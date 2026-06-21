@@ -1,0 +1,20 @@
+{
+  "schema": "auto_complete_package_proposal.v1",
+  "proposal_id": "auto-complete-jpcmp-selected-ghost-ux-proof-260621",
+  "target_repo": "roccho-dev/edits",
+  "target_path": "packages/auto-complete",
+  "decision_repo": "roccho-dev/adrs",
+  "source_archive": "auto-complete.260621-095006.zip",
+  "source_archive_sha256": "e08f489dcd35490feada54ad19705dc10a1440af132156bfd74e054e46a44615",
+  "released_status": "PASS",
+  "assertions": 689,
+  "red_green_rounds": 7,
+  "reproduced_failures_fixed": 33,
+  "full_suite_runs": 3,
+  "full_suite_passes": 3,
+  "live_pty_runs": 20,
+  "live_pty_passes": 20,
+  "candidate_build_runs": 500,
+  "candidate_build_p95_ms": 0.598,
+  "merge_note": "Explode the source archive into target_path; omit generated Python bytecode. This PR records the package proposal and proof manifest, not the exploded full package tree."
+}

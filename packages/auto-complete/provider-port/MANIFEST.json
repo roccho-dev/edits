@@ -1,0 +1,41 @@
+{
+  "schema": "auto_complete_provider_port_proposal.v1",
+  "proposal_id": "auto-complete-provider-port-260621",
+  "target_repo": "roccho-dev/edits",
+  "target_path": "packages/auto-complete",
+  "decision_repo": "roccho-dev/adrs",
+  "base_pr": "https://github.com/roccho-dev/edits/pull/1",
+  "base_pr_merged": true,
+  "source_overlay_archive": "edits-auto-complete-provider-port.260621.zip",
+  "source_overlay_sha256": "3d6fa18b7ecbbb649cf520dec62e765af7c6a1f26eeede0ee570f26bf618dd14",
+  "release_archive": "auto-complete.provider-port.260621.zip",
+  "release_archive_sha256": "150de7cb87951dd3be2e53eb7c2cf99e4177752df808a3e46323e3967ada0546",
+  "patch": "auto-complete.provider-port.260621.patch",
+  "patch_sha256": "3c31f8062555ecdedbeaa6a8aae7f15c922a1b712820afc9526071bc1a46aba9",
+  "adrs_raw_jsonl": "auto-complete-provider-port-260621.raws.jsonl",
+  "adrs_raw_jsonl_sha256": "662df26be0546ef8a770fb62cff3ba9dd40dcc52deb1b7ff1535969a8b3b37c8",
+  "pr_body_sha256": "e72013931dc7f051ef5e953fa363f3c18490ba4712e7794907b555c0b36bd0d9",
+  "tested_commit": "4b8477c5171293642b2d5f1a6c3983e36ae37b81",
+  "proof_release_commit": "0629e7cfada32afe29f851cbd0923b9b9adc6fc6",
+  "release_ref": "proof-provider-port-260621",
+  "proof": {
+    "status": "PASS",
+    "assertions": 735,
+    "provider_contract_assertions": 38,
+    "red_green_rounds": 7,
+    "fixed_failures": 33,
+    "rendered_examples": 8,
+    "live_pty_passes": 20,
+    "full_suite_passes": 3,
+    "candidate_build_runs": 500,
+    "candidate_build_p95_ms": 2.952,
+    "candidate_build_gate_ms": 20
+  },
+  "local_rerun": {
+    "command": "./test/run.sh",
+    "status": "PASS",
+    "assertions": 735,
+    "note": "The rerun updated timing JSON, so the GitHub proposal references the immutable source zip hashes rather than committing rerun-mutated result files."
+  },
+  "merge_note": "This PR records the provider-port proposal and immutable artifact hashes. The intended implementation merge is to apply the overlay archive to packages/auto-complete while omitting generated Python bytecode."
+}

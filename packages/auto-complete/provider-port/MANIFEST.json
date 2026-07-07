@@ -14,6 +14,7 @@
   "patch_sha256": "3c31f8062555ecdedbeaa6a8aae7f15c922a1b712820afc9526071bc1a46aba9",
   "adrs_raw_jsonl": "auto-complete-provider-port-260621.raws.jsonl",
   "adrs_raw_jsonl_sha256": "662df26be0546ef8a770fb62cff3ba9dd40dcc52deb1b7ff1535969a8b3b37c8",
+  "pr_body_sha256": "e72013931dc7f051ef5e953fa363f3c18490ba4712e7794907b555c0b36bd0d9",
   "tested_commit": "4b8477c5171293642b2d5f1a6c3983e36ae37b81",
   "proof_release_commit": "0629e7cfada32afe29f851cbd0923b9b9adc6fc6",
   "release_ref": "proof-provider-port-260621",
@@ -34,7 +35,7 @@
     "command": "./test/run.sh",
     "status": "PASS",
     "assertions": 735,
-    "note": "The rerun updated timing JSON, so this proposal references immutable source zip hashes rather than committing rerun-mutated result files."
+    "note": "The rerun updated timing JSON, so the GitHub proposal references the immutable source zip hashes rather than committing rerun-mutated result files."
   },
   "merge_note": "This PR records the provider-port proposal and immutable artifact hashes. The intended implementation merge is to apply the overlay archive to packages/auto-complete while omitting generated Python bytecode."
 }

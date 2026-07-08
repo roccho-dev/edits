@@ -61,7 +61,7 @@ func run(worldPath, chars, vimPath, out, tracePath, screenTextPath, rawPath stri
 		_ = os.Remove(p)
 	}
 	projection := buildProjectionMap(world, chars)
-	script, err := writeVimscript(projection, tracePath, screenTextPath)
+	script, err := writeVimscript(projection, tracePath, screenTextPath, chars)
 	if err != nil {
 		return err
 	}
@@ -103,14 +103,7 @@ func run(worldPath, chars, vimPath, out, tracePath, screenTextPath, rawPath stri
 		time.Sleep(90 * time.Millisecond)
 	}
 	time.Sleep(1400 * time.Millisecond)
-	_, _ = sess.Master.Write([]byte("\x1b:q!\r"))
-	waitDone := make(chan error, 1)
-	go func() { waitDone <- sess.Wait() }()
-	select {
-	case <-waitDone:
-	case <-time.After(1500 * time.Millisecond):
-		_ = sess.Close()
-	}
+	waitForVimExit(sess)
 	select {
 	case <-readerDone:
 	case <-time.After(900 * time.Millisecond):
@@ -156,6 +149,34 @@ func run(worldPath, chars, vimPath, out, tracePath, screenTextPath, rawPath stri
 
 func toVimPath(p string) string { return strings.ReplaceAll(p, "\\", "/") }
 
+func waitForVimExit(sess *pty.Session) {
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- sess.Wait() }()
+	select {
+	case <-waitDone:
+		return
+	case <-time.After(3500 * time.Millisecond):
+	}
+	writeDone := make(chan struct{})
+	go func() {
+		_, _ = sess.Master.Write([]byte("\x1b:q!\r"))
+		close(writeDone)
+	}()
+	select {
+	case <-writeDone:
+	case <-time.After(500 * time.Millisecond):
+	}
+	select {
+	case <-waitDone:
+	case <-time.After(1500 * time.Millisecond):
+		_ = sess.Close()
+		select {
+		case <-waitDone:
+		case <-time.After(1500 * time.Millisecond):
+		}
+	}
+}
+
 func lookupVim() (string, error) {
 	names := []string{"vim", "vim.exe", "nvim", "nvim.exe"}
 	for _, name := range names {
@@ -194,7 +215,7 @@ func buildProjectionMap(world rsc.World, chars string) map[string]any {
 	return projection
 }
 
-func writeVimscript(projection map[string]any, tracePath, screenTextPath string) (string, error) {
+func writeVimscript(projection map[string]any, tracePath, screenTextPath, finalLine string) (string, error) {
 	path := filepath.Join(os.TempDir(), fmt.Sprintf("hq-conpty-rsc-visual-%d.vim", time.Now().UnixNano()))
 	projectionJSON, _ := json.Marshal(projection)
 	body := fmt.Sprintf(`
@@ -208,6 +229,7 @@ set columns=104 lines=30
 syntax off
 let g:hq_trace = %s
 let g:hq_screen_text = %s
+let g:hq_final_line = %s
 call writefile([json_encode({'kind':'vim.script.start','cwd':getcwd()})], g:hq_trace, 'a')
 let g:hq_projection_by_line = json_decode(%s)
 call writefile([json_encode({'kind':'vim.script.decoded','has_popup':exists('*popup_create')})], g:hq_trace, 'a')
@@ -243,6 +265,10 @@ function! s:HqRenderProjection() abort
   sleep 90m
   call <SID>HqCaptureScreen()
   call writefile([json_encode({'kind':'vim.popup.rendered','line':l:line,'slot_kind':get(l:item, 'slot_kind', ''),'slot_path':get(l:item, 'slot_path', []),'labels':l:labels,'popup_id':g:hq_popup,'screen_text':g:hq_screen_text})], g:hq_trace, 'a')
+  if l:line ==# g:hq_final_line
+    call writefile([json_encode({'kind':'vim.auto_exit.scheduled','line':l:line})], g:hq_trace, 'a')
+    call timer_start(250, {-> execute('qa!')})
+  endif
 endfunction
 augroup HqRSCVisualProjection
   autocmd!
@@ -250,7 +276,7 @@ augroup HqRSCVisualProjection
 augroup END
 call writefile([json_encode({'kind':'vim.visual.start','line':getline(1),'cursor':col('.') - 1})], g:hq_trace, 'a')
 startinsert
-`, vimString(tracePath), vimString(screenTextPath), vimString(string(projectionJSON)))
+`, vimString(tracePath), vimString(screenTextPath), vimString(finalLine), vimString(string(projectionJSON)))
 	return path, os.WriteFile(path, []byte(body), 0o644)
 }
 

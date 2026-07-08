@@ -72,7 +72,7 @@ func run(worldPath, chars, vimPath, out, tracePath, screenTextPath, rawPath stri
 	}
 	defer os.Remove(bufFile)
 
-	argv := []string{vimPath, "-v", "-T", "xterm", "-Nu", "NONE", "-n", "-i", "NONE", "-S", script, bufFile}
+	argv := []string{vimPath, "-v", "-T", "xterm", "-Nu", "NONE", "-n", "-i", "NONE", "-S", toVimPath(script), toVimPath(bufFile)}
 	sess, err := pty.Start(argv, []string{"TERM=xterm-256color", "COLUMNS=104", "LINES=30"})
 	if err != nil {
 		return err
@@ -148,6 +148,8 @@ func run(worldPath, chars, vimPath, out, tracePath, screenTextPath, rawPath stri
 	return nil
 }
 
+func toVimPath(p string) string { return strings.ReplaceAll(p, "\\", "/") }
+
 func lookupVim() (string, error) {
 	names := []string{"vim", "vim.exe", "nvim", "nvim.exe"}
 	for _, name := range names {
@@ -200,7 +202,9 @@ set columns=104 lines=30
 syntax off
 let g:hq_trace = %s
 let g:hq_screen_text = %s
+call writefile([json_encode({'kind':'vim.script.start','cwd':getcwd()})], g:hq_trace, 'a')
 let g:hq_projection_by_line = json_decode(%s)
+call writefile([json_encode({'kind':'vim.script.decoded','has_popup':exists('*popup_create')})], g:hq_trace, 'a')
 let g:hq_popup = -1
 function! s:HqCaptureScreen() abort
   let l:rows=[]

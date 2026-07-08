@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"unicode/utf16"
 	"unsafe"
 
@@ -29,6 +30,8 @@ type Session struct {
 	pid      int
 	inRead   windows.Handle
 	outWrite windows.Handle
+	mu       sync.Mutex
+	closed   bool
 }
 
 type pipeMaster struct {
@@ -48,6 +51,8 @@ func (m *pipeMaster) Write(p []byte) (int, error) {
 }
 func (m *pipeMaster) Close() error {
 	closeHandles(m.inWrite, m.outRead)
+	m.inWrite = 0
+	m.outRead = 0
 	return nil
 }
 
@@ -138,22 +143,36 @@ func (s *Session) Close() error {
 	if s == nil {
 		return nil
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
 	if s.Master != nil {
 		_ = s.Master.Close()
+		s.Master = nil
 	}
 	closeHandles(s.inRead, s.outWrite)
+	s.inRead, s.outWrite = 0, 0
 	if s.attrList != nil {
 		s.attrList.Delete()
+		s.attrList = nil
 	}
 	if s.process != 0 {
-		_ = windows.TerminateProcess(s.process, 1)
+		if state, err := windows.WaitForSingleObject(s.process, 0); err == nil && state == windows.WAIT_TIMEOUT {
+			_ = windows.TerminateProcess(s.process, 1)
+		}
 		_ = windows.CloseHandle(s.process)
+		s.process = 0
 	}
 	if s.thread != 0 {
 		_ = windows.CloseHandle(s.thread)
+		s.thread = 0
 	}
 	if s.hpc != 0 {
 		windows.ClosePseudoConsole(s.hpc)
+		s.hpc = 0
 	}
 	return nil
 }

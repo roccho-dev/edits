@@ -63,3 +63,9 @@ jobs:
           test -s .local/current-projection.json
       - name: Prove vertical slice script
         run: bash packages/hq-local-worker/proofs/vertical_slice.sh
+      - name: Prove agent proposal promotion
+        run: |
+          python3 packages/hq-modeling-queue/tools/proposal_to_model_commit.py packages/hq-modeling-queue/examples/modeling-proposal.sample.json --created-at 2026-07-08T00:03:01Z > /tmp/proposal.promoted.queue.jsonl
+          python3 packages/hq-modeling-queue/tools/validate_queue.py /tmp/proposal.promoted.queue.jsonl
+          grep '"kind":"hq.modelCommitQueued.v1"' /tmp/proposal.promoted.queue.jsonl
+          grep '"reason":"promoted from modeling proposal mp_001"' /tmp/proposal.promoted.queue.jsonl

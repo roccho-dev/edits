@@ -47,26 +47,32 @@ jobs:
         run: go build -o dist/hqconpty.exe ./cmd/hqconpty
       - name: Resolve non-Git Vim for ConPTY visual proof
         shell: pwsh
+        timeout-minutes: 6
         run: |
-          choco install vim -y --no-progress --limit-output
-          $searchRoots = @(
-            'C:\tools',
-            'C:\Program Files\Vim',
-            'C:\ProgramData\chocolatey\lib'
-          )
-          $vim = $null
-          foreach ($root in $searchRoots) {
-            if (Test-Path $root) {
-              $found = Get-ChildItem $root -Recurse -Filter vim.exe -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -notlike '*\Git\*' } |
-                Sort-Object FullName -Descending |
-                Select-Object -First 1
-              if ($found) { $vim = $found.FullName; break }
+          function Find-NonGitVim {
+            $searchRoots = @(
+              'C:\tools',
+              'C:\Program Files\Vim',
+              'C:\ProgramData\chocolatey\lib'
+            )
+            foreach ($root in $searchRoots) {
+              if (Test-Path $root) {
+                $found = Get-ChildItem $root -Recurse -Filter vim.exe -ErrorAction SilentlyContinue |
+                  Where-Object { $_.FullName -notlike '*\Git\*' } |
+                  Sort-Object FullName -Descending |
+                  Select-Object -First 1
+                if ($found) { return $found.FullName }
+              }
             }
-          }
-          if (-not $vim) {
             $cmd = Get-Command vim.exe -ErrorAction SilentlyContinue
-            if ($cmd -and ($cmd.Source -notlike '*\Git\*')) { $vim = $cmd.Source }
+            if ($cmd -and ($cmd.Source -notlike '*\Git\*')) { return $cmd.Source }
+            return $null
+          }
+
+          $vim = Find-NonGitVim
+          if (-not $vim) {
+            choco install vim -y --no-progress --limit-output
+            $vim = Find-NonGitVim
           }
           if (-not $vim) { throw 'non-Git vim.exe not found' }
           "VIM_EXE=$vim" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append

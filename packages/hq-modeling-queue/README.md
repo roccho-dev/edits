@@ -73,3 +73,21 @@ python3 packages/hq-modeling-queue/tools/queue_io.py validate .local/queue.jsonl
 ```
 
 `.local/queue.jsonl` and `.local/receipt.jsonl` remain local runtime files and must not be committed.
+
+## Command vocabulary
+
+Confirmed Vim/hq commands are converted into local queue rows.
+
+| command prefix | output kind |
+|---|---|
+| `model.*` | `hq.modelCommitQueued.v1` |
+| `agent.*` | `hq.agentTaskQueued.v1` |
+
+The vocabulary lives in `commands/modeling.commands.jsonl`. Convert examples with:
+
+```text
+python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.model-add-edge.json
+python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.agent-propose-model.json
+```
+
+Command conversion is still local intent creation. It does not admit any row into an accepted ledger.

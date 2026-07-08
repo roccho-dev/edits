@@ -93,7 +93,7 @@ func Start(argv []string, env []string) (*Session, error) {
 		closeHandles(inRead, inWrite, outRead, outWrite)
 		return nil, fmt.Errorf("InitializeProcThreadAttributeList: %w", err)
 	}
-	if r1, _, err := procUpdateProcThreadAttribute.Call(uintptr(attrList), 0, procThreadAttributePseudoConsole, hpc, unsafe.Sizeof(hpc), 0, 0); r1 == 0 {
+	if r1, _, err := procUpdateProcThreadAttribute.Call(uintptr(attrList), 0, procThreadAttributePseudoConsole, uintptr(unsafe.Pointer(&hpc)), unsafe.Sizeof(hpc), 0, 0); r1 == 0 {
 		procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 		procClosePseudoConsole.Call(hpc)
 		closeHandles(inRead, inWrite, outRead, outWrite)
@@ -123,7 +123,6 @@ func Start(argv []string, env []string) (*Session, error) {
 		closeHandles(inRead, inWrite, outRead, outWrite)
 		return nil, fmt.Errorf("CreateProcess %q: %w", cmdlineRaw, err)
 	}
-	// Pseudo console has now been attached to the child process. The host keeps only inWrite/outRead.
 	closeHandles(inRead, outWrite)
 	return &Session{Master: &pipeMaster{input: os.NewFile(uintptr(inWrite), "conpty-input"), output: os.NewFile(uintptr(outRead), "conpty-output")}, hpc: hpc, process: pi.Process, thread: pi.Thread, pid: int(pi.ProcessId)}, nil
 }

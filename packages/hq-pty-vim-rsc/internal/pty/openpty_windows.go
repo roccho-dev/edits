@@ -19,11 +19,13 @@ type Master interface {
 }
 
 type Session struct {
-	Master  Master
-	hpc     uintptr
-	process syscall.Handle
-	thread  syscall.Handle
-	pid     int
+	Master   Master
+	hpc      uintptr
+	process  syscall.Handle
+	thread   syscall.Handle
+	pid      int
+	consoleR *os.File
+	consoleW *os.File
 }
 
 type pipeMaster struct {
@@ -68,21 +70,25 @@ func Start(argv []string, env []string) (*Session, error) {
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("empty argv")
 	}
-	sa := &syscall.SecurityAttributes{Length: uint32(unsafe.Sizeof(syscall.SecurityAttributes{})), InheritHandle: 1}
-	var inRead, inWrite syscall.Handle
-	var outRead, outWrite syscall.Handle
-	if err := syscall.CreatePipe(&inRead, &inWrite, sa, 0); err != nil {
-		return nil, fmt.Errorf("CreatePipe input: %w", err)
-	}
-	if err := syscall.CreatePipe(&outRead, &outWrite, sa, 0); err != nil {
-		_ = syscall.CloseHandle(inRead)
-		_ = syscall.CloseHandle(inWrite)
+	// Pipe direction matches common ConPTY implementations:
+	// host reads pr, ConPTY writes consoleW; ConPTY reads consoleR, host writes pw.
+	pr, consoleW, err := os.Pipe()
+	if err != nil {
 		return nil, fmt.Errorf("CreatePipe output: %w", err)
 	}
+	consoleR, pw, err := os.Pipe()
+	if err != nil {
+		_ = pr.Close()
+		_ = consoleW.Close()
+		return nil, fmt.Errorf("CreatePipe input: %w", err)
+	}
 	var hpc uintptr
-	if r1, _, err := procCreatePseudoConsole.Call(coordValue(120, 40), uintptr(inRead), uintptr(outWrite), 0, uintptr(unsafe.Pointer(&hpc))); r1 != 0 {
-		closeHandles(inRead, inWrite, outRead, outWrite)
-		return nil, fmt.Errorf("CreatePseudoConsole HRESULT=0x%x last=%v", r1, err)
+	if r1, _, last := procCreatePseudoConsole.Call(coordValue(120, 40), consoleR.Fd(), consoleW.Fd(), 0, uintptr(unsafe.Pointer(&hpc))); r1 != 0 {
+		_ = pr.Close()
+		_ = consoleW.Close()
+		_ = consoleR.Close()
+		_ = pw.Close()
+		return nil, fmt.Errorf("CreatePseudoConsole HRESULT=0x%x last=%v", r1, last)
 	}
 
 	var attrSize uintptr
@@ -91,13 +97,19 @@ func Start(argv []string, env []string) (*Session, error) {
 	attrList := unsafe.Pointer(&attrBuf[0])
 	if r1, _, err := procInitializeProcThreadAttributeList.Call(uintptr(attrList), 1, 0, uintptr(unsafe.Pointer(&attrSize))); r1 == 0 {
 		procClosePseudoConsole.Call(hpc)
-		closeHandles(inRead, inWrite, outRead, outWrite)
+		_ = pr.Close()
+		_ = consoleW.Close()
+		_ = consoleR.Close()
+		_ = pw.Close()
 		return nil, fmt.Errorf("InitializeProcThreadAttributeList: %w", err)
 	}
-	if r1, _, err := procUpdateProcThreadAttribute.Call(uintptr(attrList), 0, procThreadAttributePseudoConsole, uintptr(unsafe.Pointer(&hpc)), unsafe.Sizeof(hpc), 0, 0); r1 == 0 {
+	if r1, _, err := procUpdateProcThreadAttribute.Call(uintptr(attrList), 0, procThreadAttributePseudoConsole, hpc, unsafe.Sizeof(hpc), 0, 0); r1 == 0 {
 		procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 		procClosePseudoConsole.Call(hpc)
-		closeHandles(inRead, inWrite, outRead, outWrite)
+		_ = pr.Close()
+		_ = consoleW.Close()
+		_ = consoleR.Close()
+		_ = pw.Close()
 		return nil, fmt.Errorf("UpdateProcThreadAttribute: %w", err)
 	}
 	si := startupInfoEx{ProcThreadAttributeList: (*byte)(attrList)}
@@ -108,7 +120,10 @@ func Start(argv []string, env []string) (*Session, error) {
 	if err != nil {
 		procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 		procClosePseudoConsole.Call(hpc)
-		closeHandles(inRead, inWrite, outRead, outWrite)
+		_ = pr.Close()
+		_ = consoleW.Close()
+		_ = consoleR.Close()
+		_ = pw.Close()
 		return nil, err
 	}
 	envBlock := makeEnvBlock(env)
@@ -117,15 +132,17 @@ func Start(argv []string, env []string) (*Session, error) {
 		envPtr = &envBlock[0]
 	}
 	flags := uint32(extendedStartupInfoPresent | createUnicodeEnvironment)
-	err = syscall.CreateProcess(nil, cmdline, nil, nil, true, flags, envPtr, nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
+	err = syscall.CreateProcess(nil, cmdline, nil, nil, false, flags, envPtr, nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
 	procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 	if err != nil {
 		procClosePseudoConsole.Call(hpc)
-		closeHandles(inRead, inWrite, outRead, outWrite)
+		_ = pr.Close()
+		_ = consoleW.Close()
+		_ = consoleR.Close()
+		_ = pw.Close()
 		return nil, fmt.Errorf("CreateProcess %q: %w", cmdlineRaw, err)
 	}
-	closeHandles(inRead, outWrite)
-	return &Session{Master: &pipeMaster{input: os.NewFile(uintptr(inWrite), "conpty-input"), output: os.NewFile(uintptr(outRead), "conpty-output")}, hpc: hpc, process: pi.Process, thread: pi.Thread, pid: int(pi.ProcessId)}, nil
+	return &Session{Master: &pipeMaster{input: pw, output: pr}, hpc: hpc, process: pi.Process, thread: pi.Thread, pid: int(pi.ProcessId), consoleR: consoleR, consoleW: consoleW}, nil
 }
 
 func coordValue(x, y int16) uintptr {
@@ -155,6 +172,12 @@ func (s *Session) Close() error {
 	if s.Master != nil {
 		_ = s.Master.Close()
 	}
+	if s.consoleR != nil {
+		_ = s.consoleR.Close()
+	}
+	if s.consoleW != nil {
+		_ = s.consoleW.Close()
+	}
 	if s.process != 0 {
 		_ = syscall.TerminateProcess(s.process, 1)
 		_ = syscall.CloseHandle(s.process)
@@ -166,14 +189,6 @@ func (s *Session) Close() error {
 		procClosePseudoConsole.Call(s.hpc)
 	}
 	return nil
-}
-
-func closeHandles(handles ...syscall.Handle) {
-	for _, h := range handles {
-		if h != 0 {
-			_ = syscall.CloseHandle(h)
-		}
-	}
 }
 
 func makeEnvBlock(extra []string) []uint16 {

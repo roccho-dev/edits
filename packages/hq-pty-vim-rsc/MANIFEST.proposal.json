@@ -1,0 +1,35 @@
+{
+  "schema": "hq_pty_vim_rsc_explorer_launcher_proposal.v1",
+  "proposal_id": "hq-pty-vim-rsc-explorer-launcher-260708",
+  "target_repo": "roccho-dev/edits",
+  "target_path": "packages/hq-pty-vim-rsc",
+  "source_archive": "hq-pty-vim-rsc-validated-proof.260708-094249.zip",
+  "source_archive_observed_path": "C:\\Users\\resta\\Downloads\\hq-pty-vim-rsc-validated-proof.260708-094249.zip",
+  "source_archive_sha256": "e8a3f8e1b4175c08a7307c9b909cce488da241dde731abbea91bc84b776b0d52",
+  "source_report": "hq-pty-vim-rsc-validated-proof-report.txt",
+  "source_report_claims": {
+    "go_test_all": "PASS",
+    "loose_draft_validation": "LOOSE_DRAFT_VALIDATION_PROOF_OK",
+    "pty_vim_rsc": "RSC_PTY_VIM_PROOF_OK",
+    "visual_projection": "VIM_VISUAL_PROJECTION_PROOF_OK"
+  },
+  "windows_host_probe": {
+    "checked_at": "2026-07-08T10:00:00+09:00",
+    "go_tool": "mise x go@1.23.2",
+    "go_version": "go1.23.2 windows/amd64",
+    "go_build_cmd_hq": "FAIL",
+    "go_test_all": "FAIL",
+    "blocking_errors": [
+      "cmd/hq/rsc_cmd.go references Session.Master, but internal/pty/openpty_stub.go does not expose Master on non-Unix builds",
+      "internal/dispatcher tests assume Unix printf"
+    ]
+  },
+  "intended_first_workflow": {
+    "host": "Windows",
+    "outer_terminal": "Windows Terminal",
+    "multiplexer": "Herdr",
+    "default_process": "Vim",
+    "accepted_action": "explorer.exe open/select"
+  },
+  "merge_note": "This proposal records the artifact and Windows porting boundary. It does not import the full archive payload."
+}

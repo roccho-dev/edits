@@ -1,0 +1,164 @@
+name: auto-complete bootstrap golden
+
+on:
+  push:
+    branches:
+      - auto-complete-ci-proof-260708
+  pull_request:
+    paths:
+      - '.github/workflows/auto-complete-bootstrap-golden.yml'
+
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vim
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y vim
+      - name: Run bootstrap Vim Japanese completion golden
+        run: |
+          set -eu
+          mkdir -p /tmp/jpcmp-golden/dict /tmp/jpcmp-golden/test
+          cat > /tmp/jpcmp-golden/dict/domain.jsonl <<'JSONL'
+          {"reading":"ほうじん","romaji":"houjin","word":"法人","rank":10,"source":"jp-dict"}
+          {"reading":"ほうじんばいきゃく","romaji":"houjinbaikyaku","word":"法人売却","rank":20,"source":"jp-dict"}
+          {"reading":"ほうしん","romaji":"houshin","word":"方針","rank":30,"source":"jp-dict"}
+          {"reading":"ほじょ","romaji":"hojo","word":"補助","rank":40,"source":"jp-dict"}
+          JSONL
+          cat > /tmp/jpcmp-golden/test/proof.vim <<'VIM'
+          set nomore
+          set encoding=utf-8
+          set fileencoding=utf-8
+          let s:dict_path = expand('<sfile>:p:h:h') . '/dict/domain.jsonl'
+          let s:records = []
+          for line in readfile(s:dict_path)
+            if line =~# '^\s*$'
+              continue
+            endif
+            call add(s:records, json_decode(line))
+          endfor
+          let s:normal_words = [
+                \ {'word':'houjinScore','rank':1300},
+                \ {'word':'houjinRepository','rank':1200},
+                \ {'word':'houjinbaikyakuPlan','rank':1100},
+                \ {'word':'hogeBufferOnly','rank':1000}
+                \ ]
+          function! s:RomajiToHiraganaRun(input) abort
+            let rest = a:input
+            let out = ''
+            let table = {
+                  \ 'kya':'きゃ','kyu':'きゅ','kyo':'きょ',
+                  \ 'sha':'しゃ','shu':'しゅ','sho':'しょ',
+                  \ 'cha':'ちゃ','chu':'ちゅ','cho':'ちょ',
+                  \ 'bya':'びゃ','byu':'びゅ','byo':'びょ',
+                  \ 'hya':'ひゃ','hyu':'ひゅ','hyo':'ひょ',
+                  \ 'gya':'ぎゃ','gyu':'ぎゅ','gyo':'ぎょ',
+                  \ 'ja':'じゃ','ju':'じゅ','jo':'じょ',
+                  \ 'ji':'じ','shi':'し','chi':'ち','tsu':'つ',
+                  \ 'ka':'か','ki':'き','ku':'く','ke':'け','ko':'こ',
+                  \ 'sa':'さ','si':'し','su':'す','se':'せ','so':'そ',
+                  \ 'ta':'た','ti':'ち','tu':'つ','te':'て','to':'と',
+                  \ 'na':'な','ni':'に','nu':'ぬ','ne':'ね','no':'の',
+                  \ 'ha':'は','hi':'ひ','fu':'ふ','hu':'ふ','he':'へ','ho':'ほ',
+                  \ 'ma':'ま','mi':'み','mu':'む','me':'め','mo':'も',
+                  \ 'ya':'や','yu':'ゆ','yo':'よ',
+                  \ 'ra':'ら','ri':'り','ru':'る','re':'れ','ro':'ろ',
+                  \ 'wa':'わ','wo':'を',
+                  \ 'ga':'が','gi':'ぎ','gu':'ぐ','ge':'げ','go':'ご',
+                  \ 'za':'ざ','zi':'じ','zu':'ず','ze':'ぜ','zo':'ぞ',
+                  \ 'da':'だ','di':'ぢ','du':'づ','de':'で','do':'ど',
+                  \ 'ba':'ば','bi':'び','bu':'ぶ','be':'べ','bo':'ぼ',
+                  \ 'pa':'ぱ','pi':'ぴ','pu':'ぷ','pe':'ぺ','po':'ぽ',
+                  \ 'a':'あ','i':'い','u':'う','e':'え','o':'お'
+                  \ }
+            while strlen(rest) > 0
+              if strlen(rest) >= 2 && strpart(rest, 0, 1) ==# strpart(rest, 1, 1) && strpart(rest, 0, 1) =~# '[bcdfghjklmpqrstvwxyz]' && strpart(rest, 0, 1) !=# 'n'
+                let out .= 'っ'
+                let rest = strpart(rest, 1)
+                continue
+              endif
+              if strpart(rest, 0, 1) ==# 'n'
+                if strlen(rest) == 1
+                  let out .= 'ん'
+                  let rest = ''
+                  continue
+                elseif strpart(rest, 1, 1) !~# '[aiueoy]'
+                  let out .= 'ん'
+                  let rest = strpart(rest, 1)
+                  continue
+                endif
+              endif
+              let matched = 0
+              for n in [3, 2, 1]
+                if strlen(rest) >= n
+                  let key = strpart(rest, 0, n)
+                  if has_key(table, key)
+                    let out .= table[key]
+                    let rest = strpart(rest, n)
+                    let matched = 1
+                    break
+                  endif
+                endif
+              endfor
+              if !matched
+                let out .= strpart(rest, 0, 1)
+                let rest = strpart(rest, 1)
+              endif
+            endwhile
+            return out
+          endfunction
+          function! s:ConvertLowerRomajiRun(input) abort
+            let m = matchstr(a:input, '^\l\+')
+            let tail = strpart(a:input, strlen(m))
+            return s:RomajiToHiraganaRun(m) . tail
+          endfunction
+          function! s:Candidates(prefix) abort
+            let out = []
+            for item in s:normal_words
+              if item.word =~? '^' . escape(a:prefix, '\')
+                call add(out, {'word': item.word, 'source': 'normal', 'rank': item.rank})
+              endif
+            endfor
+            let view = s:ConvertLowerRomajiRun(a:prefix)
+            for r in s:records
+              if stridx(get(r, 'romaji', ''), a:prefix) == 0 || stridx(get(r, 'reading', ''), view) == 0
+                call add(out, {'word': r.word, 'source': 'jp-dict', 'rank': 100 - get(r, 'rank', 0)})
+              endif
+            endfor
+            call sort(out, {a,b -> b.rank ==# a.rank ? (a.word ># b.word) - (a.word <# b.word) : b.rank - a.rank})
+            return out
+          endfunction
+          let s:failures = []
+          function! s:AssertContains(prefix, word, source) abort
+            let labels = map(copy(s:Candidates(a:prefix)), {_,x -> x.word . ' [' . x.source . ']'})
+            let target = a:word . ' [' . a:source . ']'
+            if index(labels, target) < 0
+              call add(s:failures, a:prefix . ' missing ' . target . ' got=' . string(labels))
+            endif
+          endfunction
+          function! s:AssertTop(prefix, word, source) abort
+            let cands = s:Candidates(a:prefix)
+            if empty(cands) || cands[0].word !=# a:word || cands[0].source !=# a:source
+              call add(s:failures, a:prefix . ' top mismatch got=' . string(cands))
+            endif
+          endfunction
+          call s:AssertContains('houji', 'houjinScore', 'normal')
+          call s:AssertContains('houji', '法人', 'jp-dict')
+          call s:AssertContains('houji', '法人売却', 'jp-dict')
+          call s:AssertTop('houji', 'houjinScore', 'normal')
+          call s:AssertTop('houjin', 'houjinScore', 'normal')
+          call s:AssertContains('houjinb', '法人売却', 'jp-dict')
+          call s:AssertTop('houjinb', 'houjinbaikyakuPlan', 'normal')
+          call s:AssertContains('houjinScore', 'houjinScore', 'normal')
+          let result = {'status': empty(s:failures) ? 'PASS' : 'FAIL', 'failures': s:failures}
+          call writefile([json_encode(result)], expand('<sfile>:p:h:h') . '/result.json')
+          if !empty(s:failures)
+            cquit
+          endif
+          qa!
+          VIM
+          cd /tmp/jpcmp-golden
+          vim --clean -Nu NONE -n -es -S test/proof.vim
+          cat test/result.json

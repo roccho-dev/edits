@@ -120,12 +120,9 @@ func Start(argv []string, env []string) (*Session, error) {
 	flags := uint32(extendedStartupInfoPresent | createUnicodeEnvironment)
 	err = syscall.CreateProcess(nil, cmdline, nil, nil, false, flags, envPtr, nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
 	procDeleteProcThreadAttributeList.Call(uintptr(attrList))
-	_ = syscall.CloseHandle(inRead)
-	_ = syscall.CloseHandle(outWrite)
 	if err != nil {
 		procClosePseudoConsole.Call(hpc)
-		_ = syscall.CloseHandle(inWrite)
-		_ = syscall.CloseHandle(outRead)
+		closeHandles(inRead, inWrite, outRead, outWrite)
 		return nil, fmt.Errorf("CreateProcess %q: %w", cmdlineRaw, err)
 	}
 	return &Session{Master: &pipeMaster{input: os.NewFile(uintptr(inWrite), "conpty-input"), output: os.NewFile(uintptr(outRead), "conpty-output")}, inputRead: inRead, outputWrite: outWrite, hpc: hpc, process: pi.Process, thread: pi.Thread, pid: int(pi.ProcessId)}, nil
@@ -154,6 +151,7 @@ func (s *Session) Close() error {
 	if s.Master != nil {
 		_ = s.Master.Close()
 	}
+	closeHandles(s.inputRead, s.outputWrite)
 	if s.process != 0 {
 		_ = syscall.TerminateProcess(s.process, 1)
 		_ = syscall.CloseHandle(s.process)

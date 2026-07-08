@@ -20,29 +20,30 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
-      - name: Resolve Vim for ConPTY visual proof
+      - name: Resolve non-Git Vim for ConPTY visual proof
         shell: pwsh
         run: |
-          $candidates = @(
-            'C:\Program Files\Git\cmd\vim.exe',
-            'C:\Program Files\Git\bin\vim.exe',
-            'C:\Program Files\Git\usr\bin\vim.exe',
-            'C:\Program Files\Git\mingw64\bin\vim.exe'
+          choco install vim -y --no-progress --limit-output
+          $searchRoots = @(
+            'C:\tools',
+            'C:\Program Files\Vim',
+            'C:\ProgramData\chocolatey\lib'
           )
           $vim = $null
-          foreach ($candidate in $candidates) {
-            if (Test-Path $candidate) { $vim = $candidate; break }
+          foreach ($root in $searchRoots) {
+            if (Test-Path $root) {
+              $found = Get-ChildItem $root -Recurse -Filter vim.exe -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -notlike '*\Git\*' } |
+                Sort-Object FullName -Descending |
+                Select-Object -First 1
+              if ($found) { $vim = $found.FullName; break }
+            }
           }
           if (-not $vim) {
             $cmd = Get-Command vim.exe -ErrorAction SilentlyContinue
-            if ($cmd) { $vim = $cmd.Source }
+            if ($cmd -and ($cmd.Source -notlike '*\Git\*')) { $vim = $cmd.Source }
           }
-          if (-not $vim) {
-            choco install vim -y --no-progress --limit-output
-            $found = Get-ChildItem 'C:\Program Files\Vim' -Recurse -Filter vim.exe -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
-            if ($found) { $vim = $found.FullName }
-          }
-          if (-not $vim) { throw 'vim.exe not found' }
+          if (-not $vim) { throw 'non-Git vim.exe not found' }
           "VIM_EXE=$vim" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Output "Vim: $vim"
       - name: Test all packages

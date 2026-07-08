@@ -160,7 +160,7 @@ func (s *Session) Close() error {
 		s.attrList = nil
 	}
 	if s.process != 0 {
-		if state, err := windows.WaitForSingleObject(s.process, 0); err == nil && state == windows.WAIT_TIMEOUT {
+		if state, err := windows.WaitForSingleObject(s.process, 0); err == nil && state == uint32(windows.WAIT_TIMEOUT) {
 			_ = windows.TerminateProcess(s.process, 1)
 		}
 		_ = windows.CloseHandle(s.process)

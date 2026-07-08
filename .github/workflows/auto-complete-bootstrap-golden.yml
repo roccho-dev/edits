@@ -1,0 +1,106 @@
+name: auto-complete bootstrap golden
+
+on:
+  push:
+    branches:
+      - auto-complete-ci-proof-260708
+  pull_request:
+    paths:
+      - '.github/workflows/auto-complete-bootstrap-golden.yml'
+
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vim
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y vim
+      - name: Run current Japanese completion golden in Vim
+        run: |
+          set -eu
+          cat > /tmp/proof.vim <<'VIM'
+          set nomore
+          set encoding=utf-8
+          set fileencoding=utf-8
+          let s:records = [
+                \ {'reading':'ほうじん','romaji':'houjin','word':'法人','rank':10},
+                \ {'reading':'ほうじんばいきゃく','romaji':'houjinbaikyaku','word':'法人売却','rank':20},
+                \ {'reading':'ほうしん','romaji':'houshin','word':'方針','rank':30},
+                \ {'reading':'ほじょ','romaji':'hojo','word':'補助','rank':40}
+                \ ]
+          let s:normal_words = [
+                \ {'word':'houjinScore','rank':1300},
+                \ {'word':'houjinRepository','rank':1200},
+                \ {'word':'houjinbaikyakuPlan','rank':1100},
+                \ {'word':'hogeBufferOnly','rank':1000}
+                \ ]
+          function! s:Hira(input) abort
+            let rest = a:input
+            let out = ''
+            let table = {'hou':'ほう','ho':'ほ','ji':'じ','jin':'じん','bai':'ばい','kya':'きゃ','ku':'く','n':'ん','h':'h','j':'j','b':'b'}
+            while strlen(rest) > 0
+              let matched = 0
+              for n in [3,2,1]
+                let key = strpart(rest,0,n)
+                if has_key(table,key)
+                  let out .= table[key]
+                  let rest = strpart(rest,n)
+                  let matched = 1
+                  break
+                endif
+              endfor
+              if !matched
+                let out .= strpart(rest,0,1)
+                let rest = strpart(rest,1)
+              endif
+            endwhile
+            return out
+          endfunction
+          function! s:Cands(prefix) abort
+            let out=[]
+            for item in s:normal_words
+              if item.word =~? '^' . escape(a:prefix,'\')
+                call add(out, {'word': item.word, 'source':'normal', 'rank':item.rank})
+              endif
+            endfor
+            let view = s:Hira(a:prefix)
+            for r in s:records
+              if stridx(r.romaji, a:prefix) == 0 || stridx(r.reading, view) == 0
+                call add(out, {'word': r.word, 'source':'jp-dict', 'rank':100-r.rank})
+              endif
+            endfor
+            call sort(out, {a,b -> b.rank ==# a.rank ? (a.word ># b.word) - (a.word <# b.word) : b.rank - a.rank})
+            return out
+          endfunction
+          let s:fail=[]
+          function! s:Has(prefix, word, source) abort
+            let labels = map(copy(s:Cands(a:prefix)), {_,x -> x.word . ' [' . x.source . ']'})
+            let target = a:word . ' [' . a:source . ']'
+            if index(labels, target) < 0
+              call add(s:fail, a:prefix . ' missing ' . target . ' got=' . string(labels))
+            endif
+          endfunction
+          function! s:Top(prefix, word, source) abort
+            let c = s:Cands(a:prefix)
+            if empty(c) || c[0].word !=# a:word || c[0].source !=# a:source
+              call add(s:fail, a:prefix . ' top mismatch got=' . string(c))
+            endif
+          endfunction
+          call s:Has('houji','houjinScore','normal')
+          call s:Has('houji','法人','jp-dict')
+          call s:Has('houji','法人売却','jp-dict')
+          call s:Top('houji','houjinScore','normal')
+          call s:Top('houjin','houjinScore','normal')
+          call s:Has('houjinb','法人売却','jp-dict')
+          call s:Top('houjinb','houjinbaikyakuPlan','normal')
+          call s:Has('houjinScore','houjinScore','normal')
+          call writefile([json_encode({'status': empty(s:fail) ? 'PASS':'FAIL', 'failures': s:fail})], '/tmp/result.json')
+          if !empty(s:fail)
+            cquit
+          endif
+          qa!
+          VIM
+          vim --clean -Nu NONE -n -es -S /tmp/proof.vim
+          cat /tmp/result.json

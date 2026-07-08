@@ -73,15 +73,29 @@ jobs:
           Write-Output "Vim: $vim"
       - name: Check Windows ConPTY Vim visual projection
         shell: pwsh
+        timeout-minutes: 3
         run: |
           New-Item -ItemType Directory -Force -Path cache | Out-Null
           Remove-Item -Force -ErrorAction SilentlyContinue cache\windows-conpty-vim-visual.failed
-          & .\dist\hqconpty.exe --vim "$env:VIM_EXE" --out cache\windows-conpty-vim-visual.json --trace cache\windows-conpty-vim-visual.trace.jsonl --screen-text cache\windows-conpty-vim-visual.screen.txt --raw cache\windows-conpty-vim-visual.pty.raw *> cache\windows-conpty-vim-visual.log
-          $exit = $LASTEXITCODE
-          if ($exit -ne 0) {
-            "exit=$exit" | Out-File cache\windows-conpty-vim-visual.failed
+          $stdout = "cache\windows-conpty-vim-visual.stdout.log"
+          $stderr = "cache\windows-conpty-vim-visual.stderr.log"
+          Remove-Item -Force -ErrorAction SilentlyContinue $stdout, $stderr, cache\windows-conpty-vim-visual.log
+          $args = @(
+            "--vim", "$env:VIM_EXE",
+            "--out", "cache\windows-conpty-vim-visual.json",
+            "--trace", "cache\windows-conpty-vim-visual.trace.jsonl",
+            "--screen-text", "cache\windows-conpty-vim-visual.screen.txt",
+            "--raw", "cache\windows-conpty-vim-visual.pty.raw"
+          )
+          $p = Start-Process -FilePath ".\dist\hqconpty.exe" -ArgumentList $args -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -NoNewWindow
+          if (-not $p.WaitForExit(120000)) {
+            "timeout=120s" | Out-File cache\windows-conpty-vim-visual.failed
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          } elseif ($p.ExitCode -ne 0) {
+            "exit=$($p.ExitCode)" | Out-File cache\windows-conpty-vim-visual.failed
           }
-          if (Test-Path cache\windows-conpty-vim-visual.log) { Get-Content cache\windows-conpty-vim-visual.log -Raw | Write-Output }
+          if (Test-Path $stdout) { Get-Content $stdout -Raw | Tee-Object -FilePath cache\windows-conpty-vim-visual.log -Append | Write-Output }
+          if (Test-Path $stderr) { Get-Content $stderr -Raw | Tee-Object -FilePath cache\windows-conpty-vim-visual.log -Append | Write-Output }
       - name: Upload checked Windows hq and Vim adapter
         if: always()
         uses: actions/upload-artifact@v4

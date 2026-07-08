@@ -68,12 +68,13 @@ func Start(argv []string, env []string) (*Session, error) {
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("empty argv")
 	}
+	sa := &syscall.SecurityAttributes{Length: uint32(unsafe.Sizeof(syscall.SecurityAttributes{})), InheritHandle: 1}
 	var inRead, inWrite syscall.Handle
 	var outRead, outWrite syscall.Handle
-	if err := syscall.CreatePipe(&inRead, &inWrite, nil, 0); err != nil {
+	if err := syscall.CreatePipe(&inRead, &inWrite, sa, 0); err != nil {
 		return nil, fmt.Errorf("CreatePipe input: %w", err)
 	}
-	if err := syscall.CreatePipe(&outRead, &outWrite, nil, 0); err != nil {
+	if err := syscall.CreatePipe(&outRead, &outWrite, sa, 0); err != nil {
 		_ = syscall.CloseHandle(inRead)
 		_ = syscall.CloseHandle(inWrite)
 		return nil, fmt.Errorf("CreatePipe output: %w", err)
@@ -116,7 +117,7 @@ func Start(argv []string, env []string) (*Session, error) {
 		envPtr = &envBlock[0]
 	}
 	flags := uint32(extendedStartupInfoPresent | createUnicodeEnvironment)
-	err = syscall.CreateProcess(nil, cmdline, nil, nil, false, flags, envPtr, nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
+	err = syscall.CreateProcess(nil, cmdline, nil, nil, true, flags, envPtr, nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
 	procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 	if err != nil {
 		procClosePseudoConsole.Call(hpc)

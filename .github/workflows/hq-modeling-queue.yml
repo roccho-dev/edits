@@ -61,3 +61,19 @@ jobs:
           python3 packages/hq-modeling-queue/tools/validate_queue.py .local/receipt.jsonl
           grep '"status":"processed"' .local/receipt.jsonl
           test -s .local/current-projection.json
+      - name: Prove malformed queue row writes failed receipt
+        run: |
+          rm -rf .local
+          printf '{"kind":' > /tmp/broken.queue.jsonl
+          python3 packages/hq-local-worker/tools/local_worker.py process --queue /tmp/broken.queue.jsonl --receipt .local/receipt.jsonl --state .local/shadow-model.json --projection .local/current-projection.json
+          python3 packages/hq-modeling-queue/tools/validate_queue.py .local/receipt.jsonl
+          grep '"status":"failed"' .local/receipt.jsonl
+          grep 'invalid JSONL row' .local/receipt.jsonl
+      - name: Prove duplicate idempotency is not reprocessed
+        run: |
+          rm -rf .local
+          python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.model-add-edge.json > /tmp/dup.row.jsonl
+          cat /tmp/dup.row.jsonl /tmp/dup.row.jsonl > /tmp/dup.queue.jsonl
+          python3 packages/hq-local-worker/tools/local_worker.py process --queue /tmp/dup.queue.jsonl --receipt .local/receipt.jsonl --state .local/shadow-model.json --projection .local/current-projection.json
+          test "$(wc -l < .local/receipt.jsonl | tr -d ' ')" = "1"
+          python3 packages/hq-modeling-queue/tools/validate_queue.py .local/receipt.jsonl

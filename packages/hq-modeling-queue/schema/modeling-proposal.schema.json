@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roccho-dev.local/edits/hq-modeling-queue/modeling-proposal.schema.json",
+  "title": "modeling proposal",
+  "type": "object",
+  "required": ["id", "kind", "createdAt", "sourceTaskId", "targetRef", "op", "payload", "evidence", "risk", "status"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "kind": { "const": "modeling.proposal.v1" },
+    "createdAt": { "type": "string", "minLength": 1 },
+    "sourceTaskId": { "type": "string", "minLength": 1 },
+    "targetRef": { "type": ["object", "null"], "additionalProperties": true },
+    "op": { "type": "string", "minLength": 1 },
+    "payload": { "type": "object", "additionalProperties": true },
+    "evidence": { "type": "array", "items": { "type": "string" } },
+    "risk": { "type": "array", "items": { "type": "string" } },
+    "status": { "enum": ["proposed", "rejected", "promoted"] }
+  },
+  "additionalProperties": false
+}

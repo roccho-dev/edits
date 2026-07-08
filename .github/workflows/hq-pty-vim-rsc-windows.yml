@@ -20,6 +20,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
+      - name: Resolve Go modules
+        shell: pwsh
+        run: go mod tidy
       - name: Test all packages
         shell: pwsh
         run: |
@@ -85,6 +88,7 @@ jobs:
         with:
           name: hq-pty-vim-rsc-windows-checked
           path: |
+            packages/hq-pty-vim-rsc/go.sum
             packages/hq-pty-vim-rsc/dist/hq.exe
             packages/hq-pty-vim-rsc/dist/hqconpty.exe
             packages/hq-pty-vim-rsc/vim/**

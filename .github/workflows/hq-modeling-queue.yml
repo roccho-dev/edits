@@ -33,3 +33,13 @@ jobs:
           python3 packages/hq-modeling-queue/tools/queue_io.py validate .local/queue.jsonl
           test "$(wc -l < /tmp/queue.readback.jsonl | tr -d ' ')" = "1"
           test "$(wc -l < /tmp/queue.tail.jsonl | tr -d ' ')" = "1"
+      - name: Prove command conversion to model queue row
+        run: |
+          python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.model-add-edge.json > /tmp/model.queue.jsonl
+          python3 packages/hq-modeling-queue/tools/validate_queue.py /tmp/model.queue.jsonl
+          grep '"kind":"hq.modelCommitQueued.v1"' /tmp/model.queue.jsonl
+      - name: Prove command conversion to agent task queue row
+        run: |
+          python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.agent-propose-model.json > /tmp/agent.queue.jsonl
+          python3 packages/hq-modeling-queue/tools/validate_queue.py /tmp/agent.queue.jsonl
+          grep '"kind":"hq.agentTaskQueued.v1"' /tmp/agent.queue.jsonl

@@ -104,7 +104,13 @@ func run(worldPath, chars, vimPath, out, tracePath, screenTextPath, rawPath stri
 	}
 	time.Sleep(1400 * time.Millisecond)
 	_, _ = sess.Master.Write([]byte("\x1b:q!\r"))
-	_ = sess.Wait()
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- sess.Wait() }()
+	select {
+	case <-waitDone:
+	case <-time.After(1500 * time.Millisecond):
+		_ = sess.Close()
+	}
 	select {
 	case <-readerDone:
 	case <-time.After(900 * time.Millisecond):

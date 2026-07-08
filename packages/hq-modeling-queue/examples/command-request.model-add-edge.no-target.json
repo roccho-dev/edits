@@ -1,0 +1,7 @@
+{
+  "command": "model.addEdge",
+  "createdAt": "2026-07-08T00:02:01Z",
+  "confirmedBy": "human",
+  "payload": {"from": "pkg:core", "to": "pkg:ui", "relation": "uses"},
+  "reason": "targetRef should be read from current-target file"
+}

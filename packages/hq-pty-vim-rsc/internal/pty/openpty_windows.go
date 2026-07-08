@@ -87,6 +87,7 @@ func Start(argv []string, env []string) (*Session, error) {
 		return nil, fmt.Errorf("UpdateProcThreadAttribute: %w", err)
 	}
 	si := windows.StartupInfoEx{}
+	si.StartupInfo.Flags = windows.STARTF_USESTDHANDLES
 	si.ProcThreadAttributeList = attrList.List()
 	si.Cb = uint32(unsafe.Sizeof(si))
 	var pi windows.ProcessInformation
@@ -111,7 +112,7 @@ func Start(argv []string, env []string) (*Session, error) {
 		envPtr = &envBlock[0]
 	}
 	flags := uint32(windows.EXTENDED_STARTUPINFO_PRESENT | windows.CREATE_UNICODE_ENVIRONMENT)
-	if err := windows.CreateProcess(argv0p, cmdlinep, nil, nil, false, flags, envPtr, nil, &si.StartupInfo, &pi); err != nil {
+	if err := windows.CreateProcess(argv0p, cmdlinep, sa, sa, false, flags, envPtr, nil, &si.StartupInfo, &pi); err != nil {
 		attrList.Delete()
 		windows.ClosePseudoConsole(hpc)
 		closeHandles(inRead, inWrite, outRead, outWrite)

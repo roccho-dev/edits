@@ -94,7 +94,7 @@ func Start(argv []string, env []string) (*Session, error) {
 		closeHandles(inRead, inWrite, outRead, outWrite)
 		return nil, fmt.Errorf("InitializeProcThreadAttributeList: %w", err)
 	}
-	if r1, _, err := procUpdateProcThreadAttribute.Call(uintptr(attrList), 0, procThreadAttributePseudoConsole, uintptr(unsafe.Pointer(&hpc)), unsafe.Sizeof(hpc), 0, 0); r1 == 0 {
+	if r1, _, err := procUpdateProcThreadAttribute.Call(uintptr(attrList), 0, procThreadAttributePseudoConsole, hpc, unsafe.Sizeof(hpc), 0, 0); r1 == 0 {
 		procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 		procClosePseudoConsole.Call(hpc)
 		closeHandles(inRead, inWrite, outRead, outWrite)

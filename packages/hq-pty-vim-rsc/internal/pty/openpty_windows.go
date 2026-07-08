@@ -45,7 +45,6 @@ func (m *pipeMaster) Close() error {
 	return nil
 }
 
-type coord struct{ X, Y int16 }
 type startupInfoEx struct {
 	syscall.StartupInfo
 	ProcThreadAttributeList *byte
@@ -82,9 +81,9 @@ func Start(argv []string, env []string) (*Session, error) {
 		return nil, fmt.Errorf("CreatePipe output: %w", err)
 	}
 	var hpc uintptr
-	if r1, _, err := procCreatePseudoConsole.Call(uintptr(unsafe.Pointer(&coord{X: 120, Y: 40})), uintptr(inRead), uintptr(outWrite), 0, uintptr(unsafe.Pointer(&hpc))); r1 != 0 {
+	if r1, _, err := procCreatePseudoConsole.Call(coordValue(120, 40), uintptr(inRead), uintptr(outWrite), 0, uintptr(unsafe.Pointer(&hpc))); r1 != 0 {
 		closeHandles(inRead, inWrite, outRead, outWrite)
-		return nil, fmt.Errorf("CreatePseudoConsole: %w", err)
+		return nil, fmt.Errorf("CreatePseudoConsole HRESULT=0x%x last=%v", r1, err)
 	}
 	var attrSize uintptr
 	procInitializeProcThreadAttributeList.Call(0, 1, 0, uintptr(unsafe.Pointer(&attrSize)))
@@ -126,6 +125,10 @@ func Start(argv []string, env []string) (*Session, error) {
 		return nil, fmt.Errorf("CreateProcess %q: %w", cmdlineRaw, err)
 	}
 	return &Session{Master: &pipeMaster{input: os.NewFile(uintptr(inWrite), "conpty-input"), output: os.NewFile(uintptr(outRead), "conpty-output")}, inputRead: inRead, outputWrite: outWrite, hpc: hpc, process: pi.Process, thread: pi.Thread, pid: int(pi.ProcessId)}, nil
+}
+
+func coordValue(x, y int16) uintptr {
+	return uintptr(uint16(x)) | uintptr(uint32(uint16(y))<<16)
 }
 
 func (s *Session) PID() int {

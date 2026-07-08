@@ -1,0 +1,22 @@
+{"kind":"schema.object","object":"project","description":"root project object that owns n task children"}
+{"kind":"schema.key","object":"project","key":"kind","type":"enum","required":true,"enum":["project"],"description":"object discriminator"}
+{"kind":"schema.key","object":"project","key":"id","type":"string","required":true,"description":"stable project id"}
+{"kind":"schema.key","object":"project","key":"name","type":"string","required":true,"description":"human project name"}
+{"kind":"schema.key","object":"project","key":"status","type":"enum","required":false,"enum":["active","paused","archived"],"description":"project status"}
+{"kind":"schema.key","object":"project","key":"tasks","type":"array:ref","ref":"task","relation":"contains","required":true,"description":"1 x n child task references"}
+{"kind":"schema.object","object":"task","description":"child task object"}
+{"kind":"schema.key","object":"task","key":"kind","type":"enum","required":true,"enum":["task"],"description":"object discriminator"}
+{"kind":"schema.key","object":"task","key":"id","type":"string","required":true,"description":"stable task id"}
+{"kind":"schema.key","object":"task","key":"title","type":"string","required":true,"description":"task title"}
+{"kind":"schema.key","object":"task","key":"owner","type":"enum","required":true,"enum":["me","agent:a","agent:b"],"description":"task owner"}
+{"kind":"schema.key","object":"task","key":"priority","type":"enum","required":false,"enum":["low","normal","high"],"description":"task priority"}
+{"kind":"schema.key","object":"task","key":"deps","type":"array:ref","ref":"task","relation":"depends_on","required":false,"description":"n x n task dependencies"}
+{"kind":"object.upsert","id":"project:hq","object":"project","fields":{"kind":"project","id":"hq","name":"HQ","status":"active"}}
+{"kind":"object.upsert","id":"task:t1","object":"task","fields":{"kind":"task","id":"t1","title":"Build pty master","owner":"me","priority":"high"}}
+{"kind":"object.upsert","id":"task:t2","object":"task","fields":{"kind":"task","id":"t2","title":"Wire Vim as line editor","owner":"agent:a","priority":"high"}}
+{"kind":"object.upsert","id":"task:t3","object":"task","fields":{"kind":"task","id":"t3","title":"Prove recursive slot completion","owner":"agent:b","priority":"normal"}}
+{"kind":"relation.add","parent":"project:hq","child":"task:t1","role":"tasks","index":0}
+{"kind":"relation.add","parent":"project:hq","child":"task:t2","role":"tasks","index":1}
+{"kind":"relation.add","parent":"project:hq","child":"task:t3","role":"tasks","index":2}
+{"kind":"relation.add","parent":"task:t3","child":"task:t1","role":"deps","index":0}
+{"kind":"relation.add","parent":"task:t3","child":"task:t2","role":"deps","index":1}

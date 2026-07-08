@@ -1,0 +1,43 @@
+{
+  "argv": [
+    "/usr/bin/vim",
+    "-Nu",
+    "NONE",
+    "-n",
+    "-i",
+    "NONE",
+    "-S",
+    "/tmp/hq-rsc-live-visual-1783471309209110017.vim",
+    "/tmp/hq-rsc-visual-1783471309209553223.jsonl"
+  ],
+  "captured_screen_bytes": 60187,
+  "direct_vim_no_shell": true,
+  "final_popup_sample": {
+    "kind": "vim.popup.rendered",
+    "labels": [
+      "task:t1",
+      "task:t2",
+      "task:t3"
+    ],
+    "line": "project hq tasks ",
+    "popup_id": 1017,
+    "screen_text": "cache/loose-visual.screen.txt",
+    "slot_kind": "draft.ref",
+    "slot_path": [
+      "tasks"
+    ]
+  },
+  "kind": "proof.pty-vim-rsc-visual-projection",
+  "pid": 38164,
+  "proc_cmdline": "/usr/bin/vim\u0000-Nu\u0000NONE\u0000-n\u0000-i\u0000NONE\u0000-S\u0000/tmp/hq-rsc-live-visual-1783471309209110017.vim\u0000/tmp/hq-rsc-visual-1783471309209553223.jsonl\u0000",
+  "projection_source": "pty-master-core-map",
+  "raw_pty_transcript": "cache/loose-visual.pty.raw",
+  "screen_contains_popup": true,
+  "screen_text": "cache/loose-visual.screen.txt",
+  "trace": "cache/loose-visual.trace.jsonl",
+  "trace_rows": 35,
+  "typed_chars": "project hq tasks ",
+  "vim_popup_trace_ok": true,
+  "vim_query_shell": false,
+  "visual_projection_ok": true
+}

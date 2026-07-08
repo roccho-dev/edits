@@ -1,0 +1,237 @@
+{
+  "digest": "8252dd537aeec70fd31e1c98cae93a1f0bfdff988b2a1c5d892dbf11c5110472",
+  "schemas": {
+    "project": {
+      "object": "project",
+      "description": "root project object that owns n task children",
+      "keys": {
+        "id": {
+          "key": "id",
+          "type": "string",
+          "required": true,
+          "description": "stable project id"
+        },
+        "kind": {
+          "key": "kind",
+          "type": "enum",
+          "required": true,
+          "enum": [
+            "project"
+          ],
+          "description": "object discriminator"
+        },
+        "name": {
+          "key": "name",
+          "type": "string",
+          "required": true,
+          "description": "human project name"
+        },
+        "status": {
+          "key": "status",
+          "type": "enum",
+          "required": false,
+          "enum": [
+            "active",
+            "paused",
+            "archived"
+          ],
+          "description": "project status"
+        },
+        "tasks": {
+          "key": "tasks",
+          "type": "array:ref",
+          "required": true,
+          "ref": "task",
+          "relation": "contains",
+          "description": "1 x n child task references"
+        }
+      },
+      "order": [
+        "kind",
+        "id",
+        "name",
+        "status",
+        "tasks"
+      ]
+    },
+    "task": {
+      "object": "task",
+      "description": "child task object",
+      "keys": {
+        "deps": {
+          "key": "deps",
+          "type": "array:ref",
+          "required": false,
+          "ref": "task",
+          "relation": "depends_on",
+          "description": "n x n task dependencies"
+        },
+        "id": {
+          "key": "id",
+          "type": "string",
+          "required": true,
+          "description": "stable task id"
+        },
+        "kind": {
+          "key": "kind",
+          "type": "enum",
+          "required": true,
+          "enum": [
+            "task"
+          ],
+          "description": "object discriminator"
+        },
+        "owner": {
+          "key": "owner",
+          "type": "enum",
+          "required": true,
+          "enum": [
+            "me",
+            "agent:a",
+            "agent:b"
+          ],
+          "description": "task owner"
+        },
+        "priority": {
+          "key": "priority",
+          "type": "enum",
+          "required": false,
+          "enum": [
+            "low",
+            "normal",
+            "high"
+          ],
+          "description": "task priority"
+        },
+        "title": {
+          "key": "title",
+          "type": "string",
+          "required": true,
+          "description": "task title"
+        }
+      },
+      "order": [
+        "kind",
+        "id",
+        "title",
+        "owner",
+        "priority",
+        "deps"
+      ]
+    }
+  },
+  "objects": {
+    "project:hq": {
+      "id": "project:hq",
+      "object": "project",
+      "fields": {
+        "id": "hq",
+        "kind": "project",
+        "name": "HQ",
+        "status": "active"
+      }
+    },
+    "task:t1": {
+      "id": "task:t1",
+      "object": "task",
+      "fields": {
+        "id": "t1",
+        "kind": "task",
+        "owner": "me",
+        "priority": "high",
+        "title": "Build pty master"
+      }
+    },
+    "task:t2": {
+      "id": "task:t2",
+      "object": "task",
+      "fields": {
+        "id": "t2",
+        "kind": "task",
+        "owner": "agent:a",
+        "priority": "high",
+        "title": "Wire Vim as line editor"
+      }
+    },
+    "task:t3": {
+      "id": "task:t3",
+      "object": "task",
+      "fields": {
+        "id": "t3",
+        "kind": "task",
+        "owner": "agent:b",
+        "priority": "normal",
+        "title": "Prove recursive slot completion"
+      }
+    }
+  },
+  "relations": [
+    {
+      "parent": "project:hq",
+      "child": "task:t1",
+      "role": "tasks",
+      "index": 0
+    },
+    {
+      "parent": "project:hq",
+      "child": "task:t2",
+      "role": "tasks",
+      "index": 1
+    },
+    {
+      "parent": "project:hq",
+      "child": "task:t3",
+      "role": "tasks",
+      "index": 2
+    },
+    {
+      "parent": "task:t3",
+      "child": "task:t1",
+      "role": "deps",
+      "index": 0
+    },
+    {
+      "parent": "task:t3",
+      "child": "task:t2",
+      "role": "deps",
+      "index": 1
+    }
+  ],
+  "children": {
+    "project:hq": [
+      {
+        "parent": "project:hq",
+        "child": "task:t1",
+        "role": "tasks",
+        "index": 0
+      },
+      {
+        "parent": "project:hq",
+        "child": "task:t2",
+        "role": "tasks",
+        "index": 1
+      },
+      {
+        "parent": "project:hq",
+        "child": "task:t3",
+        "role": "tasks",
+        "index": 2
+      }
+    ],
+    "task:t3": [
+      {
+        "parent": "task:t3",
+        "child": "task:t1",
+        "role": "deps",
+        "index": 0
+      },
+      {
+        "parent": "task:t3",
+        "child": "task:t2",
+        "role": "deps",
+        "index": 1
+      }
+    ]
+  },
+  "event_count": 22
+}

@@ -1,0 +1,8 @@
+{"kind":"purpose.generation","generation":0,"purpose":"Vim上の入力途中文脈から安全な操作候補を出す","contribution":"direct"}
+{"kind":"purpose.generation","generation":1,"purpose":"completion itemにedit/meaning/PlanDraftを載せる","contribution":"direct"}
+{"kind":"purpose.generation","generation":2,"purpose":"completion/hover/diagnostics/codeActionでは副作用を起こさない","contribution":"direct"}
+{"kind":"purpose.generation","generation":3,"purpose":"confirm後だけdispatcherがadapter越しに実行しreceipt.jsonlを残す","contribution":"direct"}
+{"kind":"purpose.generation","generation":4,"purpose":"HTTPとshellをmain canonicalで実adapter化する","contribution":"direct"}
+{"kind":"purpose.generation","generation":5,"purpose":"tmuxはworktreeで分離して実験する","contribution":"direct"}
+{"kind":"purpose.generation","generation":6,"purpose":"Vim一文字入力でautocmpが更新される証跡を残す","contribution":"direct"}
+{"kind":"purpose.generation","generation":7,"purpose":"protocol-first Go runtimeを本線にする","contribution":"direct"}

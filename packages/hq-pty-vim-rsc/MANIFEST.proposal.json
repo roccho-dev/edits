@@ -31,5 +31,6 @@
     "default_process": "Vim",
     "accepted_action": "explorer.exe open/select"
   },
-  "merge_note": "This proposal records the artifact and Windows porting boundary. It does not import the full archive payload."
+  "payload_imported": true,
+  "payload_import_note": "The expanded archive payload is imported under target_path, excluding only the nested .git directory. Windows porting boundaries remain recorded in BUILD-NOTES.md."
 }

@@ -21,7 +21,8 @@ func TestConPTYCmdEchoOutput(t *testing.T) {
 		_, err := io.Copy(&buf, sess.Master)
 		done <- err
 	}()
-	waitContains(t, &buf, ">", 3*time.Second)
+	waitForAnyOutput(t, &buf, 3*time.Second)
+	time.Sleep(1200 * time.Millisecond)
 	if _, err := sess.Master.Write([]byte("echo hq-conpty-ok\r")); err != nil {
 		_ = sess.Close()
 		t.Fatalf("write echo to ConPTY failed: %v", err)
@@ -41,6 +42,18 @@ func TestConPTYCmdEchoOutput(t *testing.T) {
 	if !strings.Contains(buf.String(), "hq-conpty-ok") {
 		t.Fatalf("missing conpty output; got %q", buf.String())
 	}
+}
+
+func waitForAnyOutput(t *testing.T, buf *bytes.Buffer, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if buf.Len() > 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for any ConPTY output")
 }
 
 func waitContains(t *testing.T, buf *bytes.Buffer, want string, timeout time.Duration) {

@@ -1,0 +1,35 @@
+{"cursor":0,"line":"","kind":"vim.visual.start"}
+{"cursor":1,"kind":"master.typed","labels":[],"line":"p","slot_kind":"unknown","slot_path":null}
+{"cursor":2,"kind":"master.typed","labels":[],"line":"pr","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.root","popup_id":1001,"labels":[],"line":"p","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":3,"kind":"master.typed","labels":[],"line":"pro","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.root","popup_id":1002,"labels":[],"line":"pr","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":4,"kind":"master.typed","labels":[],"line":"proj","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.root","popup_id":1003,"labels":[],"line":"pro","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":5,"kind":"master.typed","labels":[],"line":"proje","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.root","popup_id":1004,"labels":[],"line":"proj","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":6,"kind":"master.typed","labels":[],"line":"projec","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.root","popup_id":1005,"labels":[],"line":"proje","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":7,"kind":"master.typed","labels":[],"line":"project","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.root","popup_id":1006,"labels":[],"line":"projec","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":8,"kind":"master.typed","labels":[],"line":"project ","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.root","popup_id":1007,"labels":[],"line":"project","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":9,"kind":"master.typed","labels":[],"line":"project h","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.root","popup_id":1008,"labels":[],"line":"project ","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":10,"kind":"master.typed","labels":[],"line":"project hq","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.path","popup_id":1009,"labels":[],"line":"project h","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":11,"kind":"master.typed","labels":[],"line":"project hq ","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.path","popup_id":1010,"labels":[],"line":"project hq","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":12,"kind":"master.typed","labels":[],"line":"project hq t","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.path","popup_id":1011,"labels":["name","status","tasks"],"line":"project hq ","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":[]}
+{"cursor":13,"kind":"master.typed","labels":[],"line":"project hq ta","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.path","popup_id":1012,"labels":["tasks"],"line":"project hq t","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":["t"]}
+{"cursor":14,"kind":"master.typed","labels":[],"line":"project hq tas","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.path","popup_id":1013,"labels":["tasks"],"line":"project hq ta","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":["ta"]}
+{"cursor":15,"kind":"master.typed","labels":[],"line":"project hq task","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.path","popup_id":1014,"labels":["tasks"],"line":"project hq tas","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":["tas"]}
+{"cursor":16,"kind":"master.typed","labels":[],"line":"project hq tasks","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.path","popup_id":1015,"labels":["tasks"],"line":"project hq task","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":["task"]}
+{"cursor":17,"kind":"master.typed","labels":[],"line":"project hq tasks ","slot_kind":"unknown","slot_path":null}
+{"slot_kind":"draft.path","popup_id":1016,"labels":["tasks"],"line":"project hq tasks","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":["tasks"]}
+{"slot_kind":"draft.ref","popup_id":1017,"labels":["task:t1","task:t2","task:t3"],"line":"project hq tasks ","kind":"vim.popup.rendered","screen_text":"cache/loose-visual.screen.txt","slot_path":["tasks"]}

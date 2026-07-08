@@ -1,0 +1,30 @@
+{"kind":"project","tasks":[                                                                             
+~                                                                                                       
+~                                                                                                       
+~    +--------------------------------------------+                                                     
+~    | HQ SLOT PROJECTION                         |                                                     
+~    | slot: array.item path: tasks               |                                                     
+~    | > task:t1  Build pty master                |                                                     
+~    | > task:t2  Wire Vim as line editor         |                                                     
+~    | > task:t3  Prove recursive slot completion |                                                     
+~    +--------------------------------------------+                                                     
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+                                                                                                        

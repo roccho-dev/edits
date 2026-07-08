@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>hq Vim visual projection proof</title>
+<style>
+body { margin: 0; background: #111827; color: #e5e7eb; font: 14px/1.5 system-ui, sans-serif; }
+main { padding: 24px; }
+pre { background: #141820; border: 1px solid #374151; border-radius: 10px; padding: 16px; overflow: auto; font: 15px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.ok { color: #bef264; }
+.small { color: #9ca3af; }
+</style>
+<main>
+<h1>hq Vim visual projection proof <span class="ok">OK</span></h1>
+<p>Direct Vim child, no shell wrapper: <strong>True</strong></p>
+<p>Popup trace OK: <strong>True</strong>; screen contains popup: <strong>True</strong></p>
+<p>Labels: <strong>task:t1, task:t2, task:t3</strong></p>
+<p class="small">This is the Vim <code>screenstring()</code> grid captured after popup projection.</p>
+<pre>project hq tasks                                                                                        
+~                                                                                                       
+~                                                                                                       
+~    +--------------------------------------------+                                                     
+~    | HQ SLOT PROJECTION                         |                                                     
+~    | slot: draft.ref path: tasks                |                                                     
+~    | draft: project.patch op: append-ref        |                                                     
+~    | missing: ref                               |                                                     
+~    | &gt; task:t1  Build pty master                |                                                     
+~    | &gt; task:t2  Wire Vim as line editor         |                                                     
+~    | &gt; task:t3  Prove recursive slot completion |                                                     
+~    +--------------------------------------------+                                                     
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+                                                                                                        </pre>
+</main>

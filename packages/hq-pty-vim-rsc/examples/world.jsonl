@@ -1,0 +1,22 @@
+{"kind":"adapter.registered","adapter":"mux.spawn","safe":true,"description":"spawn a new slave through mux/herdr/tmux adapter"}
+{"kind":"adapter.registered","adapter":"pane.send","safe":true,"description":"send input to an existing pane"}
+{"kind":"adapter.registered","adapter":"agent.ask","safe":true,"description":"ask an agent with explicit context"}
+{"kind":"adapter.registered","adapter":"http.request","safe":true,"description":"perform HTTP request through real Go net/http adapter"}
+{"kind":"adapter.registered","adapter":"shell.exec","safe":false,"description":"execute shell command; last resort; requires explicit confirmation"}
+{"kind":"adapter.registered","adapter":"file.edit","safe":false,"description":"edit files; requires confirm"}
+{"kind":"adapter.registered","adapter":"git.run","safe":false,"description":"run git through adapter; requires confirm"}
+{"kind":"target.upsert","target":"pane.shell","adapter":"pane.send","description":"existing shell pane"}
+{"kind":"target.upsert","target":"pane.runner","adapter":"pane.send","description":"test runner pane"}
+{"kind":"target.upsert","target":"agent.a","adapter":"agent.ask","description":"agent A"}
+{"kind":"target.upsert","target":"mux","adapter":"mux.spawn","description":"mux fabric"}
+{"kind":"target.upsert","target":"http","adapter":"http.request","description":"HTTP adapter"}
+{"kind":"target.upsert","target":"shell","adapter":"shell.exec","description":"confirmed shell adapter"}
+{"kind":"context.ref","ref":"runner:last-failure","description":"last runner failure"}
+{"kind":"context.ref","ref":"diff:staged","description":"staged git diff"}
+{"kind":"context.ref","ref":"repo:summary","description":"reduced repo summary"}
+{"kind":"command.template","label":"spawn bash slave","insert":"mux.spawn bash name=shell cwd=. mode=bg","adapter":"mux.spawn","action":"spawn","description":"Create a new bash slave in background"}
+{"kind":"command.template","label":"send git status","insert":"pane.shell.send \"git status\" enter","adapter":"pane.send","action":"send","description":"Send git status to shell pane"}
+{"kind":"command.template","label":"run go tests","insert":"pane.runner.send \"go test ./...\" enter","adapter":"pane.send","action":"send","description":"Send go test to runner pane"}
+{"kind":"command.template","label":"ask agent fix failure","insert":"agent.a.fix failed-test with=runner:last-failure,diff:staged","adapter":"agent.ask","action":"fix","description":"Ask agent A to fix current failing test with explicit context"}
+{"kind":"command.template","label":"health check","insert":"http.get http://127.0.0.1:18080/health save=health","adapter":"http.request","action":"request","description":"HTTP health check through adapter"}
+{"kind":"command.template","label":"shell echo proof","insert":"shell.exec \"printf hq-shell-ok\" timeout=2s","adapter":"shell.exec","action":"exec","description":"Confirmed shell adapter smoke proof"}

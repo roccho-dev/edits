@@ -1,0 +1,30 @@
+project hq tasks                                                                                        
+~                                                                                                       
+~                                                                                                       
+~    +--------------------------------------------+                                                     
+~    | HQ SLOT PROJECTION                         |                                                     
+~    | slot: draft.ref path: tasks                |                                                     
+~    | draft: project.patch op: append-ref        |                                                     
+~    | missing: ref                               |                                                     
+~    | > task:t1  Build pty master                |                                                     
+~    | > task:t2  Wire Vim as line editor         |                                                     
+~    | > task:t3  Prove recursive slot completion |                                                     
+~    +--------------------------------------------+                                                     
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+~                                                                                                       
+                                                                                                        

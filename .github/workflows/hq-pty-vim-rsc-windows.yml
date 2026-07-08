@@ -48,7 +48,15 @@ jobs:
           Write-Output "Vim: $vim"
       - name: Test all packages
         shell: pwsh
-        run: go test ./...
+        run: |
+          New-Item -ItemType Directory -Force -Path cache | Out-Null
+          Remove-Item -Force -ErrorAction SilentlyContinue cache\windows-go-test.failed
+          go test -v ./... *> cache\windows-go-test.log
+          $exit = $LASTEXITCODE
+          if ($exit -ne 0) {
+            "exit=$exit" | Out-File cache\windows-go-test.failed
+          }
+          Get-Content cache\windows-go-test.log -Raw | Write-Output
       - name: Build Windows launcher hq.exe
         shell: pwsh
         run: |
@@ -86,9 +94,14 @@ jobs:
             packages/hq-pty-vim-rsc/cache/windows-*.raw
             packages/hq-pty-vim-rsc/cache/windows-*.log
             packages/hq-pty-vim-rsc/cache/windows-*.failed
-      - name: Assert Windows ConPTY Vim visual projection
+      - name: Assert Windows test and ConPTY Vim visual projection
         shell: pwsh
         run: |
+          if (Test-Path cache\windows-go-test.failed) {
+            Get-Content cache\windows-go-test.failed -Raw | Write-Output
+            Get-Content cache\windows-go-test.log -Raw | Write-Output
+            throw 'Windows go test failed'
+          }
           if (Test-Path cache\windows-conpty-vim-visual.failed) {
             Get-Content cache\windows-conpty-vim-visual.failed -Raw | Write-Output
             if (Test-Path cache\windows-conpty-vim-visual.log) { Get-Content cache\windows-conpty-vim-visual.log -Raw | Write-Output }

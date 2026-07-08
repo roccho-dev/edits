@@ -1,0 +1,8 @@
+{
+  "command": "model.addEdge",
+  "createdAt": "2026-07-08T00:01:00Z",
+  "confirmedBy": "human",
+  "targetRef": {"kind": "projectionNode", "id": "pkg:core"},
+  "payload": {"from": "pkg:core", "to": "pkg:ui", "relation": "uses"},
+  "reason": "confirmed from Vim completion"
+}

@@ -1,0 +1,32 @@
+name: auto-complete golden
+
+on:
+  pull_request:
+    paths:
+      - 'packages/auto-complete/**'
+      - '.github/workflows/auto-complete-golden.yml'
+  push:
+    branches:
+      - proposals
+    paths:
+      - 'packages/auto-complete/**'
+      - '.github/workflows/auto-complete-golden.yml'
+
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/auto-complete
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vim and Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y vim python3
+      - name: Run current Vim golden proof
+        run: bash test/run.sh
+      - name: Assert golden summary invariants
+        run: python3 test/golden_check.py
+      - name: Run Go LSP seed tests
+        run: go test ./...

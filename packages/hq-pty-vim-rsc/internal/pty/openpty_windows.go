@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"unicode/utf16"
 	"unsafe"
@@ -54,6 +55,10 @@ func Start(argv []string, env []string) (*Session, error) {
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("empty argv")
 	}
+	resolvedArgv := append([]string(nil), argv...)
+	if p, err := exec.LookPath(argv[0]); err == nil {
+		resolvedArgv[0] = p
+	}
 	sa := &windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), InheritHandle: 1}
 	var inRead, inWrite windows.Handle
 	var outRead, outWrite windows.Handle
@@ -85,14 +90,14 @@ func Start(argv []string, env []string) (*Session, error) {
 	si.ProcThreadAttributeList = attrList.List()
 	si.Cb = uint32(unsafe.Sizeof(si))
 	var pi windows.ProcessInformation
-	argv0p, err := windows.UTF16PtrFromString(argv[0])
+	argv0p, err := windows.UTF16PtrFromString(resolvedArgv[0])
 	if err != nil {
 		attrList.Delete()
 		windows.ClosePseudoConsole(hpc)
 		closeHandles(inRead, inWrite, outRead, outWrite)
 		return nil, err
 	}
-	cmdline := windows.ComposeCommandLine(argv)
+	cmdline := windows.ComposeCommandLine(resolvedArgv)
 	cmdlinep, err := windows.UTF16PtrFromString(cmdline)
 	if err != nil {
 		attrList.Delete()

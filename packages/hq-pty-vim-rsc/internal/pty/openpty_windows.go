@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"syscall"
+	"unicode/utf16"
 	"unsafe"
 )
 
@@ -110,7 +111,12 @@ func Start(argv []string, env []string) (*Session, error) {
 		closeHandles(inRead, inWrite, outRead, outWrite)
 		return nil, err
 	}
-	err = syscall.CreateProcess(nil, cmdline, nil, nil, false, extendedStartupInfoPresent, nil, nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
+	envBlock := makeEnvBlock(env)
+	var envPtr *uint16
+	if len(envBlock) > 0 {
+		envPtr = &envBlock[0]
+	}
+	err = syscall.CreateProcess(nil, cmdline, nil, nil, false, extendedStartupInfoPresent, unsafe.Pointer(envPtr), nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
 	procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 	_ = syscall.CloseHandle(inRead)
 	_ = syscall.CloseHandle(outWrite)
@@ -166,6 +172,36 @@ func closeHandles(handles ...syscall.Handle) {
 		}
 	}
 }
+
+func makeEnvBlock(extra []string) []uint16 {
+	merged := map[string]string{}
+	order := []string{}
+	add := func(kv string) {
+		if kv == "" || !strings.Contains(kv, "=") {
+			return
+		}
+		key := strings.SplitN(kv, "=", 2)[0]
+		lower := strings.ToLower(key)
+		if _, ok := merged[lower]; !ok {
+			order = append(order, lower)
+		}
+		merged[lower] = kv
+	}
+	for _, kv := range os.Environ() {
+		add(kv)
+	}
+	for _, kv := range extra {
+		add(kv)
+	}
+	var out []uint16
+	for _, key := range order {
+		out = append(out, utf16.Encode([]rune(merged[key]))...)
+		out = append(out, 0)
+	}
+	out = append(out, 0)
+	return out
+}
+
 func windowsCommandLine(argv []string) string {
 	parts := make([]string, len(argv))
 	for i, a := range argv {

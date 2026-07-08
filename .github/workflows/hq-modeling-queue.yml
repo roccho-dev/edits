@@ -1,0 +1,26 @@
+name: hq-modeling-queue
+
+on:
+  pull_request:
+    paths:
+      - 'packages/hq-modeling-queue/**'
+      - '.github/workflows/hq-modeling-queue.yml'
+  push:
+    branches:
+      - proposals
+    paths:
+      - 'packages/hq-modeling-queue/**'
+      - '.github/workflows/hq-modeling-queue.yml'
+
+jobs:
+  validate-samples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Validate queue sample
+        run: python3 packages/hq-modeling-queue/tools/validate_queue.py packages/hq-modeling-queue/examples/queue.sample.jsonl
+      - name: Validate receipt sample
+        run: python3 packages/hq-modeling-queue/tools/validate_queue.py packages/hq-modeling-queue/examples/receipt.sample.jsonl

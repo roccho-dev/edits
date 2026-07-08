@@ -53,6 +53,7 @@ type startupInfoEx struct {
 
 const (
 	extendedStartupInfoPresent       = 0x00080000
+	createUnicodeEnvironment        = 0x00000400
 	procThreadAttributePseudoConsole = 0x00020016
 	infinite                         = 0xffffffff
 )
@@ -116,7 +117,8 @@ func Start(argv []string, env []string) (*Session, error) {
 	if len(envBlock) > 0 {
 		envPtr = &envBlock[0]
 	}
-	err = syscall.CreateProcess(nil, cmdline, nil, nil, false, extendedStartupInfoPresent, envPtr, nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
+	flags := uint32(extendedStartupInfoPresent | createUnicodeEnvironment)
+	err = syscall.CreateProcess(nil, cmdline, nil, nil, false, flags, envPtr, nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
 	procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 	_ = syscall.CloseHandle(inRead)
 	_ = syscall.CloseHandle(outWrite)

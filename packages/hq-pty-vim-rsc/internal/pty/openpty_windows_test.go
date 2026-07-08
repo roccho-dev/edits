@@ -11,7 +11,7 @@ import (
 )
 
 func TestConPTYCmdEchoOutput(t *testing.T) {
-	sess, err := Start([]string{"cmd.exe", "/c", "echo", "hq-conpty-ok"}, nil)
+	sess, err := Start([]string{"cmd.exe"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +21,13 @@ func TestConPTYCmdEchoOutput(t *testing.T) {
 		_, err := io.Copy(&buf, sess.Master)
 		done <- err
 	}()
+	time.Sleep(300 * time.Millisecond)
+	if _, err := sess.Master.Write([]byte("echo hq-conpty-ok\r\nexit\r\n")); err != nil {
+		_ = sess.Close()
+		t.Fatalf("write to ConPTY failed: %v", err)
+	}
 	_ = sess.Wait()
+	time.Sleep(300 * time.Millisecond)
 	_ = sess.Close()
 	select {
 	case <-done:

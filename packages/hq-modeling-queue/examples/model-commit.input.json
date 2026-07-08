@@ -1,0 +1,13 @@
+{
+  "id": "mq_append_001",
+  "kind": "hq.modelCommitQueued.v1",
+  "createdAt": "2026-07-08T00:00:10Z",
+  "status": "queued",
+  "confirmedBy": "human",
+  "idempotencyKey": "idem_mq_append_001",
+  "sourceDigest": null,
+  "targetRef": {"kind": "projectionNode", "id": "pkg:core"},
+  "op": "addEdge",
+  "payload": {"from": "pkg:core", "to": "pkg:ui", "relation": "uses"},
+  "reason": "append/readback proof input"
+}

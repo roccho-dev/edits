@@ -60,3 +60,16 @@ Use the standard-library validator:
 python3 packages/hq-modeling-queue/tools/validate_queue.py packages/hq-modeling-queue/examples/queue.sample.jsonl
 python3 packages/hq-modeling-queue/tools/validate_queue.py packages/hq-modeling-queue/examples/receipt.sample.jsonl
 ```
+
+## Local queue IO
+
+Use the standard-library queue tool for local/dev append, readback, tail, and full-file validation:
+
+```text
+python3 packages/hq-modeling-queue/tools/queue_io.py append .local/queue.jsonl --from-file packages/hq-modeling-queue/examples/model-commit.input.json
+python3 packages/hq-modeling-queue/tools/queue_io.py read .local/queue.jsonl
+python3 packages/hq-modeling-queue/tools/queue_io.py tail .local/queue.jsonl -n 1
+python3 packages/hq-modeling-queue/tools/queue_io.py validate .local/queue.jsonl
+```
+
+`.local/queue.jsonl` and `.local/receipt.jsonl` remain local runtime files and must not be committed.

@@ -24,3 +24,12 @@ jobs:
         run: python3 packages/hq-modeling-queue/tools/validate_queue.py packages/hq-modeling-queue/examples/queue.sample.jsonl
       - name: Validate receipt sample
         run: python3 packages/hq-modeling-queue/tools/validate_queue.py packages/hq-modeling-queue/examples/receipt.sample.jsonl
+      - name: Prove local queue append/readback/tail
+        run: |
+          rm -rf .local
+          python3 packages/hq-modeling-queue/tools/queue_io.py append .local/queue.jsonl --from-file packages/hq-modeling-queue/examples/model-commit.input.json
+          python3 packages/hq-modeling-queue/tools/queue_io.py read .local/queue.jsonl --summary > /tmp/queue.readback.jsonl
+          python3 packages/hq-modeling-queue/tools/queue_io.py tail .local/queue.jsonl -n 1 > /tmp/queue.tail.jsonl
+          python3 packages/hq-modeling-queue/tools/queue_io.py validate .local/queue.jsonl
+          test "$(wc -l < /tmp/queue.readback.jsonl | tr -d ' ')" = "1"
+          test "$(wc -l < /tmp/queue.tail.jsonl | tr -d ' ')" = "1"

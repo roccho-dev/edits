@@ -23,12 +23,12 @@ func TestConPTYCmdEchoOutput(t *testing.T) {
 	}()
 	waitForAnyOutput(t, &buf, 3*time.Second)
 	time.Sleep(1200 * time.Millisecond)
-	if _, err := sess.Master.Write([]byte("echo hq-conpty-ok\r")); err != nil {
+	if _, err := sess.Master.Write([]byte("echo hq-conpty-ok\r\n")); err != nil {
 		_ = sess.Close()
 		t.Fatalf("write echo to ConPTY failed: %v", err)
 	}
 	waitContains(t, &buf, "hq-conpty-ok", 3*time.Second)
-	if _, err := sess.Master.Write([]byte("exit\r")); err != nil {
+	if _, err := sess.Master.Write([]byte("exit\r\n")); err != nil {
 		_ = sess.Close()
 		t.Fatalf("write exit to ConPTY failed: %v", err)
 	}

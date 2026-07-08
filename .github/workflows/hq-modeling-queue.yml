@@ -43,3 +43,11 @@ jobs:
           python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.agent-propose-model.json > /tmp/agent.queue.jsonl
           python3 packages/hq-modeling-queue/tools/validate_queue.py /tmp/agent.queue.jsonl
           grep '"kind":"hq.agentTaskQueued.v1"' /tmp/agent.queue.jsonl
+      - name: Prove current target bridge fallback
+        run: |
+          rm -rf .local
+          python3 packages/hq-modeling-queue/tools/current_target.py write .local/current-target.json --from-file packages/hq-modeling-queue/examples/current-target.sample.json
+          python3 packages/hq-modeling-queue/tools/current_target.py validate .local/current-target.json
+          python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.model-add-edge.no-target.json --target-file .local/current-target.json > /tmp/model.from-target.queue.jsonl
+          python3 packages/hq-modeling-queue/tools/validate_queue.py /tmp/model.from-target.queue.jsonl
+          grep '"targetRef":{"kind":"projectionNode","id":"pkg:core"}' /tmp/model.from-target.queue.jsonl

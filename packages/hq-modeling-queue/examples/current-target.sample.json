@@ -1,0 +1,11 @@
+{
+  "kind": "projectionNode",
+  "id": "pkg:core",
+  "source": "localhost-ui",
+  "projectionDigest": "sha256:example-projection",
+  "updatedAt": "2026-07-08T00:02:00Z",
+  "metadata": {
+    "label": "core",
+    "repo": "roccho-dev/edits"
+  }
+}

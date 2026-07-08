@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roccho-dev.local/edits/hq-modeling-queue/current-target.schema.json",
+  "title": "current targetRef bridge",
+  "type": "object",
+  "required": ["kind", "id", "source", "projectionDigest", "updatedAt"],
+  "properties": {
+    "kind": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "projectionDigest": { "type": ["string", "null"] },
+    "updatedAt": { "type": "string", "minLength": 1 },
+    "metadata": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": false
+}

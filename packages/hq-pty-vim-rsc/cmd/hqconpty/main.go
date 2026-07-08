@@ -72,7 +72,7 @@ func run(worldPath, chars, vimPath, out, tracePath, screenTextPath, rawPath stri
 	}
 	defer os.Remove(bufFile)
 
-	argv := []string{vimPath, "-Nu", "NONE", "-n", "-i", "NONE", "-S", script, bufFile}
+	argv := []string{vimPath, "-v", "-T", "xterm", "-Nu", "NONE", "-n", "-i", "NONE", "-S", script, bufFile}
 	sess, err := pty.Start(argv, []string{"TERM=xterm-256color", "COLUMNS=104", "LINES=30"})
 	if err != nil {
 		return err
@@ -81,6 +81,7 @@ func run(worldPath, chars, vimPath, out, tracePath, screenTextPath, rawPath stri
 
 	readerDone := make(chan struct{})
 	var captured bytes.Buffer
+	defer func() { _ = os.WriteFile(rawPath, captured.Bytes(), 0o644) }()
 	go func() { _, _ = io.Copy(&captured, sess.Master); close(readerDone) }()
 
 	time.Sleep(900 * time.Millisecond)

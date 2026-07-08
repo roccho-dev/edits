@@ -7,6 +7,7 @@ on:
       - 'packages/hq-local-worker/**'
       - 'packages/hq-admission-gate/**'
       - 'packages/hq-source-extract/**'
+      - 'packages/contracts-poc/**'
       - '.github/workflows/hq-modeling-queue.yml'
   push:
     branches:
@@ -16,6 +17,7 @@ on:
       - 'packages/hq-local-worker/**'
       - 'packages/hq-admission-gate/**'
       - 'packages/hq-source-extract/**'
+      - 'packages/contracts-poc/**'
       - '.github/workflows/hq-modeling-queue.yml'
 
 jobs:
@@ -94,3 +96,5 @@ jobs:
           grep '"kind":"extraction.v1"' /tmp/repoMap.world.jsonl
           grep '"kind":"repoMap.world.node.v1"' /tmp/repoMap.world.jsonl
           grep '"kind":"repoMap.world.edge.v1"' /tmp/repoMap.world.jsonl
+      - name: Prove contracts-poc ledger validation
+        run: python3 packages/contracts-poc/tools/validate_contract_ledger.py packages/contracts-poc/ledgers/sample.contract.jsonl

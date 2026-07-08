@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -35,7 +36,7 @@ func TestDispatchRequiresMatchingPlanIdentity(t *testing.T) {
 }
 
 func TestShellExecAdapterActuallyRunsWithConfirm(t *testing.T) {
-	plan := testPlan(t, "shell.exec \"printf hq-shell-ok\" timeout=2s", 5)
+	plan := testPlan(t, "shell.exec \""+shellEchoCommand("hq-shell-ok")+"\" timeout=2s", 5)
 	d := NewDefault()
 	if _, err := d.Dispatch(Request{Plan: plan, PlanID: plan.ID, PlanHash: plan.Hash, BufferVersion: 5}); err == nil {
 		t.Fatalf("expected shell plan to require confirmation")
@@ -70,9 +71,16 @@ func TestHTTPAdapterActuallyRequests(t *testing.T) {
 }
 
 func TestAdaptersCanBeCalledDirectly(t *testing.T) {
-	plan := core.PlanDraft{Args: map[string]string{"command": "printf direct-shell-ok", "timeout": "2s"}}
+	plan := core.PlanDraft{Args: map[string]string{"command": shellEchoCommand("direct-shell-ok"), "timeout": "2s"}}
 	got, err := ShellAdapter{}.Execute(context.Background(), plan)
 	if err != nil || !strings.Contains(got["stdout"].(string), "direct-shell-ok") {
 		t.Fatalf("shell adapter direct failed got=%v err=%v", got, err)
 	}
+}
+
+func shellEchoCommand(text string) string {
+	if runtime.GOOS == "windows" {
+		return "echo " + text
+	}
+	return "printf " + text
 }

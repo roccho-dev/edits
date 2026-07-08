@@ -24,6 +24,8 @@ jobs:
         shell: pwsh
         run: |
           $candidates = @(
+            'C:\Program Files\Git\cmd\vim.exe',
+            'C:\Program Files\Git\bin\vim.exe',
             'C:\Program Files\Git\usr\bin\vim.exe',
             'C:\Program Files\Git\mingw64\bin\vim.exe'
           )

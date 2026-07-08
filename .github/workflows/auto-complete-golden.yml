@@ -1,4 +1,4 @@
-name: auto-complete golden
+name: auto-complete candidate and UX evidence
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ on:
       - '.github/workflows/auto-complete-golden.yml'
 
 jobs:
-  golden:
+  candidate-and-ux-evidence:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,9 +24,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y vim python3
-      - name: Run current Vim golden proof
+      - name: Run current Vim candidate-contract proof
         run: bash test/run.sh
-      - name: Assert golden summary invariants
+      - name: Assert candidate-contract summary invariants
         run: python3 test/golden_check.py
       - name: Run Go LSP seed tests
         run: go test ./...
@@ -34,7 +34,20 @@ jobs:
         run: python3 test/lsp_smoke.py
       - name: Run Vim adapter through Go LSP
         run: vim --clean -Nu NONE -n -es -S test/vim_lsp_adapter.vim && cat test/vim_lsp_adapter_result.json
+      - name: Render UX visual evidence
+        run: python3 test/render_ux_visual.py
+      - name: Check UX visual evidence
+        run: python3 test/ux_visual_check.py
       - name: Run adapter boundary check
         run: python3 test/boundary_check.py
       - name: Run Helix config smoke check
         run: python3 test/helix_config_check.py
+      - name: Upload UX visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-complete-ux-golden-evidence
+          path: |
+            packages/auto-complete/artifacts/ux-golden.svg
+            packages/auto-complete/artifacts/ux-golden.json
+            packages/auto-complete/artifacts/ux-golden.md
+          if-no-files-found: error

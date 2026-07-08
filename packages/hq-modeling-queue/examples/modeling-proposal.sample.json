@@ -1,0 +1,12 @@
+{
+  "id": "mp_001",
+  "kind": "modeling.proposal.v1",
+  "createdAt": "2026-07-08T00:03:00Z",
+  "sourceTaskId": "aq_001",
+  "targetRef": {"kind": "projectionNode", "id": "pkg:core"},
+  "op": "addEdge",
+  "payload": {"from": "pkg:core", "to": "pkg:ui", "relation": "uses"},
+  "evidence": ["selectedNeighborhood shows pkg:core depends on pkg:ui"],
+  "risk": ["proposal still requires human confirmation and admission"],
+  "status": "proposed"
+}

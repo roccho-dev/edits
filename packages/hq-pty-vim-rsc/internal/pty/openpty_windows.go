@@ -19,13 +19,11 @@ type Master interface {
 }
 
 type Session struct {
-	Master      Master
-	inputRead   syscall.Handle
-	outputWrite syscall.Handle
-	hpc         uintptr
-	process     syscall.Handle
-	thread      syscall.Handle
-	pid         int
+	Master  Master
+	hpc     uintptr
+	process syscall.Handle
+	thread  syscall.Handle
+	pid     int
 }
 
 type pipeMaster struct {
@@ -85,19 +83,23 @@ func Start(argv []string, env []string) (*Session, error) {
 		closeHandles(inRead, inWrite, outRead, outWrite)
 		return nil, fmt.Errorf("CreatePseudoConsole HRESULT=0x%x last=%v", r1, err)
 	}
+	// The pseudo console owns these pipe ends now; the host keeps only inWrite/outRead.
+	closeHandles(inRead, outWrite)
+	inRead, outWrite = 0, 0
+
 	var attrSize uintptr
 	procInitializeProcThreadAttributeList.Call(0, 1, 0, uintptr(unsafe.Pointer(&attrSize)))
 	attrBuf := make([]byte, attrSize)
 	attrList := unsafe.Pointer(&attrBuf[0])
 	if r1, _, err := procInitializeProcThreadAttributeList.Call(uintptr(attrList), 1, 0, uintptr(unsafe.Pointer(&attrSize))); r1 == 0 {
 		procClosePseudoConsole.Call(hpc)
-		closeHandles(inRead, inWrite, outRead, outWrite)
+		closeHandles(inWrite, outRead)
 		return nil, fmt.Errorf("InitializeProcThreadAttributeList: %w", err)
 	}
 	if r1, _, err := procUpdateProcThreadAttribute.Call(uintptr(attrList), 0, procThreadAttributePseudoConsole, hpc, unsafe.Sizeof(hpc), 0, 0); r1 == 0 {
 		procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 		procClosePseudoConsole.Call(hpc)
-		closeHandles(inRead, inWrite, outRead, outWrite)
+		closeHandles(inWrite, outRead)
 		return nil, fmt.Errorf("UpdateProcThreadAttribute: %w", err)
 	}
 	si := startupInfoEx{ProcThreadAttributeList: (*byte)(attrList)}
@@ -108,7 +110,7 @@ func Start(argv []string, env []string) (*Session, error) {
 	if err != nil {
 		procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 		procClosePseudoConsole.Call(hpc)
-		closeHandles(inRead, inWrite, outRead, outWrite)
+		closeHandles(inWrite, outRead)
 		return nil, err
 	}
 	envBlock := makeEnvBlock(env)
@@ -121,10 +123,10 @@ func Start(argv []string, env []string) (*Session, error) {
 	procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 	if err != nil {
 		procClosePseudoConsole.Call(hpc)
-		closeHandles(inRead, inWrite, outRead, outWrite)
+		closeHandles(inWrite, outRead)
 		return nil, fmt.Errorf("CreateProcess %q: %w", cmdlineRaw, err)
 	}
-	return &Session{Master: &pipeMaster{input: os.NewFile(uintptr(inWrite), "conpty-input"), output: os.NewFile(uintptr(outRead), "conpty-output")}, inputRead: inRead, outputWrite: outWrite, hpc: hpc, process: pi.Process, thread: pi.Thread, pid: int(pi.ProcessId)}, nil
+	return &Session{Master: &pipeMaster{input: os.NewFile(uintptr(inWrite), "conpty-input"), output: os.NewFile(uintptr(outRead), "conpty-output")}, hpc: hpc, process: pi.Process, thread: pi.Thread, pid: int(pi.ProcessId)}, nil
 }
 
 func coordValue(x, y int16) uintptr {
@@ -154,7 +156,6 @@ func (s *Session) Close() error {
 	if s.Master != nil {
 		_ = s.Master.Close()
 	}
-	closeHandles(s.inputRead, s.outputWrite)
 	if s.process != 0 {
 		_ = syscall.TerminateProcess(s.process, 1)
 		_ = syscall.CloseHandle(s.process)

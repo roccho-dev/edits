@@ -32,3 +32,7 @@ jobs:
         run: go test ./...
       - name: Run Go LSP JSON-RPC smoke
         run: python3 test/lsp_smoke.py
+      - name: Run adapter boundary check
+        run: python3 test/boundary_check.py
+      - name: Run Helix config smoke check
+        run: python3 test/helix_config_check.py

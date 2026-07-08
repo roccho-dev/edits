@@ -7,9 +7,10 @@ import (
 	"io"
 	"os"
 	"strings"
-	"syscall"
 	"unicode/utf16"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 type Master interface {
@@ -20,110 +21,83 @@ type Master interface {
 
 type Session struct {
 	Master   Master
-	hpc      uintptr
-	process  syscall.Handle
-	thread   syscall.Handle
+	hpc      windows.Handle
+	attrList *windows.ProcThreadAttributeListContainer
+	process  windows.Handle
+	thread   windows.Handle
 	pid      int
-	consoleR *os.File
-	consoleW *os.File
+	inRead   windows.Handle
+	outWrite windows.Handle
 }
 
 type pipeMaster struct {
-	input  *os.File
-	output *os.File
+	inWrite windows.Handle
+	outRead windows.Handle
 }
 
-func (m *pipeMaster) Read(p []byte) (int, error)  { return m.output.Read(p) }
-func (m *pipeMaster) Write(p []byte) (int, error) { return m.input.Write(p) }
+func (m *pipeMaster) Read(p []byte) (int, error) {
+	var n uint32
+	err := windows.ReadFile(m.outRead, p, &n, nil)
+	return int(n), err
+}
+func (m *pipeMaster) Write(p []byte) (int, error) {
+	var n uint32
+	err := windows.WriteFile(m.inWrite, p, &n, nil)
+	return int(n), err
+}
 func (m *pipeMaster) Close() error {
-	if m.input != nil {
-		_ = m.input.Close()
-	}
-	if m.output != nil {
-		_ = m.output.Close()
-	}
+	closeHandles(m.inWrite, m.outRead)
 	return nil
 }
-
-type startupInfoEx struct {
-	syscall.StartupInfo
-	ProcThreadAttributeList *byte
-}
-
-const (
-	extendedStartupInfoPresent       = 0x00080000
-	createUnicodeEnvironment        = 0x00000400
-	procThreadAttributePseudoConsole = 0x00020016
-	infinite                         = 0xffffffff
-)
-
-var (
-	kernel32                              = syscall.NewLazyDLL("kernel32.dll")
-	procCreatePseudoConsole              = kernel32.NewProc("CreatePseudoConsole")
-	procClosePseudoConsole               = kernel32.NewProc("ClosePseudoConsole")
-	procInitializeProcThreadAttributeList = kernel32.NewProc("InitializeProcThreadAttributeList")
-	procUpdateProcThreadAttribute        = kernel32.NewProc("UpdateProcThreadAttribute")
-	procDeleteProcThreadAttributeList    = kernel32.NewProc("DeleteProcThreadAttributeList")
-)
 
 func Start(argv []string, env []string) (*Session, error) {
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("empty argv")
 	}
-	// Pipe direction matches common ConPTY implementations:
-	// host reads pr, ConPTY writes consoleW; ConPTY reads consoleR, host writes pw.
-	pr, consoleW, err := os.Pipe()
-	if err != nil {
-		return nil, fmt.Errorf("CreatePipe output: %w", err)
-	}
-	consoleR, pw, err := os.Pipe()
-	if err != nil {
-		_ = pr.Close()
-		_ = consoleW.Close()
+	sa := &windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), InheritHandle: 1}
+	var inRead, inWrite windows.Handle
+	var outRead, outWrite windows.Handle
+	if err := windows.CreatePipe(&inRead, &inWrite, sa, 0); err != nil {
 		return nil, fmt.Errorf("CreatePipe input: %w", err)
 	}
-	var hpc uintptr
-	if r1, _, last := procCreatePseudoConsole.Call(coordValue(120, 40), consoleR.Fd(), consoleW.Fd(), 0, uintptr(unsafe.Pointer(&hpc))); r1 != 0 {
-		_ = pr.Close()
-		_ = consoleW.Close()
-		_ = consoleR.Close()
-		_ = pw.Close()
-		return nil, fmt.Errorf("CreatePseudoConsole HRESULT=0x%x last=%v", r1, last)
+	if err := windows.CreatePipe(&outRead, &outWrite, sa, 0); err != nil {
+		closeHandles(inRead, inWrite)
+		return nil, fmt.Errorf("CreatePipe output: %w", err)
 	}
-
-	var attrSize uintptr
-	procInitializeProcThreadAttributeList.Call(0, 1, 0, uintptr(unsafe.Pointer(&attrSize)))
-	attrBuf := make([]byte, attrSize)
-	attrList := unsafe.Pointer(&attrBuf[0])
-	if r1, _, err := procInitializeProcThreadAttributeList.Call(uintptr(attrList), 1, 0, uintptr(unsafe.Pointer(&attrSize))); r1 == 0 {
-		procClosePseudoConsole.Call(hpc)
-		_ = pr.Close()
-		_ = consoleW.Close()
-		_ = consoleR.Close()
-		_ = pw.Close()
-		return nil, fmt.Errorf("InitializeProcThreadAttributeList: %w", err)
+	var hpc windows.Handle
+	if err := windows.CreatePseudoConsole(windows.Coord{X: 120, Y: 40}, inRead, outWrite, 0, &hpc); err != nil {
+		closeHandles(inRead, inWrite, outRead, outWrite)
+		return nil, fmt.Errorf("CreatePseudoConsole: %w", err)
 	}
-	if r1, _, err := procUpdateProcThreadAttribute.Call(uintptr(attrList), 0, procThreadAttributePseudoConsole, hpc, unsafe.Sizeof(hpc), 0, 0); r1 == 0 {
-		procDeleteProcThreadAttributeList.Call(uintptr(attrList))
-		procClosePseudoConsole.Call(hpc)
-		_ = pr.Close()
-		_ = consoleW.Close()
-		_ = consoleR.Close()
-		_ = pw.Close()
+	attrList, err := windows.NewProcThreadAttributeList(1)
+	if err != nil {
+		windows.ClosePseudoConsole(hpc)
+		closeHandles(inRead, inWrite, outRead, outWrite)
+		return nil, err
+	}
+	if err := attrList.Update(windows.PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, unsafe.Pointer(hpc), unsafe.Sizeof(hpc)); err != nil {
+		attrList.Delete()
+		windows.ClosePseudoConsole(hpc)
+		closeHandles(inRead, inWrite, outRead, outWrite)
 		return nil, fmt.Errorf("UpdateProcThreadAttribute: %w", err)
 	}
-	si := startupInfoEx{ProcThreadAttributeList: (*byte)(attrList)}
+	si := windows.StartupInfoEx{}
+	si.ProcThreadAttributeList = attrList.List()
 	si.Cb = uint32(unsafe.Sizeof(si))
-	var pi syscall.ProcessInformation
-	cmdlineRaw := windowsCommandLine(argv)
-	cmdline, err := syscall.UTF16PtrFromString(cmdlineRaw)
+	var pi windows.ProcessInformation
+	argv0p, err := windows.UTF16PtrFromString(argv[0])
 	if err != nil {
-		procDeleteProcThreadAttributeList.Call(uintptr(attrList))
-		procClosePseudoConsole.Call(hpc)
-		_ = pr.Close()
-		_ = consoleW.Close()
-		_ = consoleR.Close()
-		_ = pw.Close()
+		attrList.Delete()
+		windows.ClosePseudoConsole(hpc)
+		closeHandles(inRead, inWrite, outRead, outWrite)
+		return nil, err
+	}
+	cmdline := windows.ComposeCommandLine(argv)
+	cmdlinep, err := windows.UTF16PtrFromString(cmdline)
+	if err != nil {
+		attrList.Delete()
+		windows.ClosePseudoConsole(hpc)
+		closeHandles(inRead, inWrite, outRead, outWrite)
 		return nil, err
 	}
 	envBlock := makeEnvBlock(env)
@@ -131,22 +105,14 @@ func Start(argv []string, env []string) (*Session, error) {
 	if len(envBlock) > 0 {
 		envPtr = &envBlock[0]
 	}
-	flags := uint32(extendedStartupInfoPresent | createUnicodeEnvironment)
-	err = syscall.CreateProcess(nil, cmdline, nil, nil, false, flags, envPtr, nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
-	procDeleteProcThreadAttributeList.Call(uintptr(attrList))
-	if err != nil {
-		procClosePseudoConsole.Call(hpc)
-		_ = pr.Close()
-		_ = consoleW.Close()
-		_ = consoleR.Close()
-		_ = pw.Close()
-		return nil, fmt.Errorf("CreateProcess %q: %w", cmdlineRaw, err)
+	flags := uint32(windows.EXTENDED_STARTUPINFO_PRESENT | windows.CREATE_UNICODE_ENVIRONMENT)
+	if err := windows.CreateProcess(argv0p, cmdlinep, nil, nil, false, flags, envPtr, nil, &si.StartupInfo, &pi); err != nil {
+		attrList.Delete()
+		windows.ClosePseudoConsole(hpc)
+		closeHandles(inRead, inWrite, outRead, outWrite)
+		return nil, fmt.Errorf("CreateProcess %q: %w", cmdline, err)
 	}
-	return &Session{Master: &pipeMaster{input: pw, output: pr}, hpc: hpc, process: pi.Process, thread: pi.Thread, pid: int(pi.ProcessId), consoleR: consoleR, consoleW: consoleW}, nil
-}
-
-func coordValue(x, y int16) uintptr {
-	return uintptr(uint16(x)) | uintptr(uint32(uint16(y))<<16)
+	return &Session{Master: &pipeMaster{inWrite: inWrite, outRead: outRead}, hpc: hpc, attrList: attrList, process: pi.Process, thread: pi.Thread, pid: int(pi.ProcessId), inRead: inRead, outWrite: outWrite}, nil
 }
 
 func (s *Session) PID() int {
@@ -159,10 +125,7 @@ func (s *Session) Wait() error {
 	if s == nil || s.process == 0 {
 		return nil
 	}
-	_, err := syscall.WaitForSingleObject(s.process, infinite)
-	if err == syscall.Errno(0) {
-		return nil
-	}
+	_, err := windows.WaitForSingleObject(s.process, windows.INFINITE)
 	return err
 }
 func (s *Session) Close() error {
@@ -172,23 +135,29 @@ func (s *Session) Close() error {
 	if s.Master != nil {
 		_ = s.Master.Close()
 	}
-	if s.consoleR != nil {
-		_ = s.consoleR.Close()
-	}
-	if s.consoleW != nil {
-		_ = s.consoleW.Close()
+	closeHandles(s.inRead, s.outWrite)
+	if s.attrList != nil {
+		s.attrList.Delete()
 	}
 	if s.process != 0 {
-		_ = syscall.TerminateProcess(s.process, 1)
-		_ = syscall.CloseHandle(s.process)
+		_ = windows.TerminateProcess(s.process, 1)
+		_ = windows.CloseHandle(s.process)
 	}
 	if s.thread != 0 {
-		_ = syscall.CloseHandle(s.thread)
+		_ = windows.CloseHandle(s.thread)
 	}
 	if s.hpc != 0 {
-		procClosePseudoConsole.Call(s.hpc)
+		windows.ClosePseudoConsole(s.hpc)
 	}
 	return nil
+}
+
+func closeHandles(handles ...windows.Handle) {
+	for _, h := range handles {
+		if h != 0 {
+			_ = windows.CloseHandle(h)
+		}
+	}
 }
 
 func makeEnvBlock(extra []string) []uint16 {
@@ -218,45 +187,4 @@ func makeEnvBlock(extra []string) []uint16 {
 	}
 	out = append(out, 0)
 	return out
-}
-
-func windowsCommandLine(argv []string) string {
-	parts := make([]string, len(argv))
-	for i, a := range argv {
-		parts[i] = quoteArg(a)
-	}
-	return strings.Join(parts, " ")
-}
-func quoteArg(s string) string {
-	if s == "" {
-		return `""`
-	}
-	if !strings.ContainsAny(s, " \t\n\v\"") {
-		return s
-	}
-	var b strings.Builder
-	b.WriteByte('"')
-	bs := 0
-	for _, r := range s {
-		if r == '\\' {
-			bs++
-			continue
-		}
-		if r == '"' {
-			b.WriteString(strings.Repeat(`\`, bs*2+1))
-			b.WriteRune(r)
-			bs = 0
-			continue
-		}
-		if bs > 0 {
-			b.WriteString(strings.Repeat(`\`, bs))
-			bs = 0
-		}
-		b.WriteRune(r)
-	}
-	if bs > 0 {
-		b.WriteString(strings.Repeat(`\`, bs*2))
-	}
-	b.WriteByte('"')
-	return b.String()
 }

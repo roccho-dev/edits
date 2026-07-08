@@ -20,10 +20,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
+      - name: Install Vim for ConPTY visual proof
+        shell: pwsh
+        run: |
+          choco install vim -y --no-progress
+          $vim = Get-ChildItem 'C:\Program Files\Vim' -Recurse -Filter vim.exe | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $vim) { throw 'vim.exe not found after install' }
+          "VIM_EXE=$($vim.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Output "Vim: $($vim.FullName)"
       - name: Test all packages
         shell: pwsh
         run: go test ./...
-      - name: Build hq.exe
+      - name: Build Windows launcher hq.exe
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
@@ -31,11 +39,24 @@ jobs:
       - name: Check Windows Explorer launcher behavior
         shell: pwsh
         run: ./scripts/proof_windows_launcher.ps1
+      - name: Build full ConPTY visual proof binary
+        shell: pwsh
+        run: go build -o dist/hqconpty.exe ./cmd/hqconpty
+      - name: Check Windows ConPTY Vim visual projection
+        shell: pwsh
+        run: |
+          .\dist\hqconpty.exe --vim "$env:VIM_EXE" --out cache\windows-conpty-vim-visual.json --trace cache\windows-conpty-vim-visual.trace.jsonl --screen-text cache\windows-conpty-vim-visual.screen.txt --raw cache\windows-conpty-vim-visual.pty.raw
+          $proof = Get-Content cache\windows-conpty-vim-visual.json -Raw | ConvertFrom-Json
+          if (-not $proof.visual_projection_ok) { throw 'visual_projection_ok was false' }
       - name: Upload checked Windows hq and Vim adapter
         uses: actions/upload-artifact@v4
         with:
           name: hq-pty-vim-rsc-windows-checked
           path: |
             packages/hq-pty-vim-rsc/dist/hq.exe
+            packages/hq-pty-vim-rsc/dist/hqconpty.exe
             packages/hq-pty-vim-rsc/vim/**
             packages/hq-pty-vim-rsc/cache/windows-*.json
+            packages/hq-pty-vim-rsc/cache/windows-*.jsonl
+            packages/hq-pty-vim-rsc/cache/windows-*.txt
+            packages/hq-pty-vim-rsc/cache/windows-*.raw

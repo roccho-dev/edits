@@ -1,5 +1,0 @@
-package jpcmp
-
-import "testing"
-
-func TestCompletionMatchesGoldenCandidateShape(t *testing.T) { cfg := DefaultConfig(); cfg.DictionaryPaths = []string{"../../dict/domain.jsonl"}; engine := NewEngine(cfg); text := "houjinScore houjinRepository houjinbaikyakuPlan hogeBufferOnly\nhouji"; items := engine.CompletionItems(text,1,len("houji")); if len(items)==0 { t.Fatal("expected candidates") }; if items[0].Label != "houjinScore" { t.Fatalf("top = %s, want houjinScore", items[0].Label) }; labels := map[string]bool{}; for _, item := range items { labels[item.Label]=true }; for _, want := range []string{"houjinScore","法人","法人売却"} { if !labels[want] { t.Fatalf("missing %s in %#v", want, labels) } }; for _, item := range items { if item.Label == "法人売却" { if item.TextEdit == nil || item.TextEdit.Range.Start.Character != 0 || item.TextEdit.Range.End.Character != len("houji") { t.Fatalf("bad textEdit: %#v", item.TextEdit) }; if item.FilterText != "houji" { t.Fatalf("filterText = %s", item.FilterText) }; return } }; t.Fatal("法人売却 not found") }

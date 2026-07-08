@@ -1,7 +1,7 @@
 set nomore
 set encoding=utf-8
 set fileencoding=utf-8
-source adapters/vim/lsp_bridge.vim
+source adapters/editor/vim/lsp_bridge.vim
 let s:text = "houjinScore houjinRepository houjinbaikyakuPlan hogeBufferOnly\nhouji"
 let s:items = JpcmpLspComplete(s:text, 1, 5)
 let s:labels = map(copy(s:items), {_,x -> get(x, 'label', '')})

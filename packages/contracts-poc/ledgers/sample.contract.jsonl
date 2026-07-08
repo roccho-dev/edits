@@ -1,0 +1,4 @@
+{"id":"schema.repoMap.world","kind":"contract.schema.v1","name":"repoMap.world.v1","reason":"staged schema row for repo map world"}
+{"id":"field.repoMap.world.node","kind":"contract.field.v1","schema":"repoMap.world.v1","name":"node","type":"object","reason":"staged field row"}
+{"id":"edge.repoMap.contains","kind":"contract.edge.v1","from":"repo","to":"package","relation":"contains","reason":"staged containment edge"}
+{"id":"rule.queue.not_authority","kind":"contract.authority_rule.v1","subject":"hq.modelCommitQueued.v1","decision":"not_authority","reason":"queue append is local intent only"}

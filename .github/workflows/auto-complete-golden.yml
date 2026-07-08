@@ -30,3 +30,5 @@ jobs:
         run: python3 test/golden_check.py
       - name: Run Go LSP seed tests
         run: go test ./...
+      - name: Run Go LSP JSON-RPC smoke
+        run: python3 test/lsp_smoke.py

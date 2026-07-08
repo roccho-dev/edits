@@ -28,6 +28,17 @@ def load_templates(path: Path) -> dict[str, dict[str, Any]]:
     return templates
 
 
+def load_current_target(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise SystemExit(f"FAIL {path}: current target must be object")
+    return {"kind": data.get("kind"), "id": data.get("id")}
+
+
 def short_digest(value: dict[str, Any]) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
@@ -72,12 +83,16 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="convert confirmed command to queue row")
     parser.add_argument("request_json")
     parser.add_argument("--templates", default="packages/hq-modeling-queue/commands/modeling.commands.jsonl")
+    parser.add_argument("--target-file", help="optional .local/current-target.json fallback")
     args = parser.parse_args(argv[1:])
 
     request_path = Path(args.request_json)
     request = json.loads(request_path.read_text(encoding="utf-8"))
     if not isinstance(request, dict):
         raise SystemExit("FAIL: command request must be a JSON object")
+
+    if not request.get("targetRef"):
+        request["targetRef"] = load_current_target(Path(args.target_file)) if args.target_file else None
 
     command = request.get("command")
     if not isinstance(command, str) or not command:

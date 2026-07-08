@@ -1,0 +1,10 @@
+{
+  "command": "agent.proposeModel",
+  "createdAt": "2026-07-08T00:01:01Z",
+  "confirmedBy": "human",
+  "targetRef": {"kind": "projectionNode", "id": "pkg:core"},
+  "goal": "check whether this dependency edge should exist in source model",
+  "context": ["repoMap.world.v1", "repoMap.projection.v1", "selectedNeighborhood"],
+  "acceptance": ["produce modelingProposal.v1", "include evidence", "do not mutate accepted ledger"],
+  "reason": "need proposal before model commit"
+}

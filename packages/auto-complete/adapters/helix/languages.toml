@@ -1,0 +1,7 @@
+[language-server.jpcmp]
+command = "jpcmp-lsp"
+args = ["--dict", "dict/domain.jsonl"]
+
+[[language]]
+name = "text"
+language-servers = ["jpcmp"]

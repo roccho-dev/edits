@@ -61,3 +61,5 @@ jobs:
           python3 packages/hq-modeling-queue/tools/validate_queue.py .local/receipt.jsonl
           grep '"status":"processed"' .local/receipt.jsonl
           test -s .local/current-projection.json
+      - name: Prove vertical slice script
+        run: bash packages/hq-local-worker/proofs/vertical_slice.sh

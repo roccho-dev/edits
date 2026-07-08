@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roccho-dev.local/edits/hq-modeling-queue/queue-records.schema.json",
+  "title": "hq modeling queue records",
+  "oneOf": [
+    { "$ref": "#/$defs/modelCommitQueued" },
+    { "$ref": "#/$defs/agentTaskQueued" },
+    { "$ref": "#/$defs/receipt" }
+  ],
+  "$defs": {
+    "id": { "type": "string", "minLength": 1 },
+    "digest": { "type": ["string", "null"] },
+    "targetRef": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "commonQueue": {
+      "type": "object",
+      "required": ["id", "kind", "createdAt", "status", "confirmedBy", "idempotencyKey"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "type": "string" },
+        "createdAt": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["queued"] },
+        "confirmedBy": { "type": "string", "minLength": 1 },
+        "idempotencyKey": { "type": "string", "minLength": 1 },
+        "sourceDigest": { "$ref": "#/$defs/digest" },
+        "targetRef": { "$ref": "#/$defs/targetRef" },
+        "reason": { "type": "string" }
+      }
+    },
+    "modelCommitQueued": {
+      "allOf": [
+        { "$ref": "#/$defs/commonQueue" },
+        {
+          "type": "object",
+          "required": ["kind", "targetRef", "op", "payload", "reason"],
+          "properties": {
+            "kind": { "const": "hq.modelCommitQueued.v1" },
+            "op": { "type": "string", "minLength": 1 },
+            "payload": { "type": "object", "additionalProperties": true }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "agentTaskQueued": {
+      "allOf": [
+        { "$ref": "#/$defs/commonQueue" },
+        {
+          "type": "object",
+          "required": ["kind", "goal", "context", "acceptance", "reason"],
+          "properties": {
+            "kind": { "const": "hq.agentTaskQueued.v1" },
+            "goal": { "type": "string", "minLength": 1 },
+            "context": { "type": "array", "items": { "type": "string" } },
+            "acceptance": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "receipt": {
+      "type": "object",
+      "required": ["id", "kind", "createdAt", "status", "queueId", "idempotencyKey"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "hq.receipt.v1" },
+        "createdAt": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["processed", "failed", "pending"] },
+        "queueId": { "type": "string", "minLength": 1 },
+        "idempotencyKey": { "type": "string", "minLength": 1 },
+        "targetRef": { "$ref": "#/$defs/targetRef" },
+        "projectionDigest": { "$ref": "#/$defs/digest" },
+        "ledgerDigest": { "$ref": "#/$defs/digest" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

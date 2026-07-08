@@ -15,7 +15,6 @@ func TestConPTYCmdEchoOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sess.Close()
 	var buf bytes.Buffer
 	done := make(chan error, 1)
 	go func() {
@@ -23,6 +22,7 @@ func TestConPTYCmdEchoOutput(t *testing.T) {
 		done <- err
 	}()
 	_ = sess.Wait()
+	_ = sess.Close()
 	select {
 	case <-done:
 	case <-time.After(3 * time.Second):

@@ -116,7 +116,7 @@ func Start(argv []string, env []string) (*Session, error) {
 	if len(envBlock) > 0 {
 		envPtr = &envBlock[0]
 	}
-	err = syscall.CreateProcess(nil, cmdline, nil, nil, false, extendedStartupInfoPresent, unsafe.Pointer(envPtr), nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
+	err = syscall.CreateProcess(nil, cmdline, nil, nil, false, extendedStartupInfoPresent, envPtr, nil, (*syscall.StartupInfo)(unsafe.Pointer(&si)), &pi)
 	procDeleteProcThreadAttributeList.Call(uintptr(attrList))
 	_ = syscall.CloseHandle(inRead)
 	_ = syscall.CloseHandle(outWrite)

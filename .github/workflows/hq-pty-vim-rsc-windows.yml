@@ -1,0 +1,41 @@
+name: hq-pty-vim-rsc-windows
+
+on:
+  push:
+    branches:
+      - proposal/edits/hq-pty-vim-explorer-260708
+  pull_request:
+    paths:
+      - 'packages/hq-pty-vim-rsc/**'
+      - '.github/workflows/hq-pty-vim-rsc-windows.yml'
+
+jobs:
+  windows-build-and-behavior:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: packages/hq-pty-vim-rsc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Test all packages
+        shell: pwsh
+        run: go test ./...
+      - name: Build hq.exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          go build -o dist/hq.exe ./cmd/hqwin
+      - name: Check Windows Explorer launcher behavior
+        shell: pwsh
+        run: ./scripts/proof_windows_launcher.ps1
+      - name: Upload checked Windows hq and Vim adapter
+        uses: actions/upload-artifact@v4
+        with:
+          name: hq-pty-vim-rsc-windows-checked
+          path: |
+            packages/hq-pty-vim-rsc/dist/hq.exe
+            packages/hq-pty-vim-rsc/vim/**
+            packages/hq-pty-vim-rsc/cache/windows-*.json

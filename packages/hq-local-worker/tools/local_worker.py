@@ -39,6 +39,27 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def iter_queue_rows(path: Path):
+    if not path.exists():
+        return
+    with path.open("r", encoding="utf-8") as fh:
+        for line_no, line in enumerate(fh, start=1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+                if not isinstance(row, dict):
+                    raise ValueError("row must be object")
+                yield line_no, row, None
+            except Exception as exc:
+                yield line_no, {
+                    "id": f"line_{line_no}",
+                    "createdAt": "1970-01-01T00:00:00Z",
+                    "idempotencyKey": f"invalid_line_{line_no}",
+                    "targetRef": None,
+                }, f"invalid JSONL row: {exc}"
+
+
 def write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -78,6 +99,12 @@ def receipt_for(row: dict[str, Any], status: str, message: str, projection_diges
     }
 
 
+def mark_done(done: set[str], row: dict[str, Any]) -> None:
+    idem = row.get("idempotencyKey")
+    if isinstance(idem, str):
+        done.add(idem)
+
+
 def process(args: argparse.Namespace) -> int:
     queue_path = Path(args.queue)
     receipt_path = Path(args.receipt)
@@ -89,10 +116,17 @@ def process(args: argparse.Namespace) -> int:
     done = processed_keys(receipts)
     new_receipts = 0
 
-    for line_no, row in enumerate(read_jsonl(queue_path), start=1):
+    for line_no, row, parse_error in iter_queue_rows(queue_path) or []:
         idem = row.get("idempotencyKey")
         if isinstance(idem, str) and idem in done:
             continue
+
+        if parse_error:
+            append_jsonl(receipt_path, receipt_for(row, "failed", parse_error, None))
+            mark_done(done, row)
+            new_receipts += 1
+            continue
+
         try:
             validate_row(queue_path, line_no, row, set(), set())
             kind = row.get("kind")
@@ -116,6 +150,7 @@ def process(args: argparse.Namespace) -> int:
                 projection["digest"] = projection_digest
                 write_json(projection_path, projection)
                 append_jsonl(receipt_path, receipt_for(row, "processed", "local projection updated; no admission performed", projection_digest))
+                mark_done(done, row)
                 new_receipts += 1
             elif kind == "hq.agentTaskQueued.v1":
                 state.setdefault("agentTasks", []).append({
@@ -125,8 +160,9 @@ def process(args: argparse.Namespace) -> int:
                     "acceptance": row.get("acceptance") or [],
                 })
                 append_jsonl(receipt_path, receipt_for(row, "pending", "agent task queued; waiting for proposal", None))
+                mark_done(done, row)
                 new_receipts += 1
-        except Exception as exc:  # local proof guard; keep receipt even for bad rows
+        except (Exception, SystemExit) as exc:  # local proof guard; keep receipt even for bad rows
             append_jsonl(receipt_path, {
                 "id": f"rc_error_{line_no}",
                 "kind": "hq.receipt.v1",
@@ -139,6 +175,7 @@ def process(args: argparse.Namespace) -> int:
                 "ledgerDigest": None,
                 "message": str(exc),
             })
+            mark_done(done, row)
             new_receipts += 1
 
     write_json(state_path, state)

@@ -44,6 +44,16 @@ def short_digest(value: dict[str, Any]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
+def ensure_target_ref(request_path: Path, request: dict[str, Any]) -> None:
+    target_ref = request.get("targetRef")
+    if not isinstance(target_ref, dict):
+        raise SystemExit(f"FAIL {request_path}: command requires targetRef for ops queue contract")
+    if not isinstance(target_ref.get("kind"), str) or not target_ref["kind"]:
+        raise SystemExit(f"FAIL {request_path}: targetRef.kind must be a non-empty string")
+    if not isinstance(target_ref.get("id"), str) or not target_ref["id"]:
+        raise SystemExit(f"FAIL {request_path}: targetRef.id must be a non-empty string")
+
+
 def make_queue_row(request: dict[str, Any], template: dict[str, Any]) -> dict[str, Any]:
     command = request["command"]
     effect = template["effect"]
@@ -105,6 +115,7 @@ def main(argv: list[str]) -> int:
     template = templates[command]
     if template.get("requiresTarget") and not request.get("targetRef"):
         raise SystemExit(f"FAIL: command requires targetRef: {command}")
+    ensure_target_ref(request_path, request)
 
     row = make_queue_row(request, template)
     validate_row(Path(request_path), 1, row, set(), set())

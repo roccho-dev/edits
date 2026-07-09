@@ -65,14 +65,26 @@ def check_required_docs(root: Path) -> None:
 
 
 def check_fixtures(root: Path) -> None:
-    allowed = (root / "packages/hq-modeling-queue/examples/boundary.allowed.md").read_text(encoding="utf-8")
-    forbidden = (root / "packages/hq-modeling-queue/examples/boundary.forbidden.md").read_text(encoding="utf-8")
-    allowed_failures = has_forbidden_claim(allowed)
-    if allowed_failures:
-        fail("allowed boundary fixture failed: " + "; ".join(allowed_failures))
-    forbidden_failures = has_forbidden_claim(forbidden)
-    if not forbidden_failures:
-        fail("forbidden boundary fixture did not fail")
+    fixture_dir = root / "packages/hq-modeling-queue/examples"
+    fixture_paths = sorted(fixture_dir.glob("boundary.*.md"))
+    if not fixture_paths:
+        fail("missing boundary fixtures")
+    saw_allowed = False
+    saw_forbidden = False
+    for path in fixture_paths:
+        failures = has_forbidden_claim(path.read_text(encoding="utf-8"))
+        if "forbidden" in path.name:
+            saw_forbidden = True
+            if not failures:
+                fail(f"forbidden boundary fixture did not fail: {path.name}")
+        else:
+            saw_allowed = True
+            if failures:
+                fail(f"allowed boundary fixture failed: {path.name}: " + "; ".join(failures))
+    if not saw_allowed:
+        fail("missing allowed boundary fixture")
+    if not saw_forbidden:
+        fail("missing forbidden boundary fixture")
 
 
 def check_repository_text(root: Path) -> None:

@@ -29,7 +29,7 @@ func main() {
         panic(fmt.Sprintf("fixture errors: %v", provider.Errors))
     }
     engine := core.NewEngine(core.DefaultConfig(), provider)
-    prefixes := []string{"hou", "houjin", "houjin1", "houjin12"}
+    prefixes := []string{"hou", "houji", "houjin", "houjino"}
     start := time.Now()
     checks := 0
     for i := 0; i < 80; i++ {
@@ -57,7 +57,7 @@ def main() -> int:
         rows = []
         for i in range(2500):
             rows.append(
-                '{{"reading":"ほうじん{0}","romaji":"houjin{0:04d}","word":"houjinCandidate{0:04d}","rank":{1},"source":"jp-dict"}}'.format(
+                '{{"reading":"ほうじんお{0}","romaji":"houjino{0:04d}","word":"houjinCandidate{0:04d}","rank":{1},"source":"jp-dict"}}'.format(
                     i, 1 + (i % 90)
                 )
             )

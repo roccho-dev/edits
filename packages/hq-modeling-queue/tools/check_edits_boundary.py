@@ -17,8 +17,8 @@ FORBIDDEN_PATTERNS = [
     ("ui renderer ownership", re.compile(r"\bui\s+renderer\s+ownership\b", re.I)),
 ]
 
-ALLOWING_CONTEXT = re.compile(r"\b(not|no|never|forbidden|without|must not|does not|do not)\b", re.I)
-PROOF_ONLY_CONTEXT = re.compile(r"\b(proof-only|legacy|evidence|non-authority|not canonical|not the canonical)\b", re.I)
+ALLOWING_CONTEXT = re.compile(r"\b(not|no|never|forbidden|without|must not|does not|do not)", re.I)
+PROOF_ONLY_CONTEXT = re.compile(r"\b(proof-only|legacy|evidence|non-authority|not canonical|not the canonical)", re.I)
 REQUIRED_README = [
     "edits = editor surface",
     "queue writer adapter",
@@ -64,6 +64,10 @@ def check_required_docs(root: Path) -> None:
         fail("docs/edits-boundary.md missing flow ownership rule")
 
 
+def is_negative_fixture(path: Path) -> bool:
+    return "forbidden" in path.name or "negative" in path.name
+
+
 def check_fixtures(root: Path) -> None:
     fixture_dir = root / "packages/hq-modeling-queue/examples"
     fixture_paths = sorted(fixture_dir.glob("boundary.*.md"))
@@ -73,10 +77,10 @@ def check_fixtures(root: Path) -> None:
     saw_forbidden = False
     for path in fixture_paths:
         failures = has_forbidden_claim(path.read_text(encoding="utf-8"))
-        if "forbidden" in path.name:
+        if is_negative_fixture(path):
             saw_forbidden = True
             if not failures:
-                fail(f"forbidden boundary fixture did not fail: {path.name}")
+                fail(f"negative boundary fixture did not fail: {path.name}")
         else:
             saw_allowed = True
             if failures:
@@ -84,7 +88,7 @@ def check_fixtures(root: Path) -> None:
     if not saw_allowed:
         fail("missing allowed boundary fixture")
     if not saw_forbidden:
-        fail("missing forbidden boundary fixture")
+        fail("missing negative boundary fixture")
 
 
 def check_repository_text(root: Path) -> None:

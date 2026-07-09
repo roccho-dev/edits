@@ -1,0 +1,9 @@
+{
+  "command": "agent.inspect",
+  "createdAt": "2026-07-08T00:01:02Z",
+  "confirmedBy": "human",
+  "goal": "inspect current modeling neighborhood",
+  "context": ["repoMap.world.v1"],
+  "acceptance": ["produce evidence", "do not mutate accepted ledger"],
+  "reason": "negative fixture: missing targetRef must fail before append"
+}

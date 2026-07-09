@@ -46,22 +46,27 @@ def require_string(path: Path, line_no: int, row: dict[str, Any], field: str) ->
     return value
 
 
-def validate_row(path: Path, line_no: int, row: dict[str, Any]) -> None:
+def validate_common(path: Path, line_no: int, row: dict[str, Any]) -> tuple[str, str, str, str]:
     if row.get("kind") != "hq.commandTemplate.v1":
         fail(path, line_no, "command kind must be hq.commandTemplate.v1")
     name = require_string(path, line_no, row, "name")
     effect = require_string(path, line_no, row, "effect")
     queue_kind = require_string(path, line_no, row, "queueKind")
-    require_string(path, line_no, row, "op")
     claim = require_string(path, line_no, row, "claim")
     if not isinstance(row.get("targetKinds"), list):
         fail(path, line_no, "targetKinds must be list")
     if not isinstance(row.get("requiresTarget"), bool):
         fail(path, line_no, "requiresTarget must be bool")
+    return name, effect, queue_kind, claim
+
+
+def validate_row(path: Path, line_no: int, row: dict[str, Any]) -> None:
+    name, effect, queue_kind, claim = validate_common(path, line_no, row)
 
     if name.startswith("model."):
         if effect != "model_commit" or queue_kind != MODEL_QUEUE:
             fail(path, line_no, "model.* must map to model_commit and hq.modelCommitQueued.v1")
+        require_string(path, line_no, row, "op")
     elif name.startswith("agent."):
         if effect != "agent_task" or queue_kind != AGENT_QUEUE:
             fail(path, line_no, "agent.* must map to agent_task and hq.agentTaskQueued.v1")

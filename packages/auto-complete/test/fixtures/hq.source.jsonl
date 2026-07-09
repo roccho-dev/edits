@@ -1,0 +1,4 @@
+{"kind":"hq.source.candidate.v1","word":"modelCommitQueued","reading":"model commit queued","romaji":"model","rank":720,"source":"hq","detail":"queue row kind"}
+{"kind":"hq.source.candidate.v1","word":"modelAddEdge","reading":"model add edge","romaji":"model","rank":700,"source":"hq","detail":"command vocabulary"}
+{"kind":"hq.source.candidate.v1","word":"targetRefRepoMapNode","reading":"target ref repo map node","romaji":"targetref","rank":680,"source":"hq","detail":"targetRef-like value"}
+{"kind":"hq.source.candidate.v1","word":"queueLocalJsonl","reading":"queue local jsonl","romaji":"queue","rank":660,"source":"hq","detail":"queue/source identifier"}

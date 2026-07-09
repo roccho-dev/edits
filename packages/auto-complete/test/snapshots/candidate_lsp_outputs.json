@@ -1,0 +1,310 @@
+{
+  "schema": "jpcmp_candidate_lsp_snapshot.v1",
+  "default": {
+    "houji": [
+      {
+        "label": "houjinScore",
+        "source": "buffer",
+        "rank": 3301,
+        "score": 203301,
+        "filterText": "houji",
+        "sortText": "796698-0000",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 5
+            }
+          },
+          "newText": "houjinScore"
+        }
+      },
+      {
+        "label": "houjinRepository",
+        "source": "buffer",
+        "rank": 3201,
+        "score": 203201,
+        "filterText": "houji",
+        "sortText": "796798-0001",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 5
+            }
+          },
+          "newText": "houjinRepository"
+        }
+      },
+      {
+        "label": "houjinbaikyakuPlan",
+        "source": "buffer",
+        "rank": 3101,
+        "score": 203101,
+        "filterText": "houji",
+        "sortText": "796898-0002",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 5
+            }
+          },
+          "newText": "houjinbaikyakuPlan"
+        }
+      },
+      {
+        "label": "法人",
+        "source": "jp",
+        "rank": 90,
+        "score": 100090,
+        "filterText": "houji",
+        "sortText": "899909-0003",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 5
+            }
+          },
+          "newText": "法人"
+        }
+      },
+      {
+        "label": "法人売却",
+        "source": "jp",
+        "rank": 80,
+        "score": 100080,
+        "filterText": "houji",
+        "sortText": "899919-0004",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 5
+            }
+          },
+          "newText": "法人売却"
+        }
+      }
+    ],
+    "houjin": [
+      {
+        "label": "houjinScore",
+        "source": "buffer",
+        "rank": 3301,
+        "score": 203301,
+        "filterText": "houjin",
+        "sortText": "796698-0000",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 6
+            }
+          },
+          "newText": "houjinScore"
+        }
+      },
+      {
+        "label": "houjinRepository",
+        "source": "buffer",
+        "rank": 3201,
+        "score": 203201,
+        "filterText": "houjin",
+        "sortText": "796798-0001",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 6
+            }
+          },
+          "newText": "houjinRepository"
+        }
+      },
+      {
+        "label": "houjinbaikyakuPlan",
+        "source": "buffer",
+        "rank": 3101,
+        "score": 203101,
+        "filterText": "houjin",
+        "sortText": "796898-0002",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 6
+            }
+          },
+          "newText": "houjinbaikyakuPlan"
+        }
+      },
+      {
+        "label": "法人",
+        "source": "jp",
+        "rank": 90,
+        "score": 100090,
+        "filterText": "houjin",
+        "sortText": "899909-0003",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 6
+            }
+          },
+          "newText": "法人"
+        }
+      },
+      {
+        "label": "法人売却",
+        "source": "jp",
+        "rank": 80,
+        "score": 100080,
+        "filterText": "houjin",
+        "sortText": "899919-0004",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 6
+            }
+          },
+          "newText": "法人売却"
+        }
+      }
+    ],
+    "houjinb": [
+      {
+        "label": "houjinbaikyakuPlan",
+        "source": "buffer",
+        "rank": 3101,
+        "score": 203101,
+        "filterText": "houjinb",
+        "sortText": "796898-0000",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 7
+            }
+          },
+          "newText": "houjinbaikyakuPlan"
+        }
+      },
+      {
+        "label": "法人売却",
+        "source": "jp",
+        "rank": 80,
+        "score": 100080,
+        "filterText": "houjinb",
+        "sortText": "899919-0001",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0
+            },
+            "end": {
+              "line": 1,
+              "character": 7
+            }
+          },
+          "newText": "法人売却"
+        }
+      }
+    ],
+    "houjinScore": []
+  },
+  "hq": {
+    "model": [
+      {
+        "label": "modelCommitQueued",
+        "source": "hq",
+        "rank": 720,
+        "score": 90720,
+        "filterText": "model",
+        "sortText": "909279-0000",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 0,
+              "character": 5
+            }
+          },
+          "newText": "modelCommitQueued"
+        }
+      },
+      {
+        "label": "modelAddEdge",
+        "source": "hq",
+        "rank": 700,
+        "score": 90700,
+        "filterText": "model",
+        "sortText": "909299-0001",
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 0,
+              "character": 5
+            }
+          },
+          "newText": "modelAddEdge"
+        }
+      }
+    ]
+  }
+}

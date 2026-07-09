@@ -30,6 +30,16 @@ jobs:
         run: python3 test/golden_check.py
       - name: Run Go LSP seed tests
         run: go test ./...
+      - name: Run post-merge workflow config check
+        run: python3 test/post_merge_workflow_check.py
+      - name: Run Go import graph boundary check
+        run: python3 test/import_graph_check.py
+      - name: Run old path absence and migration guard
+        run: python3 test/old_path_absence_check.py
+      - name: Check canonical candidate and LSP snapshots
+        run: python3 test/snapshot_check.py
+      - name: Run source adapter performance budget
+        run: python3 test/performance_budget.py
       - name: Run Go LSP JSON-RPC smoke
         run: python3 test/lsp_smoke.py
       - name: Run Vim adapter through Go LSP
@@ -38,10 +48,14 @@ jobs:
         run: python3 test/render_ux_visual.py
       - name: Check UX visual evidence
         run: python3 test/ux_visual_check.py
+      - name: Audit UX visual snapshot
+        run: python3 test/ux_snapshot_audit.py
       - name: Run adapter boundary check
         run: python3 test/boundary_check.py
       - name: Run Helix config smoke check
         run: python3 test/helix_config_check.py
+      - name: Check parent closure checklist
+        run: python3 test/parent_closure_checklist_check.py
       - name: Upload UX visual evidence
         uses: actions/upload-artifact@v4
         with:

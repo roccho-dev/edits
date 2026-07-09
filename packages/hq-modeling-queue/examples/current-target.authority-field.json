@@ -1,0 +1,10 @@
+{
+  "kind": "projectionNode",
+  "id": "pkg:core",
+  "source": "ui.localhost.preview",
+  "projectionDigest": "sha256:example",
+  "updatedAt": "2026-07-08T00:02:01Z",
+  "metadata": {
+    "dispatch": "forbidden"
+  }
+}

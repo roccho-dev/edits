@@ -48,6 +48,15 @@ jobs:
             echo 'expected missing targetRef queue row to fail'
             exit 1
           fi
+      - name: Prove current target bridge is input-only
+        run: |
+          rm -rf .local
+          python3 packages/hq-modeling-queue/tools/current_target.py write .local/current-target.json --from-file packages/hq-modeling-queue/examples/current-target.sample.json
+          python3 packages/hq-modeling-queue/tools/current_target.py validate .local/current-target.json
+          if python3 packages/hq-modeling-queue/tools/current_target.py validate packages/hq-modeling-queue/examples/current-target.authority-field.json; then
+            echo 'expected authority-bearing current target to fail'
+            exit 1
+          fi
       - name: Prove local queue append/readback/tail
         run: |
           rm -rf .local

@@ -9,10 +9,40 @@ from pathlib import Path
 from typing import Any
 
 REQUIRED = {"kind", "id", "source", "projectionDigest", "updatedAt"}
+ALLOWED = {"kind", "id", "source", "projectionDigest", "updatedAt", "metadata"}
+FORBIDDEN_AUTHORITY_FIELDS = {
+    "authority",
+    "accepted",
+    "approved",
+    "approval",
+    "admit",
+    "admission",
+    "merge",
+    "merged",
+    "fire",
+    "dispatch",
+}
 
 
 def fail(message: str) -> None:
     raise SystemExit(f"FAIL: {message}")
+
+
+def find_forbidden_fields(value: Any, prefix: str = "") -> list[str]:
+    if isinstance(value, list):
+        found: list[str] = []
+        for index, item in enumerate(value):
+            found.extend(find_forbidden_fields(item, f"{prefix}.{index}" if prefix else str(index)))
+        return found
+    if not isinstance(value, dict):
+        return []
+    found = []
+    for key, nested in value.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if key in FORBIDDEN_AUTHORITY_FIELDS:
+            found.append(path)
+        found.extend(find_forbidden_fields(nested, path))
+    return found
 
 
 def validate_target(row: dict[str, Any]) -> None:
@@ -26,9 +56,12 @@ def validate_target(row: dict[str, Any]) -> None:
         fail("projectionDigest must be string or null")
     if "metadata" in row and not isinstance(row["metadata"], dict):
         fail("metadata must be object when present")
-    extra = sorted(set(row.keys()) - {"kind", "id", "source", "projectionDigest", "updatedAt", "metadata"})
+    extra = sorted(set(row.keys()) - ALLOWED)
     if extra:
         fail(f"unknown current-target fields: {', '.join(extra)}")
+    forbidden = find_forbidden_fields(row)
+    if forbidden:
+        fail(f"current targetRef cannot carry authority fields: {', '.join(sorted(forbidden))}")
 
 
 def cmd_write(args: argparse.Namespace) -> int:

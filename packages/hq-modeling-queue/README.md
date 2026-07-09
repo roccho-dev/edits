@@ -89,3 +89,26 @@ python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modelin
 ```
 
 Command conversion is pure command-to-row construction until an adapter appends the row. It never owns admission, accepted ledger, worker runtime, or UI rendering.
+
+## Agent command boundary
+
+`agent.*` commands are queue-writing commands only.
+
+Allowed:
+
+```text
+agent.* command
+  -> hq.agentTaskQueued.v1 intent row
+```
+
+Forbidden in edits:
+
+```text
+agent runner
+modeling proposal generation
+proposal promotion
+admission gate
+accepted ledger write
+```
+
+Agent tasks may ask for investigation, evidence, tests, or proposal work, but the actual agent runtime, proposal schema, proposal promotion, and admission gate belong to ops.

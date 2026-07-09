@@ -1,0 +1,1 @@
+{"kind":"hq.commandTemplate.v1","name":"agent.inspectBoundary","effect":"agent_task","queueKind":"hq.agentTaskQueued.v1","targetKinds":["projectionNode"],"requiresTarget":false,"claim":"Human can request agent investigation as queue intent only."}

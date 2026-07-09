@@ -15,6 +15,15 @@ FORBIDDEN_CLAIMS = [
     re.compile(r"\baccepted\.modelCommit\.v1\b", re.I),
 ]
 
+FORBIDDEN_AGENT_CLAIMS = [
+    re.compile(r"\bproposal\s+promotion\b", re.I),
+    re.compile(r"\bpromote\w*\s+proposal\b", re.I),
+    re.compile(r"\bruns?\s+real\s+agent\b", re.I),
+    re.compile(r"\bagent\s+runner\b", re.I),
+    re.compile(r"\bwrites?\s+accepted\s+ledger\b", re.I),
+    re.compile(r"\badmission\s+gate\b", re.I),
+]
+
 MODEL_QUEUE = "hq.modelCommitQueued.v1"
 AGENT_QUEUE = "hq.agentTaskQueued.v1"
 
@@ -70,6 +79,9 @@ def validate_row(path: Path, line_no: int, row: dict[str, Any]) -> None:
     elif name.startswith("agent."):
         if effect != "agent_task" or queue_kind != AGENT_QUEUE:
             fail(path, line_no, "agent.* must map to agent_task and hq.agentTaskQueued.v1")
+        for pattern in FORBIDDEN_AGENT_CLAIMS:
+            if pattern.search(name) or pattern.search(claim):
+                fail(path, line_no, f"agent command claims runtime/proposal/admission ownership: {pattern.pattern}")
     else:
         fail(path, line_no, "command name must start with model. or agent.")
 
@@ -105,11 +117,15 @@ def main(argv: list[str]) -> int:
     parser.add_argument("commands", nargs="?", default="packages/hq-modeling-queue/commands/modeling.commands.jsonl")
     parser.add_argument("--valid-fixture", default="packages/hq-modeling-queue/examples/command-vocabulary.valid.jsonl")
     parser.add_argument("--invalid-fixture", default="packages/hq-modeling-queue/examples/command-vocabulary.invalid.jsonl")
+    parser.add_argument("--agent-valid-fixture", default="packages/hq-modeling-queue/examples/agent-command-boundary.valid.jsonl")
+    parser.add_argument("--agent-invalid-fixture", default="packages/hq-modeling-queue/examples/agent-command-boundary.invalid.jsonl")
     args = parser.parse_args(argv[1:])
 
     count = validate_file(Path(args.commands))
     validate_file(Path(args.valid_fixture))
     expect_failure(Path(args.invalid_fixture))
+    validate_file(Path(args.agent_valid_fixture))
+    expect_failure(Path(args.agent_invalid_fixture))
     print(json.dumps({"status": "PASS", "commands": count}, separators=(",", ":")))
     return 0
 

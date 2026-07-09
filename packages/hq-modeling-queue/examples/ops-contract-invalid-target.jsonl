@@ -1,0 +1,1 @@
+{"id":"aq_missing_target","kind":"hq.agentTaskQueued.v1","createdAt":"2026-07-08T00:01:03Z","status":"queued","confirmedBy":"human","idempotencyKey":"idem_aq_missing_target","sourceDigest":null,"goal":"inspect without target","context":[],"acceptance":[],"reason":"negative fixture: targetRef is required by ops queue contract"}

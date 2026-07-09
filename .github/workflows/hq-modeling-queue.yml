@@ -34,6 +34,20 @@ jobs:
         run: python3 packages/hq-modeling-queue/tools/validate_queue.py packages/hq-modeling-queue/examples/queue.sample.jsonl
       - name: Validate receipt sample
         run: python3 packages/hq-modeling-queue/tools/validate_queue.py packages/hq-modeling-queue/examples/receipt.sample.jsonl
+      - name: Prove ops-compatible targetRef gate
+        run: |
+          python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.model-add-edge.json > /tmp/ops-model.queue.jsonl
+          python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.agent-propose-model.json > /tmp/ops-agent.queue.jsonl
+          python3 packages/hq-modeling-queue/tools/validate_queue.py /tmp/ops-model.queue.jsonl
+          python3 packages/hq-modeling-queue/tools/validate_queue.py /tmp/ops-agent.queue.jsonl
+          if python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.agent-no-target.json > /tmp/should-not-exist.jsonl; then
+            echo 'expected missing targetRef command to fail'
+            exit 1
+          fi
+          if python3 packages/hq-modeling-queue/tools/validate_queue.py packages/hq-modeling-queue/examples/ops-contract-invalid-target.jsonl; then
+            echo 'expected missing targetRef queue row to fail'
+            exit 1
+          fi
       - name: Prove local queue append/readback/tail
         run: |
           rm -rf .local

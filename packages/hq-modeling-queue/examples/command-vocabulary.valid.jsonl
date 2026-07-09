@@ -1,0 +1,2 @@
+{"kind":"hq.commandTemplate.v1","name":"model.addExample","effect":"model_commit","queueKind":"hq.modelCommitQueued.v1","op":"addExample","targetKinds":["projectionNode"],"requiresTarget":true,"claim":"Human can confirm model intent only; queue append is not admission."}
+{"kind":"hq.commandTemplate.v1","name":"agent.inspectExample","effect":"agent_task","queueKind":"hq.agentTaskQueued.v1","targetKinds":["projectionNode"],"requiresTarget":false,"claim":"Human can request agent investigation without accepted ledger mutation."}

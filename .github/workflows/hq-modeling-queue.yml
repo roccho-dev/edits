@@ -84,7 +84,7 @@ jobs:
           python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.model-add-edge.no-target.json --target-file .local/current-target.json > /tmp/model.from-target.queue.jsonl
           python3 packages/hq-modeling-queue/tools/validate_queue.py /tmp/model.from-target.queue.jsonl
           grep '"targetRef":{"kind":"projectionNode","id":"pkg:core"}' /tmp/model.from-target.queue.jsonl
-      - name: Prove local worker receipt and projection
+      - name: Prove legacy local worker receipt and projection evidence
         run: |
           rm -rf .local
           python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.model-add-edge.json > /tmp/worker.queue.jsonl
@@ -92,7 +92,7 @@ jobs:
           python3 packages/hq-modeling-queue/tools/validate_queue.py .local/receipt.jsonl
           grep '"status":"processed"' .local/receipt.jsonl
           test -s .local/current-projection.json
-      - name: Prove malformed queue row writes failed receipt
+      - name: Prove malformed queue row writes legacy failed receipt evidence
         run: |
           rm -rf .local
           printf '{"kind":' > /tmp/broken.queue.jsonl
@@ -100,7 +100,7 @@ jobs:
           python3 packages/hq-modeling-queue/tools/validate_queue.py .local/receipt.jsonl
           grep '"status":"failed"' .local/receipt.jsonl
           grep 'invalid JSONL row' .local/receipt.jsonl
-      - name: Prove duplicate idempotency is not reprocessed
+      - name: Prove duplicate idempotency is not reprocessed by legacy proof
         run: |
           rm -rf .local
           python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.model-add-edge.json > /tmp/dup.row.jsonl
@@ -108,5 +108,5 @@ jobs:
           python3 packages/hq-local-worker/tools/local_worker.py process --queue /tmp/dup.queue.jsonl --receipt .local/receipt.jsonl --state .local/shadow-model.json --projection .local/current-projection.json
           test "$(wc -l < .local/receipt.jsonl | tr -d ' ')" = "1"
           python3 packages/hq-modeling-queue/tools/validate_queue.py .local/receipt.jsonl
-      - name: Prove vertical slice script
+      - name: Prove legacy vertical slice script
         run: bash packages/hq-local-worker/proofs/vertical_slice.sh

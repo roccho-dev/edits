@@ -2,7 +2,7 @@
 """Validate hq modeling queue JSONL with standard-library checks.
 
 This intentionally avoids external dependencies. It is a guard for local/dev queue
-shape and authority-boundary mistakes, not a replacement for admission.
+shape and authority-boundary mistakes, not a replacement for ops admission.
 """
 from __future__ import annotations
 
@@ -45,10 +45,36 @@ def require_object(path: Path, line_no: int, row: dict[str, Any], field: str) ->
         fail(path, line_no, f"missing object field: {field}")
 
 
+def require_target_ref(path: Path, line_no: int, row: dict[str, Any]) -> None:
+    require_object(path, line_no, row, "targetRef")
+    target_ref = row["targetRef"]
+    if not isinstance(target_ref.get("kind"), str) or not target_ref["kind"]:
+        fail(path, line_no, "targetRef.kind must be a non-empty string")
+    if not isinstance(target_ref.get("id"), str) or not target_ref["id"]:
+        fail(path, line_no, "targetRef.id must be a non-empty string")
+
+
+def find_forbidden_fields(value: Any, prefix: str = "") -> list[str]:
+    if isinstance(value, list):
+        found: list[str] = []
+        for index, item in enumerate(value):
+            found.extend(find_forbidden_fields(item, f"{prefix}.{index}" if prefix else str(index)))
+        return found
+    if not isinstance(value, dict):
+        return []
+    found = []
+    for key, nested in value.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if key in FORBIDDEN_FIELDS:
+            found.append(path)
+        found.extend(find_forbidden_fields(nested, path))
+    return found
+
+
 def validate_row(path: Path, line_no: int, row: dict[str, Any], seen_ids: set[str], seen_idempotency: set[str]) -> None:
-    bad = sorted(FORBIDDEN_FIELDS.intersection(row.keys()))
+    bad = find_forbidden_fields(row)
     if bad:
-        fail(path, line_no, f"forbidden authority/dispatch fields: {', '.join(bad)}")
+        fail(path, line_no, f"forbidden authority/dispatch fields: {', '.join(sorted(bad))}")
 
     kind = row.get("kind")
     if kind not in ALLOWED_KINDS:
@@ -72,7 +98,7 @@ def validate_row(path: Path, line_no: int, row: dict[str, Any], seen_ids: set[st
         if row.get("status") != "queued":
             fail(path, line_no, "modelCommitQueued status must be queued")
         require_string(path, line_no, row, "confirmedBy")
-        require_object(path, line_no, row, "targetRef")
+        require_target_ref(path, line_no, row)
         require_string(path, line_no, row, "op")
         require_object(path, line_no, row, "payload")
         require_string(path, line_no, row, "reason")
@@ -81,12 +107,13 @@ def validate_row(path: Path, line_no: int, row: dict[str, Any], seen_ids: set[st
         if row.get("status") != "queued":
             fail(path, line_no, "agentTaskQueued status must be queued")
         require_string(path, line_no, row, "confirmedBy")
+        require_target_ref(path, line_no, row)
         require_string(path, line_no, row, "goal")
         require_string(path, line_no, row, "reason")
-        if not isinstance(row.get("context"), list):
-            fail(path, line_no, "agentTaskQueued context must be a list")
-        if not isinstance(row.get("acceptance"), list):
-            fail(path, line_no, "agentTaskQueued acceptance must be a list")
+        if "context" in row and not isinstance(row.get("context"), list):
+            fail(path, line_no, "agentTaskQueued context must be a list when present")
+        if "acceptance" in row and not isinstance(row.get("acceptance"), list):
+            fail(path, line_no, "agentTaskQueued acceptance must be a list when present")
 
     if kind == "hq.receipt.v1":
         if row.get("status") not in {"processed", "failed", "pending"}:

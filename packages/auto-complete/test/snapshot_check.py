@@ -53,6 +53,7 @@ def collect(command: list[str], prefixes: list[str], line: int) -> dict[str, lis
     assert proc.stdout is not None
     try:
         proc.stdin.write(frame({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}))
+        proc.stdin.flush()
         responses: dict[str, list[dict[str, Any]]] = {}
         request_id = 2
         _ = read_frame(proc.stdout)

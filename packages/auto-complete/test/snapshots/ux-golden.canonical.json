@@ -1,0 +1,20 @@
+{
+  "schema": "jpcmp_ux_visual_evidence.v1",
+  "status": "PASS",
+  "raw_buffer": "houji",
+  "preedit": "ほうじ",
+  "labels": [
+    "houjinScore",
+    "houjinRepository",
+    "houjinbaikyakuPlan",
+    "法人",
+    "法人売却"
+  ],
+  "required": [
+    "houjinScore",
+    "法人",
+    "法人売却"
+  ],
+  "missing": [],
+  "source": "go-jpcmp-lsp-jsonrpc"
+}

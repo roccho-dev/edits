@@ -33,6 +33,13 @@
     "direct_explorer_side": true,
     "reason": "Host path opening must be modeled as hq-owned semantics before any side effect is allowed."
   },
+  "windows_host_open_semantic_proof": {
+    "vim_direct_explorer": false,
+    "queue_kind": "hq.hostPathOpenQueued.v1",
+    "receipt_kind": "hq.hostPathOpenReceipt.v1",
+    "executor": "explorer-compatible fake binary for CI",
+    "script": "scripts/proof_windows_launcher.ps1"
+  },
   "payload_imported": true,
   "payload_import_note": "The expanded archive payload is imported under target_path, excluding only the nested .git directory. Direct Explorer launch files are retired from the active package surface."
 }

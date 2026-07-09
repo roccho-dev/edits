@@ -45,3 +45,19 @@ The active Windows proof should stay focused on the ConPTY/Vim/RSC boundary.
 Direct Explorer launch behavior has been retired from this package. If host path
 opening is reintroduced, it must be modeled as hq semantics first and then pass
 through explicit confirmation plus an ops/runtime receipt boundary.
+
+## Host path open semantic proof
+
+The Windows proof now checks the allowed shape without restoring the retired Vim
+Explorer plugin:
+
+```text
+Vim -> hqwin -> hq.hostPathOpenQueued.v1 JSONL
+    -> hqwin dispatch -> hq.hostPathOpenReceipt.v1 JSONL
+    -> explorer-compatible binary
+```
+
+The executable used in proof is `cmd/fake-explorer`, not the real Windows shell
+UI. This keeps CI side-effect contained while proving that Vim does not call
+Explorer directly and that the host action only happens after a confirmed hq
+JSONL intent.

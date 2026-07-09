@@ -38,6 +38,20 @@ Vim client
   -> host action receipt
 ```
 
+This proposal now includes the narrow Windows E2E proof for that shape:
+
+```text
+Vim script
+  -> hqwin host-open-append
+  -> hq.hostPathOpenQueued.v1 JSONL
+  -> hqwin host-open-dispatch
+  -> hq.hostPathOpenReceipt.v1 JSONL
+  -> explorer-compatible binary
+```
+
+The proof uses a fake `explorer.exe`-compatible binary so CI can verify the
+execution boundary without opening a real Windows shell UI.
+
 Forbidden shape:
 
 ```text
@@ -89,8 +103,8 @@ Windows ConPTY/Vim proof remains separate from any host side-effect launcher.
 - RSC proof scripts stay reproducible.
 - Vim adapter code remains completion/accept focused.
 - No direct Explorer command is exposed from Vim.
-- No `explorer.exe` launcher is shipped from this package.
-- Host path opening requires a future hq semantic queue/receipt boundary.
+- No `explorer.exe` launcher is exposed from Vim.
+- Host path opening passes through hq semantic queue/receipt boundary.
 
 ## Non-goals
 

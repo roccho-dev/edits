@@ -1,55 +1,73 @@
 # edits
 
-Local/dev control plane for editor-related modeling workflows.
+Editor surface and queue-writer boundary for local modeling workflows.
 
-This repository owns the local operation surface for:
+This repository owns the human operation surface for:
 
-- Vim/hq completion and explicit human confirmation
-- append-only local queue rows
-- local workers that update shadow projections
-- adapters to ui, contracts, and source repositories
+- Vim/hq command vocabulary and completion
+- explicit human confirmation
+- targetRef interpretation from UI metadata
+- append-only local queue row writing
 
-It is not:
+It does not own:
 
-- a source-of-truth ledger
-- a UI state store
-- a renderer implementation
-- a source repository
-- an accepted decision authority
+- worker runtime
+- admission gates
+- accepted ledger state
+- projection authority
+- UI rendering
+- source extraction runtime
+- contract authority
+
+## Boundary declaration
+
+```text
+edits = editor surface
+      + pure command/targetRef interpretation
+      + queue writer adapter
+      - worker
+      - admission
+      - accepted ledger
+      - projection authority
+      - UI renderer
+```
 
 ## Authority boundary
 
-`edits` may write local intent and local receipts. It must not treat those local files as accepted model authority.
+`edits` may write local queue intent. It must not treat local files as accepted model authority.
 
 | path | role | commit |
 |---|---|---:|
 | `.local/queue.jsonl` | local intent queue | no |
-| `.local/receipt.jsonl` | local processing receipt | no |
-| `.local/current-target.json` | current UI targetRef | no |
-| `.local/current-projection.json` | local preview projection | no |
+| `.local/current-target.json` | current UI targetRef cache | no |
 | `examples/*.jsonl` | sample queue/receipt data | yes |
-| `docs/**` | operation contracts | yes |
-| `packages/**` | implementation packages | yes |
-| `adapters/**` | repo integration recipes | yes |
+| `docs/**` | editor/queue-writer boundary docs | yes |
+| `packages/hq-modeling-queue/` | command vocabulary and queue-row construction | yes |
+| `packages/hq-local-worker/` | legacy/proof-only local vertical-slice evidence until ops owns runtime proof | yes |
+| `adapters/ui/` | targetRef handoff recipes | yes |
 
-Queue append means intent was recorded. It does not mean the model was accepted. Accepted model authority belongs to a contracts ledger or temporary contracts-poc package until that ledger is split into its own repository.
+Queue append means intent was recorded. It does not mean the model was accepted. Accepted model authority belongs after an ops-owned admission gate.
+
+Receipts, local projections, previews, and generated HTML are evidence only. They are not accepted model authority.
 
 ## Dependency direction
 
 Allowed:
 
 ```text
-edits -> ui
-edits -> contracts or contracts-poc
-edits -> source repositories
+ui targetRef metadata -> edits queue writer
+edits queue rows -> ops queue runtime
+ops projection artifacts -> ui projection reader
 ```
 
 Forbidden:
 
 ```text
-ui -> edits
-contracts -> edits
-source repositories -> edits
+edits must not own canonical worker runtime
+edits must not own admission ownership
+edits must not own accepted ledger authority
+edits must not own projection authority ownership
+edits must not own UI renderer ownership
 ```
 
 ## Package map
@@ -57,12 +75,9 @@ source repositories -> edits
 | path | role |
 |---|---|
 | `packages/hq-pty-vim-rsc/` | lower-level Vim/RSC completion base |
-| `packages/hq-modeling-queue/` | modeling queue record contract and vocabulary |
-| `packages/hq-local-worker/` | local queue worker and receipt writer |
-| `packages/contracts-poc/` | temporary cue append-contract staging area |
-| `adapters/ui/` | ui.git adapter recipes |
-| `adapters/contracts/` | contracts/cue adapter recipes |
-| `adapters/repos/` | source repository adapter recipes |
+| `packages/hq-modeling-queue/` | editor command vocabulary, pure command-to-queue conversion, local queue writer tools |
+| `packages/hq-local-worker/` | legacy/proof-only local vertical-slice evidence; not canonical runtime |
+| `adapters/ui/` | ui targetRef handoff recipes |
 
 ## Local modeling loop
 
@@ -71,10 +86,8 @@ localhost UI targetRef
   -> Vim/hq completion
   -> human confirm
   -> .local/queue.jsonl append
-  -> local worker
-  -> projection update
-  -> localhost UI refresh
-  -> .local/receipt.jsonl append
+  -> ops-owned runtime/admission/projection path
+  -> ui projection preview
 ```
 
-This loop is for local/dev feedback. Promotion to accepted ledger is a separate admission step.
+The in-repo local worker proof remains only as local/dev evidence until ops-owned runtime proof replaces it. It is not the canonical runtime boundary.

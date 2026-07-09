@@ -10,13 +10,9 @@ from pathlib import Path
 from typing import Any
 
 FORBIDDEN_CLAIMS = [
-    re.compile(r"\bowns?\s+admission\b", re.I),
-    re.compile(r"\bwrites?\s+accepted\s+ledger\b", re.I),
+    re.compile(r"\b(own|owns|owned|owner|ownership)\b.*\b(admission|accepted\s+ledger|worker\s+runtime|worker|ui\s+renderer|renderer|dispatch|merge)\b", re.I),
+    re.compile(r"\b(write|writes|wrote|mutate|mutates|run|runs|perform|performs)\b.*\b(accepted\s+ledger|admission|worker|ui\s+renderer|renderer|dispatch|merge)\b", re.I),
     re.compile(r"\baccepted\.modelCommit\.v1\b", re.I),
-    re.compile(r"\bowns?\s+worker\b", re.I),
-    re.compile(r"\bowns?\s+ui\s+renderer\b", re.I),
-    re.compile(r"\bdispatch\b", re.I),
-    re.compile(r"\bmerge\b", re.I),
 ]
 
 MODEL_QUEUE = "hq.modelCommitQueued.v1"

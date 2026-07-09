@@ -63,11 +63,11 @@ ops projection artifacts -> ui projection reader
 Forbidden:
 
 ```text
-edits -> canonical worker runtime ownership
-edits -> admission ownership
-edits -> accepted ledger ownership
-edits -> projection authority ownership
-edits -> UI renderer ownership
+edits must not own canonical worker runtime
+edits must not own admission ownership
+edits must not own accepted ledger authority
+edits must not own projection authority ownership
+edits must not own UI renderer ownership
 ```
 
 ## Package map

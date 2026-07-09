@@ -2,9 +2,9 @@
 
 Legacy/proof-only local vertical-slice evidence for edits modeling queues.
 
-This package reads `.local/queue.jsonl`, writes `.local/receipt.jsonl`, and materializes local shadow projection output for localhost preview only to preserve the historical local/dev proof.
+This package reads `.local/queue.jsonl`, writes `.local/receipt.jsonl`, and materializes local shadow projection output for localhost preview only to preserve historical local/dev evidence.
 
-It is not the canonical worker runtime. It is not the admission layer. It does not admit rows into an accepted ledger. Primary worker, receipt, projection, and admission ownership belongs in ops.
+It is not the canonical worker runtime. It is not the admission layer. It does not admit rows into an accepted ledger. Ops owns canonical worker, receipt, and projection responsibilities.
 
 ## Boundary
 
@@ -25,7 +25,19 @@ The worker output is local evidence only:
 
 ## Allowed reason to remain in edits
 
-This package may remain while it is explicitly marked as legacy/proof-only evidence for the original editor-to-queue-to-preview proof. It must not be described as the canonical runtime owner.
+This package may remain only because it is explicitly marked as legacy/proof-only evidence for the original editor-to-queue-to-preview proof. It must not be described as the canonical runtime owner.
+
+## Replacement boundary
+
+Canonical responsibilities now point outward:
+
+| responsibility | canonical owner |
+|---|---|
+| queue validation | ops |
+| worker runtime | ops |
+| receipt writing | ops |
+| projection building | ops |
+| UI rendering | ui |
 
 ## Example
 

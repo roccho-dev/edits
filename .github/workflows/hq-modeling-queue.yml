@@ -3,6 +3,8 @@ name: hq-modeling-queue
 on:
   pull_request:
     paths:
+      - 'README.md'
+      - 'docs/**'
       - 'packages/hq-modeling-queue/**'
       - 'packages/hq-local-worker/**'
       - '.github/workflows/hq-modeling-queue.yml'
@@ -10,6 +12,8 @@ on:
     branches:
       - proposals
     paths:
+      - 'README.md'
+      - 'docs/**'
       - 'packages/hq-modeling-queue/**'
       - 'packages/hq-local-worker/**'
       - '.github/workflows/hq-modeling-queue.yml'
@@ -22,6 +26,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+      - name: Check edits boundary
+        run: python3 packages/hq-modeling-queue/tools/check_edits_boundary.py .
       - name: Validate queue sample
         run: python3 packages/hq-modeling-queue/tools/validate_queue.py packages/hq-modeling-queue/examples/queue.sample.jsonl
       - name: Validate receipt sample

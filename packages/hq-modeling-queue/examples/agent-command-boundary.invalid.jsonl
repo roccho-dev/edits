@@ -1,0 +1,3 @@
+{"kind":"hq.commandTemplate.v1","name":"agent.promoteProposal","effect":"agent_task","queueKind":"hq.agentTaskQueued.v1","targetKinds":["projectionNode"],"requiresTarget":false,"claim":"Editor agent command owns proposal promotion."}
+{"kind":"hq.commandTemplate.v1","name":"agent.run","effect":"agent_task","queueKind":"hq.agentTaskQueued.v1","targetKinds":["projectionNode"],"requiresTarget":false,"claim":"Editor command runs real agent runtime."}
+{"kind":"hq.commandTemplate.v1","name":"agent.admit","effect":"agent_task","queueKind":"hq.agentTaskQueued.v1","targetKinds":["projectionNode"],"requiresTarget":false,"claim":"Editor agent command writes accepted ledger."}

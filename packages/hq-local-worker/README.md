@@ -1,18 +1,18 @@
 # hq-local-worker
 
-Local worker for edits modeling queues.
+Legacy/proof-only local vertical-slice evidence for edits modeling queues.
 
-This package reads `.local/queue.jsonl`, writes `.local/receipt.jsonl`, and materializes local shadow projection output for localhost preview.
+This package reads `.local/queue.jsonl`, writes `.local/receipt.jsonl`, and materializes local shadow projection output for localhost preview only to preserve the historical local/dev proof.
 
-It is local/dev only. It does not admit rows into an accepted ledger.
+It is not the canonical worker runtime. It is not the admission layer. It does not admit rows into an accepted ledger. Primary worker, receipt, projection, and admission ownership belongs in ops.
 
 ## Boundary
 
-| input | local output |
+| input | local proof output |
 |---|---|
-| `hq.modelCommitQueued.v1` | shadow model operation + processed receipt |
-| `hq.agentTaskQueued.v1` | pending agent task + pending receipt |
-| invalid row | failed receipt |
+| `hq.modelCommitQueued.v1` | shadow model operation + processed evidence receipt |
+| `hq.agentTaskQueued.v1` | pending agent task evidence + pending receipt |
+| invalid row | failed evidence receipt |
 
 ## Non-authority rule
 
@@ -20,7 +20,12 @@ The worker output is local evidence only:
 
 - local receipt is not accepted authority
 - local projection is not accepted authority
-- accepted ledger append is a separate admission gate
+- local preview is not accepted authority
+- accepted ledger append is a separate ops-owned admission gate
+
+## Allowed reason to remain in edits
+
+This package may remain while it is explicitly marked as legacy/proof-only evidence for the original editor-to-queue-to-preview proof. It must not be described as the canonical runtime owner.
 
 ## Example
 

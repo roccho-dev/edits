@@ -2,7 +2,7 @@
 
 Queue record contract for local Vim/hq modeling operations.
 
-This package defines the local queue vocabulary. It does not admit records into an accepted ledger and it does not run agents.
+This package defines the local editor queue vocabulary. It does not admit records into an accepted ledger, it does not run agents, and it does not own worker runtime.
 
 ## Record kinds
 
@@ -17,11 +17,9 @@ This package defines the local queue vocabulary. It does not admit records into 
 Queue rows are intent records. They are not accepted model authority.
 
 ```text
-queue append
-  -> local worker
-  -> receipt
-  -> optional admission gate
-  -> accepted ledger
+editor command
+  -> queue intent row
+  -> ops-owned validation/runtime/admission path
 ```
 
 ## Required shared fields
@@ -76,12 +74,12 @@ python3 packages/hq-modeling-queue/tools/queue_io.py validate .local/queue.jsonl
 
 ## Command vocabulary
 
-Confirmed Vim/hq commands are converted into local queue rows.
+Confirmed Vim/hq commands are editor-surface names that convert into queue intent rows.
 
-| command prefix | output kind |
-|---|---|
-| `model.*` | `hq.modelCommitQueued.v1` |
-| `agent.*` | `hq.agentTaskQueued.v1` |
+| command prefix | output kind | ownership meaning |
+|---|---|---|
+| `model.*` | `hq.modelCommitQueued.v1` | human-confirmed model intent only |
+| `agent.*` | `hq.agentTaskQueued.v1` | human-confirmed agent-task request only |
 
 The vocabulary lives in `commands/modeling.commands.jsonl`. Convert examples with:
 
@@ -90,4 +88,4 @@ python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modelin
 python3 packages/hq-modeling-queue/tools/command_to_queue.py packages/hq-modeling-queue/examples/command-request.agent-propose-model.json
 ```
 
-Command conversion is still local intent creation. It does not admit any row into an accepted ledger.
+Command conversion is pure command-to-row construction until an adapter appends the row. It never owns admission, accepted ledger, worker runtime, or UI rendering.

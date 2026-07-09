@@ -1,0 +1,2 @@
+{"kind":"hq.commandTemplate.v1","name":"model.admit","effect":"model_commit","queueKind":"accepted.modelCommit.v1","op":"admit","targetKinds":["projectionNode"],"requiresTarget":true,"claim":"Editor owns admission and writes accepted ledger."}
+{"kind":"hq.commandTemplate.v1","name":"agent.renderUi","effect":"agent_task","queueKind":"hq.agentTaskQueued.v1","targetKinds":["projectionNode"],"requiresTarget":false,"claim":"Editor command owns UI renderer ownership."}

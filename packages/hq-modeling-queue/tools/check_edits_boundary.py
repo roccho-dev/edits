@@ -27,6 +27,8 @@ REQUIRED_README = [
     "- accepted ledger",
     "- projection authority",
     "- UI renderer",
+    "ops-owned runtime/receipt/projection path",
+    "Ops owns canonical runtime, receipt, and projection responsibilities",
 ]
 
 
@@ -58,6 +60,10 @@ def check_required_docs(root: Path) -> None:
         fail("hq-local-worker README must mark the worker as legacy/proof-only")
     if "not the canonical worker runtime" not in worker_readme:
         fail("hq-local-worker README must deny canonical runtime ownership")
+    if "Ops owns canonical worker, receipt, and projection responsibilities" not in worker_readme:
+        fail("hq-local-worker README must point canonical worker/receipt/projection ownership to ops")
+    if "worker runtime | ops" not in worker_readme:
+        fail("hq-local-worker README must include ops worker-runtime replacement boundary")
 
     boundary_doc = (root / "docs/edits-boundary.md").read_text(encoding="utf-8")
     if "edits writes intent; ops validates/processes/admits; ui renders read models" not in boundary_doc:

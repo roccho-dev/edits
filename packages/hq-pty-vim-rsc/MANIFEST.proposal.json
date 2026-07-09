@@ -1,6 +1,6 @@
 {
-  "schema": "hq_pty_vim_rsc_explorer_launcher_proposal.v1",
-  "proposal_id": "hq-pty-vim-rsc-explorer-launcher-260708",
+  "schema": "hq_pty_vim_rsc_proposal.v1",
+  "proposal_id": "hq-pty-vim-rsc-260708",
   "target_repo": "roccho-dev/edits",
   "target_path": "packages/hq-pty-vim-rsc",
   "source_archive": "hq-pty-vim-rsc-validated-proof.260708-094249.zip",
@@ -24,13 +24,15 @@
       "internal/dispatcher tests assume Unix printf"
     ]
   },
-  "intended_first_workflow": {
-    "host": "Windows",
-    "outer_terminal": "Windows Terminal",
-    "multiplexer": "Herdr",
-    "default_process": "Vim",
-    "accepted_action": "explorer.exe open/select"
+  "active_scope": {
+    "vim": "completion and explicit accept proof",
+    "rsc": "recursive slot completion and JSONL proof",
+    "windows": "ConPTY/Vim visual proof only"
+  },
+  "retired_scope": {
+    "direct_explorer_side": true,
+    "reason": "Host path opening must be modeled as hq-owned semantics before any side effect is allowed."
   },
   "payload_imported": true,
-  "payload_import_note": "The expanded archive payload is imported under target_path, excluding only the nested .git directory. Windows porting boundaries remain recorded in BUILD-NOTES.md."
+  "payload_import_note": "The expanded archive payload is imported under target_path, excluding only the nested .git directory. Direct Explorer launch files are retired from the active package surface."
 }

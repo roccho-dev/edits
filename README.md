@@ -43,7 +43,7 @@ edits = editor surface
 | `examples/*.jsonl` | sample queue/receipt data | yes |
 | `docs/**` | editor/queue-writer boundary docs | yes |
 | `packages/hq-modeling-queue/` | command vocabulary and queue-row construction | yes |
-| `packages/hq-local-worker/` | legacy/proof-only local vertical-slice evidence until ops owns runtime proof | yes |
+| `packages/hq-local-worker/` | legacy/proof-only local vertical-slice evidence after ops runtime/receipt/projection ownership | yes |
 | `adapters/ui/` | targetRef handoff recipes | yes |
 
 Queue append means intent was recorded. It does not mean the model was accepted. Accepted model authority belongs after an ops-owned admission gate.
@@ -76,7 +76,7 @@ edits must not own UI renderer ownership
 |---|---|
 | `packages/hq-pty-vim-rsc/` | lower-level Vim/RSC completion base |
 | `packages/hq-modeling-queue/` | editor command vocabulary, pure command-to-queue conversion, local queue writer tools |
-| `packages/hq-local-worker/` | legacy/proof-only local vertical-slice evidence; not canonical runtime |
+| `packages/hq-local-worker/` | legacy/proof-only vertical-slice evidence; not canonical runtime |
 | `adapters/ui/` | ui targetRef handoff recipes |
 
 ## Local modeling loop
@@ -86,8 +86,8 @@ localhost UI targetRef
   -> Vim/hq completion
   -> human confirm
   -> .local/queue.jsonl append
-  -> ops-owned runtime/admission/projection path
+  -> ops-owned runtime/receipt/projection path
   -> ui projection preview
 ```
 
-The in-repo local worker proof remains only as local/dev evidence until ops-owned runtime proof replaces it. It is not the canonical runtime boundary.
+The in-repo local worker proof remains only as legacy local/dev evidence. Ops owns canonical runtime, receipt, and projection responsibilities.

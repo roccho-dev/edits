@@ -2,7 +2,8 @@
 
 ## Local Windows probe
 
-The current Windows host did not have `go` on `PATH`, so the probe used mise:
+The current Windows host did not have `go` on `PATH`, so the original probe used
+mise:
 
 ```powershell
 mise x go@1.23.2 -- go version
@@ -40,15 +41,23 @@ hq/internal/dispatcher tests failed:
 
 The archive is not a drop-in Windows executable by `go build ./cmd/hq`.
 
-The likely fix is small but required:
+The active Windows proof should stay focused on the ConPTY/Vim/RSC boundary.
+Direct Explorer launch behavior has been retired from this package. If host path
+opening is reintroduced, it must be modeled as hq semantics first and then pass
+through explicit confirmation plus an ops/runtime receipt boundary.
 
-- split Unix PTY proof commands behind Unix build tags, or expose a Windows
-  compatible PTY/ConPTY implementation;
-- separate the pure completion/Explorer launcher binary from Unix PTY proof
-  commands;
-- adjust shell adapter tests for Windows, or mark Unix shell behavior as
-  Unix-only.
+## Host path open semantic proof
 
-For the immediate Herdr/Vim Explorer workflow, the implementation should start
-with the pure RSC completion path plus a Windows launcher adapter, not with the
-Unix PTY proof command.
+The Windows proof now checks the allowed shape without restoring the retired Vim
+Explorer plugin:
+
+```text
+Vim -> hqwin -> hq.hostPathOpenQueued.v1 JSONL
+    -> hqwin dispatch -> hq.hostPathOpenReceipt.v1 JSONL
+    -> explorer-compatible binary
+```
+
+The executable used in proof is `cmd/fake-explorer`, not the real Windows shell
+UI. This keeps CI side-effect contained while proving that Vim does not call
+Explorer directly and that the host action only happens after a confirmed hq
+JSONL intent.

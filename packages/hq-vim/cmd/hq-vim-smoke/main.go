@@ -16,6 +16,7 @@ func main() {
 	flag.StringVar(&cfg.PluginRoot, "plugin-root", "", "hq-vim package root")
 	flag.StringVar(&cfg.Profile, "profile", "local", "hq endpoint profile")
 	flag.StringVar(&cfg.Buffer, "buffer", "", "buffer path to open")
+	flag.StringVar(&cfg.BufferText, "buffer-text", os.Getenv("HQ_BUFFER_TEXT"), "initial hq buffer text")
 	flag.BoolVar(&cfg.Headless, "headless", false, "run completion and accept proof then exit")
 	flag.Parse()
 

@@ -42,6 +42,11 @@ func TestRealVimLspConfirmQueueSmoke(t *testing.T) {
 	hqBin := buildHQStub(t)
 	profileRoot := prepareProfile(t, root, "local")
 	queue := filepath.Join(profileRoot, "local", "queue.jsonl")
+	target := t.TempDir()
+	bufferText, err := json.Marshal(map[string]any{"kind": "hq.hostOpenRequest.v1", "path": target})
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := smoke.Config{
 		HQBin:      hqBin,
 		Vim:        vim,
@@ -49,6 +54,7 @@ func TestRealVimLspConfirmQueueSmoke(t *testing.T) {
 		PluginRoot: root,
 		Profile:    "local",
 		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
+		BufferText: string(bufferText),
 		Headless:   true,
 		Env:        map[string]string{"HQ_STUB_ROOT": profileRoot},
 	}
@@ -60,19 +66,17 @@ func TestRealVimLspConfirmQueueSmoke(t *testing.T) {
 		t.Fatalf("queue not written: %v", err)
 	}
 	var row struct {
-		Kind         string `json:"kind"`
-		CompileDraft struct {
-			SideEffect bool `json:"side_effect"`
-		} `json:"compile_draft"`
+		Kind string `json:"kind"`
+		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(bytesTrimLine(b), &row); err != nil {
 		t.Fatalf("queue row json: %v\n%s", err, b)
 	}
-	if row.Kind != "instruction.accepted" {
+	if row.Kind != "hq.hostCommandQueued.v1" {
 		t.Fatalf("unexpected queue kind: %s", row.Kind)
 	}
-	if row.CompileDraft.SideEffect {
-		t.Fatal("accepted instruction must be side-effect-free")
+	if row.Path != target {
+		t.Fatalf("queue path = %q, want buffer path %q", row.Path, target)
 	}
 }
 

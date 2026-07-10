@@ -108,7 +108,7 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 					"textDocumentSync":       1,
 					"completionProvider":     map[string]any{"triggerCharacters": []string{"{", "\"", ":", "[", ","}},
 					"codeActionProvider":     true,
-					"executeCommandProvider": map[string]any{"commands": []string{"hq.rsc.accept"}},
+					"executeCommandProvider": map[string]any{"commands": []string{"hq.submit"}},
 				},
 				"serverInfo": map[string]any{"name": "hqstub-lsp"},
 			}}); err != nil {
@@ -149,37 +149,51 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 				return err
 			}
 		case "textDocument/codeAction":
-			actions := []map[string]any{}
-			for _, item := range completionItems() {
-				label := item["label"].(string)
-				actions = append(actions, map[string]any{
-					"title": "HQ RSC Accept: " + label,
-					"kind":  "quickfix",
-					"command": map[string]any{
-						"title":     "HQ RSC Accept: " + label,
-						"command":   "hq.rsc.accept",
-						"arguments": []any{item["data"].(map[string]any)["suggestion"]},
-					},
-				})
+			var p struct {
+				TextDocument struct {
+					URI string `json:"uri"`
+				} `json:"textDocument"`
 			}
+			_ = json.Unmarshal(msg.Params, &p)
+			actions := []map[string]any{{
+				"title": "HQ Submit", "kind": "quickfix",
+				"command": map[string]any{
+					"title": "HQ Submit", "command": "hq.submit",
+					"arguments": []any{map[string]any{"uri": p.TextDocument.URI}},
+				},
+			}}
 			if err := writeMessage(w, message{JSONRPC: "2.0", ID: msg.ID, Result: actions}); err != nil {
 				return err
 			}
 		case "workspace/executeCommand":
+			var p struct {
+				Command   string `json:"command"`
+				Arguments []struct {
+					URI string `json:"uri"`
+				} `json:"arguments"`
+			}
+			if err := json.Unmarshal(msg.Params, &p); err != nil || p.Command != "hq.submit" || len(p.Arguments) != 1 {
+				return fmt.Errorf("invalid hq.submit request")
+			}
+			var request struct {
+				Path string `json:"path"`
+			}
+			if err := json.Unmarshal([]byte(docs[p.Arguments[0].URI]), &request); err != nil || request.Path == "" {
+				return fmt.Errorf("invalid host-open buffer")
+			}
 			row := map[string]any{
-				"kind":              "instruction.accepted",
-				"instruction_id":    "ins_stub",
-				"suggestion_id":     "sug_stub_t1",
-				"suggestion_hash":   "hash_stub_t1",
-				"buffer_version":    1,
-				"world_digest":      "stub",
-				"compile_draft":     map[string]any{"kind": "jsonl.patch", "operation": "append-ref", "path": []string{"tasks"}, "ref": "task:t1", "side_effect": false},
-				"hq_stub_confirmed": true,
+				"kind":        "hq.hostCommandQueued.v1",
+				"id":          "hqcmd_stub",
+				"status":      "queued",
+				"command":     "host.open",
+				"path":        request.Path,
+				"confirmedBy": "vim-lsp",
 			}
 			if err := appendJSONL(queue, row); err != nil {
 				return err
 			}
-			if err := writeMessage(w, message{JSONRPC: "2.0", ID: msg.ID, Result: row}); err != nil {
+			result := map[string]any{"kind": "hq.submitResult.v1", "status": "queued", "queueKind": row["kind"], "queueId": row["id"]}
+			if err := writeMessage(w, message{JSONRPC: "2.0", ID: msg.ID, Result: result}); err != nil {
 				return err
 			}
 		default:

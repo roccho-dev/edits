@@ -39,7 +39,7 @@ Then in Vim:
 
 ```vim
 :HqStart
-:HqAcceptFirst
+:HqSubmit
 ```
 
 When `hq` is on `PATH`, `g:hq_bin` is unnecessary. `:HqStart` uses the `local`

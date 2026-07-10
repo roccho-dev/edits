@@ -54,7 +54,7 @@ function! hq#request(method, params) abort
   return s:last_response.response
 endfunction
 
-function! hq#accept_first() abort
+function! hq#submit() abort
   let l:line_nr = line('.') - 1
   let l:line_len = strlen(getline('.'))
   let l:action_response = hq#request('textDocument/codeAction', {
@@ -70,15 +70,15 @@ function! hq#accept_first() abort
     throw 'no hq code actions returned'
   endif
   let l:cmd = get(l:actions[0], 'command', {})
-  if get(l:cmd, 'command', '') !=# 'hq.rsc.accept'
+  if get(l:cmd, 'command', '') !=# 'hq.submit'
     throw 'unexpected hq command action: ' . string(l:cmd)
   endif
   let l:exec_response = hq#request('workspace/executeCommand', l:cmd)
-  let l:instruction = get(l:exec_response, 'result', {})
-  if get(l:instruction, 'kind', '') !=# 'instruction.accepted'
-    throw 'hq.rsc.accept did not return instruction.accepted: ' . string(l:instruction)
+  let l:result = get(l:exec_response, 'result', {})
+  if get(l:result, 'kind', '') !=# 'hq.submitResult.v1' || get(l:result, 'status', '') !=# 'queued'
+    throw 'hq.submit did not queue the buffer: ' . string(l:result)
   endif
-  return l:instruction
+  return l:result
 endfunction
 
 function! s:on_response(data) abort

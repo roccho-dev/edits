@@ -4,5 +4,5 @@ endif
 let g:loaded_hq_vim = 1
 
 command! -nargs=? HqStart call hq#start(<f-args>)
-command! HqAcceptFirst call hq#accept_first()
+command! HqSubmit call hq#submit()
 command! HqDoctor echo string(hq#doctor())

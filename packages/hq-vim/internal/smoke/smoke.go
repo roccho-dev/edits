@@ -18,6 +18,7 @@ type Config struct {
 	PluginRoot string
 	Profile    string
 	Buffer     string
+	BufferText string
 	Headless   bool
 	Env        map[string]string
 }
@@ -50,6 +51,9 @@ func Run(cfg Config) error {
 	}
 	if cfg.Buffer == "" {
 		cfg.Buffer = filepath.Join(root, ".tmp", "manual.hqjson")
+	}
+	if cfg.BufferText == "" {
+		cfg.BufferText = `{"kind":"hq.hostOpenRequest.v1","path":"."}`
 	}
 	if err := os.MkdirAll(filepath.Dir(cfg.Buffer), 0o755); err != nil {
 		return err
@@ -154,10 +158,10 @@ func writeVimScript(root string, cfg Config) (string, error) {
 	}
 	if cfg.Headless {
 		lines = append(lines,
-			"call setline(1, '{\"kind\":\"project\",\"tasks\":[')",
+			"call setline(1, "+vimValue(cfg.BufferText)+")",
 			"call cursor(1, strlen(getline(1)) + 1)",
 			"doautocmd TextChanged",
-			"HqAcceptFirst",
+			"HqSubmit",
 			"qa!",
 		)
 	}
@@ -174,6 +178,10 @@ func writeVimScript(root string, cfg Config) (string, error) {
 
 func vimString(path string) string {
 	s := filepath.ToSlash(path)
-	b, _ := json.Marshal(s)
+	return vimValue(s)
+}
+
+func vimValue(value string) string {
+	b, _ := json.Marshal(value)
 	return string(b)
 }

@@ -243,6 +243,7 @@ func mergeEnvironment(base []string, overrides map[string]string) []string {
 				result[i] = key + "=" + value
 				replaced = true
 			}
+		}
 		if !replaced {
 			result = append(result, key+"="+value)
 		}

@@ -88,6 +88,7 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 
 	var acceptedIDs []string
 	for run := 1; run <= 2; run++ {
+		resultPath := filepath.Join(t.TempDir(), "submit-result.json")
 		cfg := smoke.Config{
 			HQBin:      hqBin,
 			Vim:        requireVim(t),
@@ -98,6 +99,7 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 			BufferText: submitText,
 			Headless:   true,
 			Env:        profile.Env,
+			ResultPath: resultPath,
 		}
 		if err := smoke.Run(cfg); err != nil {
 			t.Fatalf("canonical hq Vim submit run %d failed: %v", run, err)
@@ -118,23 +120,37 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 		if id == "" {
 			t.Fatalf("accepted instruction has no id: %#v", instruction)
 		}
+		result := readJSONObject(t, resultPath)
+		if result["kind"] != "hq.submitResult.v1" || result["status"] != "queued" {
+			t.Fatalf("unexpected submit result: %#v", result)
+		}
+		if result["queueKind"] != "accepted.instruction" {
+			t.Fatalf("submit queueKind = %v", result["queueKind"])
+		}
+		if result["queueId"] != id {
+			t.Fatalf("submit queueId = %v, appended instruction id = %s", result["queueId"], id)
+		}
+		if result["deploymentId"] != "edits-ci" {
+			t.Fatalf("submit deploymentId = %v", result["deploymentId"])
+		}
 		acceptedIDs = append(acceptedIDs, id)
 	}
 	if acceptedIDs[0] == acceptedIDs[1] {
 		t.Fatalf("repeated explicit submits reused id %q", acceptedIDs[0])
 	}
 	writeCanonicalArtifact(t, map[string]any{
-		"kind":                "edits.hqVimConformance.v1",
-		"status":              "passed",
-		"hqSourceSha":         os.Getenv("HQ_CANONICAL_SOURCE_SHA"),
-		"completionLabel":     "queue.create",
-		"completionWrites":    0,
-		"explicitSubmitRuns":  2,
-		"acceptedRows":        2,
-		"acceptedIDsDistinct": true,
-		"pathLookupUsed":      false,
-		"binding":             "explicit-absolute-g:hq_bin",
-		"boundary":            "real Vim -> real vim-lsp -> canonical hq lsp -> accepted.instruction",
+		"kind":                  "edits.hqVimConformance.v1",
+		"status":                "passed",
+		"hqSourceSha":           os.Getenv("HQ_CANONICAL_SOURCE_SHA"),
+		"completionLabel":       "queue.create",
+		"completionWrites":      0,
+		"explicitSubmitRuns":    2,
+		"acceptedRows":          2,
+		"acceptedIDsDistinct":   true,
+		"submitIdentityMatches": true,
+		"pathLookupUsed":        false,
+		"binding":               "explicit-absolute-g:hq_bin",
+		"boundary":              "real Vim -> real vim-lsp -> canonical hq lsp -> accepted.instruction",
 	})
 	t.Logf("canonical hq Vim conformance passed against %s", os.Getenv("HQ_CANONICAL_SOURCE_SHA"))
 }
@@ -227,7 +243,6 @@ func mergeEnvironment(base []string, overrides map[string]string) []string {
 				result[i] = key + "=" + value
 				replaced = true
 			}
-		}
 		if !replaced {
 			result = append(result, key+"="+value)
 		}
@@ -254,6 +269,19 @@ func writeCanonicalArtifact(t *testing.T, proof map[string]any) {
 	if err := os.WriteFile(path, append(encoded, '\n'), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func readJSONObject(t *testing.T, path string) map[string]any {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(content, &value); err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	return value
 }
 
 func readJSONLRows(t *testing.T, path string) []map[string]any {

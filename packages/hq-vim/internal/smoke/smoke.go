@@ -31,6 +31,7 @@ type Config struct {
 	Timeout                 time.Duration
 	VimLog                  string
 	LSPLog                  string
+	ResultPath              string
 }
 
 func Run(cfg Config) error {
@@ -69,6 +70,11 @@ func Run(cfg Config) error {
 	}
 	if err := os.MkdirAll(filepath.Dir(cfg.Buffer), 0o755); err != nil {
 		return err
+	}
+	if cfg.ResultPath != "" {
+		if err := os.MkdirAll(filepath.Dir(cfg.ResultPath), 0o755); err != nil {
+			return err
+		}
 	}
 
 	cleanupLogs := false
@@ -282,9 +288,16 @@ func writeVimScript(root string, cfg Config) (string, error) {
 				"call setline(1, "+vimValue(cfg.BufferText)+")",
 				"call cursor(1, strlen(getline(1)) + 1)",
 				"doautocmd TextChanged",
-				"HqSubmit",
-				"qa!",
 			)
+			if cfg.ResultPath == "" {
+				lines = append(lines, "HqSubmit")
+			} else {
+				lines = append(lines,
+					"let hq_submit_result = hq#submit()",
+					"call writefile([json_encode(hq_submit_result)], "+vimString(cfg.ResultPath)+")",
+				)
+			}
+			lines = append(lines, "qa!")
 		}
 	}
 	f, err := os.CreateTemp("", "hq-vim-smoke-*.vim")

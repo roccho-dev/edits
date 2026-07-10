@@ -29,6 +29,8 @@ type Config struct {
 	SkipSubmit              bool
 	Env                     map[string]string
 	Timeout                 time.Duration
+	VimLog                  string
+	LSPLog                  string
 }
 
 func Run(cfg Config) error {
@@ -69,13 +71,27 @@ func Run(cfg Config) error {
 		return err
 	}
 
+	cleanupLogs := false
+	if cfg.VimLog == "" {
+		cfg.VimLog = filepath.Join(os.TempDir(), fmt.Sprintf("hq-vim-verbose-%d.log", time.Now().UnixNano()))
+		cleanupLogs = true
+	}
+	if cfg.LSPLog == "" {
+		cfg.LSPLog = filepath.Join(os.TempDir(), fmt.Sprintf("hq-vim-lsp-%d.log", time.Now().UnixNano()))
+		cleanupLogs = true
+	}
+	if cleanupLogs {
+		defer os.Remove(cfg.VimLog)
+		defer os.Remove(cfg.LSPLog)
+	}
+
 	script, err := writeVimScript(root, cfg)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(script)
 
-	args := []string{"--clean", "-Nu", "NONE", "-n"}
+	args := []string{"--clean", "-Nu", "NONE", "-n", "-V1" + filepath.ToSlash(cfg.VimLog)}
 	if cfg.Headless {
 		args = append(args, "-es")
 	}
@@ -93,9 +109,32 @@ func Run(cfg Config) error {
 	cmd.Env = environmentWithOverrides(os.Environ(), cfg.Env)
 	err = cmd.Run()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return fmt.Errorf("Vim smoke timed out after %s", timeout)
+		return diagnosticError(fmt.Errorf("Vim smoke timed out after %s", timeout), cfg)
 	}
-	return err
+	if err != nil {
+		return diagnosticError(err, cfg)
+	}
+	return nil
+}
+
+func diagnosticError(cause error, cfg Config) error {
+	return fmt.Errorf("%w\nvim verbose log:\n%s\nvim-lsp log:\n%s", cause, readDiagnostic(cfg.VimLog), readDiagnostic(cfg.LSPLog))
+}
+
+func readDiagnostic(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "<unavailable: " + err.Error() + ">"
+	}
+	const limit = 16 << 10
+	if len(data) > limit {
+		data = data[len(data)-limit:]
+	}
+	text := strings.TrimSpace(string(data))
+	if text == "" {
+		return "<empty>"
+	}
+	return text
 }
 
 func environmentWithOverrides(base []string, overrides map[string]string) []string {
@@ -183,6 +222,8 @@ func writeVimScript(root string, cfg Config) (string, error) {
 	lines := []string{
 		"set nocompatible",
 		"set noswapfile",
+		"let g:lsp_log_file = " + vimString(cfg.LSPLog),
+		"let g:lsp_log_verbose = 1",
 		"execute 'set runtimepath^=' . fnameescape(" + vimString(cfg.VimLSP) + ")",
 		"execute 'set runtimepath^=' . fnameescape(" + vimString(root) + ")",
 		"runtime plugin/lsp.vim",

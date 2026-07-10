@@ -12,16 +12,19 @@ import (
 )
 
 type Config struct {
-	HQBin      string
-	Vim        string
-	VimLSP     string
-	PluginRoot string
-	Profile    string
-	Buffer     string
-	BufferText string
-	Headless   bool
-	StartOnly  bool
-	Env        map[string]string
+	HQBin                   string
+	Vim                     string
+	VimLSP                  string
+	PluginRoot              string
+	Profile                 string
+	Buffer                  string
+	BufferText              string
+	CompletionText          string
+	ExpectedCompletionLabel string
+	Headless                bool
+	StartOnly               bool
+	OmitHQBin               bool
+	Env                     map[string]string
 }
 
 func Run(cfg Config) error {
@@ -44,8 +47,10 @@ func Run(cfg Config) error {
 	if !Exists(filepath.Join(cfg.VimLSP, "plugin", "lsp.vim")) {
 		return fmt.Errorf("vim-lsp not found; set VIM_LSP_PATH or pass -vim-lsp")
 	}
-	if cfg.HQBin == "" || !Exists(cfg.HQBin) {
-		return fmt.Errorf("hq binary not found; this edits helper does not build hq, set HQ_BIN or pass -hq-bin")
+	if !cfg.OmitHQBin {
+		if cfg.HQBin == "" || !Exists(cfg.HQBin) {
+			return fmt.Errorf("hq binary not found; this edits helper does not build hq, set HQ_BIN or pass -hq-bin")
+		}
 	}
 	if cfg.Profile == "" {
 		cfg.Profile = "local"
@@ -75,11 +80,30 @@ func Run(cfg Config) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	cmd.Env = os.Environ()
-	for key, value := range cfg.Env {
-		cmd.Env = append(cmd.Env, key+"="+value)
-	}
+	cmd.Env = environmentWithOverrides(os.Environ(), cfg.Env)
 	return cmd.Run()
+}
+
+func environmentWithOverrides(base []string, overrides map[string]string) []string {
+	result := append([]string(nil), base...)
+	for key, value := range overrides {
+		replaced := false
+		for i, entry := range result {
+			name, _, _ := strings.Cut(entry, "=")
+			matches := name == key
+			if runtime.GOOS == "windows" {
+				matches = strings.EqualFold(name, key)
+			}
+			if matches {
+				result[i] = key + "=" + value
+				replaced = true
+			}
+		}
+		if !replaced {
+			result = append(result, key+"="+value)
+		}
+	}
+	return result
 }
 
 func ProbeVimRuntime(vim string) error {
@@ -149,13 +173,17 @@ func writeVimScript(root string, cfg Config) (string, error) {
 		"execute 'set runtimepath^=' . fnameescape(" + vimString(root) + ")",
 		"runtime plugin/lsp.vim",
 		"runtime plugin/hq.vim",
-		"let g:hq_bin = " + vimString(cfg.HQBin),
-		"let g:hq_profile = " + vimString(cfg.Profile),
-		"call mkdir(fnamemodify(" + vimString(cfg.Buffer) + ", ':h'), 'p')",
-		"execute 'edit ' . fnameescape(" + vimString(cfg.Buffer) + ")",
+	}
+	if !cfg.OmitHQBin {
+		lines = append(lines, "let g:hq_bin = "+vimString(cfg.HQBin))
+	}
+	lines = append(lines,
+		"let g:hq_profile = "+vimString(cfg.Profile),
+		"call mkdir(fnamemodify("+vimString(cfg.Buffer)+", ':h'), 'p')",
+		"execute 'edit ' . fnameescape("+vimString(cfg.Buffer)+")",
 		"set filetype=hqjson",
 		"setlocal omnifunc=lsp#complete",
-	}
+	)
 	if cfg.StartOnly {
 		lines = append(lines,
 			"try",
@@ -169,6 +197,29 @@ func writeVimScript(root string, cfg Config) (string, error) {
 		lines = append(lines, "HqStart")
 	}
 	if cfg.Headless && !cfg.StartOnly {
+		if cfg.ExpectedCompletionLabel != "" {
+			lines = append(lines,
+				"call setline(1, "+vimValue(cfg.CompletionText)+")",
+				"call cursor(1, strlen(getline(1)) + 1)",
+				"doautocmd TextChanged",
+				"let l:hq_completion_response = hq#request('textDocument/completion', {",
+				"      \\ 'textDocument': lsp#get_text_document_identifier(),",
+				"      \\ 'position': {'line': 0, 'character': strlen(getline(1))},",
+				"      \\ })",
+				"let l:hq_completion_result = get(l:hq_completion_response, 'result', {})",
+				"let l:hq_completion_items = type(l:hq_completion_result) == v:t_dict ? get(l:hq_completion_result, 'items', []) : l:hq_completion_result",
+				"let l:hq_completion_found = 0",
+				"for l:hq_item in l:hq_completion_items",
+				"  if get(l:hq_item, 'label', '') ==# "+vimValue(cfg.ExpectedCompletionLabel),
+				"    let l:hq_completion_found = 1",
+				"    break",
+				"  endif",
+				"endfor",
+				"if !l:hq_completion_found",
+				"  cquit 44",
+				"endif",
+			)
+		}
 		lines = append(lines,
 			"call setline(1, "+vimValue(cfg.BufferText)+")",
 			"call cursor(1, strlen(getline(1)) + 1)",

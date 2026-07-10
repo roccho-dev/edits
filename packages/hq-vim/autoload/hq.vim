@@ -12,6 +12,11 @@ function! s:is_absolute(path) abort
   return a:path =~# '^/'
 endfunction
 
+function! s:server_started_or_terminal() abort
+  let l:status = lsp#get_server_status(s:server)
+  return lsp#is_server_running(s:server) || l:status ==# 'failed' || l:status ==# 'exited'
+endfunction
+
 function! hq#doctor() abort
   let l:hq = get(g:, 'hq_bin', '')
   let l:absolute = s:is_absolute(l:hq)
@@ -22,6 +27,8 @@ function! hq#doctor() abort
         \ 'hq_bin_absolute': l:absolute,
         \ 'hq_bin_ok': l:absolute && executable(l:hq),
         \ 'profile': get(g:, 'hq_profile', 'local'),
+        \ 'server': s:server,
+        \ 'server_status': exists('*lsp#get_server_status') ? lsp#get_server_status(s:server) : 'vim-lsp-unavailable',
         \ }
 endfunction
 
@@ -49,10 +56,18 @@ function! hq#start(...) abort
         \ })
   call lsp#enable()
   call lsp#activate()
+  let l:wait_result = lsp#utils#_wait(10000, function('s:server_started_or_terminal'), 10)
+  let l:status = lsp#get_server_status(s:server)
+  if l:wait_result != 0 || !lsp#is_server_running(s:server)
+    throw 'hq LSP failed to start: status=' . l:status . ' wait=' . l:wait_result
+  endif
   return 1
 endfunction
 
 function! hq#request(method, params) abort
+  if !lsp#is_server_running(s:server)
+    throw 'hq LSP is not running: ' . lsp#get_server_status(s:server)
+  endif
   let s:done = 0
   let s:last_response = {}
   call lsp#send_request(s:server, {
@@ -62,7 +77,7 @@ function! hq#request(method, params) abort
         \ })
   let l:wait_result = lsp#utils#_wait(5000, {-> s:done}, 10)
   if l:wait_result != 0
-    throw 'vim-lsp request timed out: ' . a:method
+    throw 'vim-lsp request timed out: ' . a:method . ' status=' . lsp#get_server_status(s:server)
   endif
   if !has_key(s:last_response, 'response')
     throw 'vim-lsp response missing for ' . a:method . ': ' . string(s:last_response)

@@ -54,7 +54,6 @@ def main() -> int:
         "adapters/source/domain-jsonl",
         "adapters/source/hq-source-jsonl",
         "adapters/transport/lsp",
-        "adapters/editor/vim",
         "adapters/editor/helix",
     ]
     for rel in required_new_dirs:

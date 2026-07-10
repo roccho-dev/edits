@@ -1,0 +1,81 @@
+name: Vim9 projection proof
+
+on:
+  pull_request:
+    paths:
+      - 'packages/vim9-projection/**'
+      - '.github/workflows/vim9-projection.yml'
+
+concurrency:
+  group: vim9-projection-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vim on Windows
+        if: runner.os == 'Windows'
+        run: choco install vim -y --no-progress --limit-output
+
+      - name: Resolve native Vim on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $roots = @(
+            'C:\tools',
+            'C:\Program Files\Vim',
+            'C:\ProgramData\chocolatey\lib'
+          )
+          $candidates = foreach ($root in $roots) {
+            if (Test-Path $root) {
+              Get-ChildItem $root -Recurse -Filter vim.exe -ErrorAction SilentlyContinue
+            }
+          }
+          $vim = $candidates |
+            Where-Object { $_.FullName -notmatch '\\Git\\|\\usr\\bin\\vim\.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $vim) { throw 'native non-Git vim.exe not found' }
+          "VIM_EXE=$($vim.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $vim.FullName --version | Select-Object -First 4
+
+      - name: Install Vim on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y vim
+
+      - name: Run headless proof on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & $env:VIM_EXE -Nu NONE -n -es -S packages/vim9-projection/test/proof.vim
+          if ($LASTEXITCODE -ne 0) {
+            if (Test-Path packages/vim9-projection/test/failures.log) {
+              Get-Content packages/vim9-projection/test/failures.log
+            }
+            exit $LASTEXITCODE
+          }
+          Get-Content packages/vim9-projection/test/proof.out
+
+      - name: Run headless proof on Linux
+        if: runner.os == 'Linux'
+        run: |
+          vim -Nu NONE -n -es -S packages/vim9-projection/test/proof.vim
+          cat packages/vim9-projection/test/proof.out
+
+      - name: Run real-screen proof on Linux
+        if: runner.os == 'Linux'
+        run: |
+          script -qfec "vim -Nu NONE -n -S packages/vim9-projection/test/visual.vim" /dev/null
+          grep -F 'role: 👑 CEO' packages/vim9-projection/test/screen.out
+          grep -F 'finance_owner: 💼 CFO' packages/vim9-projection/test/screen.out
+          grep -F 'package: 📦 factory/core' packages/vim9-projection/test/screen.out
+          grep -F 'created_at: ◷ 2026-07-10 19:30 JST' packages/vim9-projection/test/screen.out

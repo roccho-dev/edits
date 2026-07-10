@@ -62,6 +62,7 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 	}
 	root := mustPackageRoot(t)
 	profile := prepareCanonicalProfile(t)
+	assertCanonicalProfileStarts(t, hqBin, profile.Env)
 	completionText := `{"op":q`
 	submitText := `{"op":"queue.create","target":"ctx","payload":{"path":"demo.jsonl"}}`
 
@@ -158,8 +159,14 @@ func prepareCanonicalProfile(t *testing.T) canonicalProfile {
 	worldPath := filepath.Join(root, "world.jsonl")
 	acceptedPath := filepath.Join(root, "accepted.jsonl")
 	capabilitiesPath := filepath.Join(root, "capabilities.json")
+	world, err := os.ReadFile(filepath.Join(mustPackageRoot(t), "testdata", "world.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(worldPath, world, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for path, content := range map[string]string{
-		worldPath:        "{}\n",
 		acceptedPath:     "",
 		capabilitiesPath: "{}\n",
 	} {
@@ -193,6 +200,39 @@ func prepareCanonicalProfile(t *testing.T) canonicalProfile {
 		env["XDG_CONFIG_HOME"] = configRoot
 	}
 	return canonicalProfile{AcceptedPath: acceptedPath, Env: env}
+}
+
+func assertCanonicalProfileStarts(t *testing.T, hqBin string, overrides map[string]string) {
+	t.Helper()
+	cmd := exec.Command(hqBin, "lsp", "--profile", "local")
+	cmd.Stdin = strings.NewReader("")
+	cmd.Env = mergeEnvironment(os.Environ(), overrides)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("canonical hq rejected generated profile before Vim: %v\n%s", err, output)
+	}
+}
+
+func mergeEnvironment(base []string, overrides map[string]string) []string {
+	result := append([]string(nil), base...)
+	for key, value := range overrides {
+		replaced := false
+		for i, entry := range result {
+			name, _, _ := strings.Cut(entry, "=")
+			matches := name == key
+			if runtime.GOOS == "windows" {
+				matches = strings.EqualFold(name, key)
+			}
+			if matches {
+				result[i] = key + "=" + value
+				replaced = true
+			}
+		}
+		if !replaced {
+			result = append(result, key+"="+value)
+		}
+	}
+	return result
 }
 
 func writeCanonicalArtifact(t *testing.T, proof map[string]any) {

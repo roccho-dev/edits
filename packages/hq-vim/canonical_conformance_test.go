@@ -65,23 +65,41 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 	completionText := `{"op":q`
 	submitText := `{"op":"queue.create","target":"ctx","payload":{"path":"demo.jsonl"}}`
 
+	completionCfg := smoke.Config{
+		HQBin:                   hqBin,
+		Vim:                     requireVim(t),
+		VimLSP:                  requireVimLSP(t),
+		PluginRoot:              root,
+		Profile:                 "local",
+		Buffer:                  filepath.Join(t.TempDir(), "completion-only.hqjson"),
+		CompletionText:          completionText,
+		ExpectedCompletionLabel: "queue.create",
+		Headless:                true,
+		SkipSubmit:              true,
+		Env:                     profile.Env,
+	}
+	if err := smoke.Run(completionCfg); err != nil {
+		t.Fatalf("canonical hq Vim completion-only conformance failed: %v", err)
+	}
+	if rows := readJSONLRows(t, profile.AcceptedPath); len(rows) != 0 {
+		t.Fatalf("completion-only run wrote %d durable rows", len(rows))
+	}
+
 	var acceptedIDs []string
 	for run := 1; run <= 2; run++ {
 		cfg := smoke.Config{
-			HQBin:                   hqBin,
-			Vim:                     requireVim(t),
-			VimLSP:                  requireVimLSP(t),
-			PluginRoot:              root,
-			Profile:                 "local",
-			Buffer:                  filepath.Join(t.TempDir(), "canonical.hqjson"),
-			BufferText:              submitText,
-			CompletionText:          completionText,
-			ExpectedCompletionLabel: "queue.create",
-			Headless:                true,
-			Env:                     profile.Env,
+			HQBin:      hqBin,
+			Vim:        requireVim(t),
+			VimLSP:     requireVimLSP(t),
+			PluginRoot: root,
+			Profile:    "local",
+			Buffer:     filepath.Join(t.TempDir(), "submit.hqjson"),
+			BufferText: submitText,
+			Headless:   true,
+			Env:        profile.Env,
 		}
 		if err := smoke.Run(cfg); err != nil {
-			t.Fatalf("canonical hq Vim conformance run %d failed: %v", run, err)
+			t.Fatalf("canonical hq Vim submit run %d failed: %v", run, err)
 		}
 		rows := readJSONLRows(t, profile.AcceptedPath)
 		if len(rows) != run {

@@ -20,6 +20,7 @@ type Config struct {
 	Buffer     string
 	BufferText string
 	Headless   bool
+	StartOnly  bool
 	Env        map[string]string
 }
 
@@ -154,9 +155,20 @@ func writeVimScript(root string, cfg Config) (string, error) {
 		"execute 'edit ' . fnameescape(" + vimString(cfg.Buffer) + ")",
 		"set filetype=hqjson",
 		"setlocal omnifunc=lsp#complete",
-		"HqStart",
 	}
-	if cfg.Headless {
+	if cfg.StartOnly {
+		lines = append(lines,
+			"try",
+			"  HqStart",
+			"catch",
+			"  cquit 43",
+			"endtry",
+			"qa!",
+		)
+	} else {
+		lines = append(lines, "HqStart")
+	}
+	if cfg.Headless && !cfg.StartOnly {
 		lines = append(lines,
 			"call setline(1, "+vimValue(cfg.BufferText)+")",
 			"call cursor(1, strlen(getline(1)) + 1)",

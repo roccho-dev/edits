@@ -35,6 +35,27 @@ func TestMissingHQBinaryFailsFast(t *testing.T) {
 	}
 }
 
+func TestReadableNonExecutableHQFailsFast(t *testing.T) {
+	root := mustPackageRoot(t)
+	notExecutable := filepath.Join(t.TempDir(), "not-hq.txt")
+	if err := os.WriteFile(notExecutable, []byte("not an executable"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := smoke.Config{
+		HQBin:      notExecutable,
+		Vim:        requireVim(t),
+		VimLSP:     requireVimLSP(t),
+		PluginRoot: root,
+		Profile:    "local",
+		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
+		Headless:   true,
+		StartOnly:  true,
+	}
+	if err := smoke.Run(cfg); err == nil {
+		t.Fatal("expected readable non-executable hq path to fail during HqStart")
+	}
+}
+
 func TestRealVimLspConfirmQueueSmoke(t *testing.T) {
 	root := mustPackageRoot(t)
 	vimLSP := requireVimLSP(t)

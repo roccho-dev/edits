@@ -7,7 +7,7 @@ function! hq#doctor() abort
   return {
         \ 'vim_lsp': !empty(globpath(&runtimepath, 'autoload/lsp.vim')),
         \ 'hq_bin': l:hq,
-        \ 'hq_bin_ok': executable(l:hq) || filereadable(l:hq),
+        \ 'hq_bin_ok': executable(l:hq),
         \ 'profile': get(g:, 'hq_profile', 'local'),
         \ }
 endfunction
@@ -19,8 +19,8 @@ function! hq#start(...) abort
   runtime plugin/lsp.vim
   let l:profile = a:0 == 1 && !empty(a:1) ? a:1 : get(g:, 'hq_profile', 'local')
   let l:hq = get(g:, 'hq_bin', 'hq')
-  if !executable(l:hq) && !filereadable(l:hq)
-    throw 'hq.vim requires hq on PATH or an existing g:hq_bin'
+  if !executable(l:hq)
+    throw 'hq.vim requires hq on PATH or an executable g:hq_bin'
   endif
   if empty(l:profile)
     throw 'hq.vim requires a non-empty hq profile'

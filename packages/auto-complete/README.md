@@ -26,7 +26,6 @@ bash test/run.sh
 python3 test/golden_check.py
 go test ./...
 python3 test/lsp_smoke.py
-vim --clean -Nu NONE -n -es -S test/vim_lsp_adapter.vim
 python3 test/render_ux_visual.py
 python3 test/ux_visual_check.py
 python3 test/boundary_check.py

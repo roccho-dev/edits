@@ -11,7 +11,6 @@ REQUIRED = [
     "adapters/source/domain-jsonl/README.md", "adapters/source/domain-jsonl/provider.go",
     "adapters/source/hq-source-jsonl/README.md", "adapters/source/hq-source-jsonl/provider.go",
     "adapters/transport/lsp/README.md", "adapters/transport/lsp/server.go",
-    "adapters/editor/vim/README.md", "adapters/editor/vim/lsp_bridge.vim",
     "adapters/editor/helix/README.md", "adapters/editor/helix/languages.toml",
     "app/jpcmp-lsp/config.go", "app/jpcmp-lsp/registry.go", "app/jpcmp-lsp/wire.go",
     "cmd/jpcmp-lsp/main.go", "test/lsp_smoke.py",
@@ -28,7 +27,7 @@ for path in (ROOT / "lib/jpcmp/core").glob("*.go"):
     for bad in FORBIDDEN_IN_CORE:
         if bad in text:
             raise SystemExit(f"[boundary-check] forbidden core dependency in {path.relative_to(ROOT)}: {bad}")
-for rel in ["adapters/editor/vim/README.md", "adapters/editor/helix/README.md"]:
+for rel in ["adapters/editor/helix/README.md"]:
     text = (ROOT / rel).read_text(encoding="utf-8").lower()
     for bad in FORBIDDEN_IN_EDITOR_ADAPTERS:
         if bad in text:

@@ -1,0 +1,112 @@
+name: hq-vim conformance
+
+on:
+  pull_request:
+    paths:
+      - 'packages/hq-vim/**'
+      - '.github/workflows/hq-vim.yml'
+
+concurrency:
+  group: hq-vim-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout edits
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Install Vim on Windows
+        if: runner.os == 'Windows'
+        run: choco install vim -y --no-progress --limit-output
+
+      - name: Resolve native Vim on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $roots = @(
+            'C:\tools',
+            'C:\Program Files\Vim',
+            'C:\ProgramData\chocolatey\lib'
+          )
+          $candidates = foreach ($root in $roots) {
+            if (Test-Path $root) {
+              Get-ChildItem $root -Recurse -Filter vim.exe -ErrorAction SilentlyContinue
+            }
+          }
+          $vim = $candidates |
+            Where-Object { $_.FullName -notmatch '\\Git\\|\\usr\\bin\\vim\.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $vim) { throw 'native non-Git vim.exe not found' }
+          "VIM_EXE=$($vim.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $vim.FullName --version | Select-Object -First 3
+
+      - name: Install Vim on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y vim
+
+      - name: Checkout pinned vim-lsp
+        uses: actions/checkout@v4
+        with:
+          repository: prabirshrestha/vim-lsp
+          ref: 474c656659b5fb51eec6770309e0211c8aa49b5b
+          path: vim-lsp
+
+      - name: Checkout accepted canonical hq
+        uses: actions/checkout@v4
+        with:
+          repository: roccho-dev/hq
+          ref: proposals
+          path: canonical-hq
+
+      - name: Record canonical hq commit
+        shell: bash
+        run: echo "HQ_CANONICAL_SOURCE_SHA=$(git -C canonical-hq rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Build canonical hq on Windows
+        if: runner.os == 'Windows'
+        working-directory: canonical-hq
+        shell: pwsh
+        run: |
+          go build -o "$env:RUNNER_TEMP\hq.exe" ./cmd/hq
+          "HQ_CANONICAL_BIN=$env:RUNNER_TEMP\hq.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build canonical hq on Linux
+        if: runner.os == 'Linux'
+        working-directory: canonical-hq
+        shell: bash
+        run: |
+          go build -o "$RUNNER_TEMP/hq" ./cmd/hq
+          echo "HQ_CANONICAL_BIN=$RUNNER_TEMP/hq" >> "$GITHUB_ENV"
+
+      - name: Run stub and canonical Vim conformance
+        working-directory: packages/hq-vim
+        shell: bash
+        env:
+          VIM_LSP_PATH: ${{ github.workspace }}/vim-lsp
+          HQ_CONFORMANCE_ARTIFACT: ${{ github.workspace }}/artifacts/hq-vim-conformance-${{ runner.os }}.json
+        run: |
+          mkdir -p "${{ github.workspace }}/artifacts"
+          set -o pipefail
+          go test -v ./... 2>&1 | tee "${{ github.workspace }}/artifacts/hq-vim-conformance-${RUNNER_OS}.log"
+
+      - name: Upload conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hq-vim-conformance-${{ runner.os }}
+          path: |
+            artifacts/hq-vim-conformance-${{ runner.os }}.json
+            artifacts/hq-vim-conformance-${{ runner.os }}.log
+          if-no-files-found: error

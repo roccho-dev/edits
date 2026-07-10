@@ -1,0 +1,3 @@
+{"key":"op","type":"enum","required":true,"description":"operation to compile into instruction","group":"instruction","enum":["queue.create"]}
+{"key":"target","type":"enum","required":true,"description":"resolver / dispatch target","group":"instruction","enum":["ctx"]}
+{"key":"payload","type":"object","required":true,"description":"user data or operation arguments","group":"data"}

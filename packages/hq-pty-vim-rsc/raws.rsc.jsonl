@@ -1,6 +1,0 @@
-{"kind":"purpose.generation","generation":0,"purpose":"shell/readlineなしでVimをline editor代替として直接PTY上に起動する","contribution":"direct"}
-{"kind":"purpose.generation","generation":1,"purpose":"PTY master側が入力streamを見てslot autocomplete middlewareを動かす","contribution":"direct"}
-{"kind":"purpose.generation","generation":2,"purpose":"JSONL object relation 1 x nを候補として積み上げる","contribution":"direct"}
-{"kind":"purpose.generation","generation":3,"purpose":"候補は文字列ではなくedit/meaning/compileDraftを持つ","contribution":"direct"}
-{"kind":"purpose.generation","generation":4,"purpose":"acceptされた候補だけinstruction JSONLへ確定する","contribution":"direct"}
-{"kind":"proof.result","command":"./scripts/proof_rsc_pty_vim.sh","result":"RSC_PTY_VIM_PROOF_OK"}

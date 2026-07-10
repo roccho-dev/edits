@@ -1,7 +1,0 @@
-{"kind":"disruptive","n":1,"claim":"Vimがshell経由で起動しているだけではline editor replacementではない","defense":"PTY masterからargv[0]=vimを直接execしproc_cmdlineを証跡化"}
-{"kind":"disruptive","n":2,"claim":"Vimに文字が届いていないのにmiddlewareだけが候補を出している可能性","defense":"Vim bufferを:wqで保存しtyped_charsと一致検証"}
-{"kind":"disruptive","n":3,"claim":"木構造ではなく単なるprefix補完に見える","defense":"project:hq -> task:t1,t2,t3 のrelation.addをreducerで読みarray.item slot候補にする"}
-{"kind":"disruptive","n":4,"claim":"候補生成中に副作用が起きる","defense":"compileDraft.side_effect=falseをtest/proofで検証"}
-{"kind":"disruptive","n":5,"claim":"accept境界が弱い","defense":"suggestion_id/hash/buffer_versionを検証してinstruction JSONLにappend"}
-{"kind":"disruptive","n":6,"claim":"Vimscriptに意味論が入ってしまう","defense":"Vimscriptはstartinsertのみ、slot判定はGo middleware側"}
-{"kind":"disruptive","n":7,"claim":"herdr固有実装に閉じる","defense":"herdr相当のsingle PTY owner contractとしてGo PTY masterで実証"}

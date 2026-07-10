@@ -6,8 +6,13 @@ on:
       - 'packages/hq-vim/**'
       - '.github/workflows/hq-vim.yml'
 
+concurrency:
+  group: hq-vim-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   conformance:
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:

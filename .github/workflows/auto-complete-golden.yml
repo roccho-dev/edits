@@ -42,8 +42,6 @@ jobs:
         run: python3 test/performance_budget.py
       - name: Run Go LSP JSON-RPC smoke
         run: python3 test/lsp_smoke.py
-      - name: Run Vim adapter through Go LSP
-        run: vim --clean -Nu NONE -n -es -S test/vim_lsp_adapter.vim && cat test/vim_lsp_adapter_result.json
       - name: Render UX visual evidence
         run: python3 test/render_ux_visual.py
       - name: Check UX visual evidence

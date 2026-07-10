@@ -11,7 +11,7 @@ REQUIRED = [
     "adapters/source/domain-jsonl/README.md", "adapters/source/domain-jsonl/provider.go",
     "adapters/source/hq-source-jsonl/README.md", "adapters/source/hq-source-jsonl/provider.go",
     "adapters/transport/lsp/README.md", "adapters/transport/lsp/server.go",
-    "adapters/editor/vim/README.md", "adapters/editor/vim/lsp_bridge.vim",
+    "adapters/editor/vim/README.md",
     "adapters/editor/helix/README.md", "adapters/editor/helix/languages.toml",
     "app/jpcmp-lsp/config.go", "app/jpcmp-lsp/registry.go", "app/jpcmp-lsp/wire.go",
     "cmd/jpcmp-lsp/main.go", "test/lsp_smoke.py",

@@ -1,6 +1,0 @@
-{"kind":"disruptive","n":1,"claim":"completionでdispatchが走ると暴発する","defense":"completionはPlanDraftのみ、side_effect=falseをtestで固定"}
-{"kind":"disruptive","n":2,"claim":"Vimで見たplanと実行planがズレる","defense":"plan_id/hash/buffer_versionをdispatchで検証"}
-{"kind":"disruptive","n":3,"claim":"shell.execが危険","defense":"safe=falseかつrequires_confirmでconfirmなしdispatchを拒否"}
-{"kind":"disruptive","n":4,"claim":"HTTP proofがmock止まり","defense":"fixture serverへreal net/http requestを送信"}
-{"kind":"disruptive","n":5,"claim":"Vim autocmp claimが曖昧","defense":"一文字変更ごとにVim hook logとLSP typed logを出す"}
-{"kind":"disruptive","n":6,"claim":"tmux実験がmainを汚す","defense":"tmuxは別branch/worktreeに隔離"}

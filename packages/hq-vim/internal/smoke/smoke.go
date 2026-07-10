@@ -1,6 +1,7 @@
 package smoke
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -26,6 +28,7 @@ type Config struct {
 	OmitHQBin               bool
 	SkipSubmit              bool
 	Env                     map[string]string
+	Timeout                 time.Duration
 }
 
 func Run(cfg Config) error {
@@ -77,12 +80,22 @@ func Run(cfg Config) error {
 		args = append(args, "-es")
 	}
 	args = append(args, "-S", script)
-	cmd := exec.Command(cfg.Vim, args...)
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, cfg.Vim, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	cmd.Env = environmentWithOverrides(os.Environ(), cfg.Env)
-	return cmd.Run()
+	err = cmd.Run()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("Vim smoke timed out after %s", timeout)
+	}
+	return err
 }
 
 func environmentWithOverrides(base []string, overrides map[string]string) []string {

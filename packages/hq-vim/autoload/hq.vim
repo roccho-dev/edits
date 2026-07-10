@@ -7,7 +7,7 @@ function! s:is_absolute(path) abort
     return 0
   endif
   if has('win32') || has('win64')
-    return a:path =~? '^\a:[\\/]' || a:path =~# '^\\\\'
+    return a:path =~? '^[A-Z]:[\\/]' || a:path =~# '^\\\\'
   endif
   return a:path =~# '^/'
 endfunction

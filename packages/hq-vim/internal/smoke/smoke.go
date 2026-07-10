@@ -101,7 +101,7 @@ func Run(cfg Config) error {
 	if cfg.Headless {
 		args = append(args, "-es")
 	}
-	args = append(args, "-S", script)
+	args = append(args, "-S", filepath.ToSlash(script))
 	timeout := cfg.Timeout
 	if timeout <= 0 {
 		timeout = 30 * time.Second

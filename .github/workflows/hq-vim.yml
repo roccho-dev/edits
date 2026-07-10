@@ -70,15 +70,21 @@ jobs:
 
       - name: Run stub and canonical Vim conformance
         working-directory: packages/hq-vim
+        shell: bash
         env:
           VIM_LSP_PATH: ${{ github.workspace }}/vim-lsp
           HQ_CONFORMANCE_ARTIFACT: ${{ github.workspace }}/artifacts/hq-vim-conformance-${{ runner.os }}.json
-        run: go test -v ./...
+        run: |
+          mkdir -p "${{ github.workspace }}/artifacts"
+          set -o pipefail
+          go test -v ./... 2>&1 | tee "${{ github.workspace }}/artifacts/hq-vim-conformance-${RUNNER_OS}.log"
 
       - name: Upload conformance evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: hq-vim-conformance-${{ runner.os }}
-          path: artifacts/hq-vim-conformance-${{ runner.os }}.json
-          if-no-files-found: warn
+          path: |
+            artifacts/hq-vim-conformance-${{ runner.os }}.json
+            artifacts/hq-vim-conformance-${{ runner.os }}.log
+          if-no-files-found: error

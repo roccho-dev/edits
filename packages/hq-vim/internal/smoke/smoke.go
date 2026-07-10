@@ -24,6 +24,7 @@ type Config struct {
 	Headless                bool
 	StartOnly               bool
 	OmitHQBin               bool
+	SkipSubmit              bool
 	Env                     map[string]string
 }
 
@@ -220,13 +221,17 @@ func writeVimScript(root string, cfg Config) (string, error) {
 				"endif",
 			)
 		}
-		lines = append(lines,
-			"call setline(1, "+vimValue(cfg.BufferText)+")",
-			"call cursor(1, strlen(getline(1)) + 1)",
-			"doautocmd TextChanged",
-			"HqSubmit",
-			"qa!",
-		)
+		if cfg.SkipSubmit {
+			lines = append(lines, "qa!")
+		} else {
+			lines = append(lines,
+				"call setline(1, "+vimValue(cfg.BufferText)+")",
+				"call cursor(1, strlen(getline(1)) + 1)",
+				"doautocmd TextChanged",
+				"HqSubmit",
+				"qa!",
+			)
+		}
 	}
 	f, err := os.CreateTemp("", "hq-vim-smoke-*.vim")
 	if err != nil {

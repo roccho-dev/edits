@@ -46,6 +46,10 @@ When `hq` is on `PATH`, `g:hq_bin` is unnecessary. `:HqStart` uses the `local`
 profile by default; use `:HqStart <profile>` only to override it. Vim never
 receives a JSONL path.
 
+Vim-lsp exposes completion through Vim's built-in omnifunc. `Ctrl-X Ctrl-O` is
+that built-in operation, not an hq-vim mapping. This package defines no key
+mapping and does not claim an automatic-popup completion UX.
+
 ## Manual Smoke
 
 After `hq` has already been built or placed:

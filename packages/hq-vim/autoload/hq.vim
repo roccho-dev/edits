@@ -54,17 +54,6 @@ function! hq#request(method, params) abort
   return s:last_response.response
 endfunction
 
-function! hq#completion_items() abort
-  let l:cursor = strlen(getline('.'))
-  let l:response = hq#request('textDocument/completion', {
-        \ 'textDocument': lsp#get_text_document_identifier(),
-        \ 'position': {'line': line('.') - 1, 'character': l:cursor},
-        \ })
-  let l:result = get(l:response, 'result', {})
-  let l:items = type(l:result) == v:t_dict ? get(l:result, 'items', []) : l:result
-  return type(l:items) == v:t_list ? l:items : []
-endfunction
-
 function! hq#accept_first() abort
   let l:line_nr = line('.') - 1
   let l:line_len = strlen(getline('.'))

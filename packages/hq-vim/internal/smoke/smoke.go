@@ -36,6 +36,9 @@ func Run(cfg Config) error {
 	if cfg.VimLSP == "" {
 		cfg.VimLSP = filepath.Join(os.Getenv("LOCALAPPDATA"), "codex-proof", "vim-lsp")
 	}
+	if err := ProbeVimRuntime(cfg.Vim); err != nil {
+		return err
+	}
 	if !Exists(filepath.Join(cfg.VimLSP, "plugin", "lsp.vim")) {
 		return fmt.Errorf("vim-lsp not found; set VIM_LSP_PATH or pass -vim-lsp")
 	}
@@ -72,6 +75,15 @@ func Run(cfg Config) error {
 		cmd.Env = append(cmd.Env, key+"="+value)
 	}
 	return cmd.Run()
+}
+
+func ProbeVimRuntime(vim string) error {
+	probe := "if empty(globpath(&runtimepath, 'autoload/dist/ft.vim')) | cquit 42 | endif"
+	cmd := exec.Command(vim, "--clean", "-Nu", "NONE", "-n", "-es", "-c", probe, "-c", "qa!")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("vim runtime is incomplete for %s: %w: %s", vim, err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 func PackageRoot(explicit string) (string, error) {
@@ -128,7 +140,6 @@ func writeVimScript(root string, cfg Config) (string, error) {
 	lines := []string{
 		"set nocompatible",
 		"set noswapfile",
-		"filetype off",
 		"execute 'set runtimepath^=' . fnameescape(" + vimString(cfg.VimLSP) + ")",
 		"execute 'set runtimepath^=' . fnameescape(" + vimString(root) + ")",
 		"runtime plugin/lsp.vim",
@@ -146,10 +157,6 @@ func writeVimScript(root string, cfg Config) (string, error) {
 			"call setline(1, '{\"kind\":\"project\",\"tasks\":[')",
 			"call cursor(1, strlen(getline(1)) + 1)",
 			"doautocmd TextChanged",
-			"let s:labels = map(hq#completion_items(), {_, v -> get(v, 'label', '')})",
-			"for s:want in ['task:t1', 'task:t2', 'task:t3']",
-			"  if index(s:labels, s:want) < 0 | throw 'missing label ' . s:want . ': ' . string(s:labels) | endif",
-			"endfor",
 			"HqAcceptFirst",
 			"qa!",
 		)

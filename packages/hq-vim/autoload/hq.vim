@@ -2,12 +2,25 @@ let s:server = 'hq-lsp'
 let s:last_response = {}
 let s:done = 0
 
+function! s:is_absolute(path) abort
+  if type(a:path) != v:t_string || empty(a:path)
+    return 0
+  endif
+  if has('win32') || has('win64')
+    return a:path =~? '^\a:[\\/]' || a:path =~# '^\\\\'
+  endif
+  return a:path =~# '^/'
+endfunction
+
 function! hq#doctor() abort
-  let l:hq = get(g:, 'hq_bin', 'hq')
+  let l:hq = get(g:, 'hq_bin', '')
+  let l:absolute = s:is_absolute(l:hq)
   return {
         \ 'vim_lsp': !empty(globpath(&runtimepath, 'autoload/lsp.vim')),
         \ 'hq_bin': l:hq,
-        \ 'hq_bin_ok': executable(l:hq),
+        \ 'hq_bin_explicit': !empty(l:hq),
+        \ 'hq_bin_absolute': l:absolute,
+        \ 'hq_bin_ok': l:absolute && executable(l:hq),
         \ 'profile': get(g:, 'hq_profile', 'local'),
         \ }
 endfunction
@@ -18,9 +31,12 @@ function! hq#start(...) abort
   endif
   runtime plugin/lsp.vim
   let l:profile = a:0 == 1 && !empty(a:1) ? a:1 : get(g:, 'hq_profile', 'local')
-  let l:hq = get(g:, 'hq_bin', 'hq')
+  let l:hq = get(g:, 'hq_bin', '')
+  if !s:is_absolute(l:hq)
+    throw 'hq.vim requires an explicit absolute g:hq_bin'
+  endif
   if !executable(l:hq)
-    throw 'hq.vim requires hq on PATH or an executable g:hq_bin'
+    throw 'hq.vim requires g:hq_bin to be executable'
   endif
   if empty(l:profile)
     throw 'hq.vim requires a non-empty hq profile'

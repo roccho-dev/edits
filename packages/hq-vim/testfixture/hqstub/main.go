@@ -128,6 +128,9 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 			}
 			_ = json.Unmarshal(msg.Params, &p)
 			docs[p.TextDocument.URI] = p.TextDocument.Text
+			if err := writeDiagnostics(w, p.TextDocument.URI); err != nil {
+				return err
+			}
 		case "textDocument/didChange":
 			var p struct {
 				TextDocument struct {
@@ -140,6 +143,9 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 			_ = json.Unmarshal(msg.Params, &p)
 			if len(p.ContentChanges) > 0 {
 				docs[p.TextDocument.URI] = p.ContentChanges[len(p.ContentChanges)-1].Text
+			}
+			if err := writeDiagnostics(w, p.TextDocument.URI); err != nil {
+				return err
 			}
 		case "textDocument/completion":
 			if err := writeMessage(w, message{JSONRPC: "2.0", ID: msg.ID, Result: map[string]any{
@@ -173,13 +179,19 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 				} `json:"arguments"`
 			}
 			if err := json.Unmarshal(msg.Params, &p); err != nil || p.Command != "hq.submit" || len(p.Arguments) != 1 {
-				return fmt.Errorf("invalid hq.submit request")
+				if err := writeError(w, msg.ID, -32602, "invalid hq.submit request"); err != nil {
+					return err
+				}
+				continue
 			}
 			var request struct {
 				Path string `json:"path"`
 			}
 			if err := json.Unmarshal([]byte(docs[p.Arguments[0].URI]), &request); err != nil || request.Path == "" {
-				return fmt.Errorf("invalid host-open buffer")
+				if err := writeError(w, msg.ID, -32602, "invalid host-open buffer"); err != nil {
+					return err
+				}
+				continue
 			}
 			row := map[string]any{
 				"kind":        "hq.hostCommandQueued.v1",
@@ -187,7 +199,7 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 				"status":      "queued",
 				"command":     "host.open",
 				"path":        request.Path,
-				"confirmedBy": "vim-lsp",
+				"confirmedBy": "yegappan/lsp",
 			}
 			if err := appendJSONL(queue, row); err != nil {
 				return err
@@ -281,4 +293,24 @@ func writeMessage(w io.Writer, msg message) error {
 	}
 	_, err = fmt.Fprintf(w, "Content-Length: %d\r\n\r\n%s", len(b), b)
 	return err
+}
+
+func writeError(w io.Writer, id json.RawMessage, code int, text string) error {
+	return writeMessage(w, message{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error:   map[string]any{"code": code, "message": text},
+	})
+}
+
+func writeDiagnostics(w io.Writer, uri string) error {
+	params, err := json.Marshal(map[string]any{"uri": uri, "diagnostics": []any{}})
+	if err != nil {
+		return err
+	}
+	return writeMessage(w, message{
+		JSONRPC: "2.0",
+		Method:  "textDocument/publishDiagnostics",
+		Params:  params,
+	})
 }

@@ -4,7 +4,7 @@ Minimal edits-owned Vim extension for the official external `hq` runtime.
 
 ```text
 Vim
-  -> vim-lsp
+  -> pinned yegappan/lsp
     -> exact absolute hq binary
       -> lsp --profile <name>
 ```
@@ -16,7 +16,7 @@ This package owns only:
 - `plugin/hq.vim`
 - `autoload/hq.vim`
 - fail-closed client dependency checks
-- real Vim/vim-lsp conformance tests
+- real Vim 9/yegappan-lsp conformance tests
 
 The `hq` repository builds, tests, and publishes the official `hq` artifact.
 The `envs` repository selects and places the exact artifact and generates the
@@ -35,7 +35,7 @@ unqualified executable name.
 The minimal Vim init is:
 
 ```vim
-set runtimepath^=C:/exact/path/to/vim-lsp
+set runtimepath^=C:/exact/path/to/yegappan-lsp
 set runtimepath^=C:/exact/path/to/edits/packages/hq-vim
 runtime plugin/lsp.vim
 runtime plugin/hq.vim
@@ -53,22 +53,21 @@ Then:
 Vim receives the profile name only. It does not receive JSONL, provider,
 worker, registry, or environment layout paths.
 
-Vim-lsp exposes completion through Vim's built-in omnifunc. `Ctrl-X Ctrl-O` is
-that built-in operation, not an hq-vim mapping. This package defines no key
-mapping and makes no automatic-popup claim.
+Yegappan/lsp owns completion presentation and is configured with
+`autoComplete: true`. This package defines no completion key mapping.
 
 ## Manual smoke
 
-After the official `hq` artifact and vim-lsp have already been placed:
+After the official `hq` artifact and yegappan/lsp have already been placed:
 
 ```sh
-go run ./cmd/hq-vim-smoke -hq-bin /absolute/path/to/hq -vim-lsp /absolute/path/to/vim-lsp
+go run ./cmd/hq-vim-smoke -hq-bin /absolute/path/to/hq -vim9-lsp /absolute/path/to/yegappan-lsp
 ```
 
 Headless submit smoke:
 
 ```sh
-go run ./cmd/hq-vim-smoke -headless -hq-bin /absolute/path/to/hq -vim-lsp /absolute/path/to/vim-lsp
+go run ./cmd/hq-vim-smoke -headless -hq-bin /absolute/path/to/hq -vim9-lsp /absolute/path/to/yegappan-lsp
 ```
 
 ## Tests
@@ -83,7 +82,7 @@ boundary checks. CI additionally checks out the accepted `roccho-dev/hq`
 
 ```text
 real Vim
-  -> pinned real vim-lsp
+  -> pinned real yegappan/lsp
   -> explicit absolute canonical hq binary
   -> expected completion candidate
   -> zero completion writes

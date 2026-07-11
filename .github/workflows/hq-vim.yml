@@ -56,12 +56,12 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y vim
 
-      - name: Checkout pinned vim-lsp
+      - name: Checkout pinned yegappan/lsp
         uses: actions/checkout@v4
         with:
-          repository: prabirshrestha/vim-lsp
-          ref: 474c656659b5fb51eec6770309e0211c8aa49b5b
-          path: vim-lsp
+          repository: yegappan/lsp
+          ref: 989016ae2ae4cbf304a9ca29478f47fec794493f
+          path: yegappan-lsp
 
       - name: Checkout accepted canonical hq
         uses: actions/checkout@v4
@@ -94,7 +94,7 @@ jobs:
         working-directory: packages/hq-vim
         shell: bash
         env:
-          VIM_LSP_PATH: ${{ github.workspace }}/vim-lsp
+          VIM9_LSP_PATH: ${{ github.workspace }}/yegappan-lsp
           HQ_CONFORMANCE_ARTIFACT: ${{ github.workspace }}/artifacts/hq-vim-conformance-${{ runner.os }}.json
         run: |
           mkdir -p "${{ github.workspace }}/artifacts"

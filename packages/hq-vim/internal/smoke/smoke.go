@@ -16,7 +16,7 @@ import (
 type Config struct {
 	HQBin                   string
 	Vim                     string
-	VimLSP                  string
+	Vim9LSP                 string
 	PluginRoot              string
 	Profile                 string
 	Buffer                  string
@@ -45,14 +45,14 @@ func Run(cfg Config) error {
 			return fmt.Errorf("vim not found; set VIM_EXE or pass -vim: %w", err)
 		}
 	}
-	if cfg.VimLSP == "" {
-		cfg.VimLSP = filepath.Join(os.Getenv("LOCALAPPDATA"), "codex-proof", "vim-lsp")
+	if cfg.Vim9LSP == "" {
+		cfg.Vim9LSP = filepath.Join(os.Getenv("LOCALAPPDATA"), "codex-proof", "yegappan-lsp")
 	}
 	if err := ProbeVimRuntime(cfg.Vim); err != nil {
 		return err
 	}
-	if !Exists(filepath.Join(cfg.VimLSP, "plugin", "lsp.vim")) {
-		return fmt.Errorf("vim-lsp not found; set VIM_LSP_PATH or pass -vim-lsp")
+	if !Exists(filepath.Join(cfg.Vim9LSP, "plugin", "lsp.vim")) || !Exists(filepath.Join(cfg.Vim9LSP, "autoload", "lsp", "buffer.vim")) {
+		return fmt.Errorf("yegappan/lsp not found; set VIM9_LSP_PATH or pass -vim9-lsp")
 	}
 	if !cfg.OmitHQBin {
 		if cfg.HQBin == "" || !Exists(cfg.HQBin) {
@@ -83,7 +83,7 @@ func Run(cfg Config) error {
 		cleanupLogs = true
 	}
 	if cfg.LSPLog == "" {
-		cfg.LSPLog = filepath.Join(os.TempDir(), fmt.Sprintf("hq-vim-lsp-%d.log", time.Now().UnixNano()))
+		cfg.LSPLog = filepath.Join(os.TempDir(), fmt.Sprintf("hq-vim9-lsp-%d.log", time.Now().UnixNano()))
 		cleanupLogs = true
 	}
 	if cleanupLogs {
@@ -124,7 +124,7 @@ func Run(cfg Config) error {
 }
 
 func diagnosticError(cause error, cfg Config) error {
-	return fmt.Errorf("%w\nvim verbose log:\n%s\nvim-lsp log:\n%s", cause, readDiagnostic(cfg.VimLog), readDiagnostic(cfg.LSPLog))
+	return fmt.Errorf("%w\nvim verbose log:\n%s\nyegappan/lsp log:\n%s", cause, readDiagnostic(cfg.VimLog), readDiagnostic(cfg.LSPLog))
 }
 
 func readDiagnostic(path string) string {
@@ -228,9 +228,7 @@ func writeVimScript(root string, cfg Config) (string, error) {
 	lines := []string{
 		"set nocompatible",
 		"set noswapfile",
-		"let g:lsp_log_file = " + vimString(cfg.LSPLog),
-		"let g:lsp_log_verbose = 1",
-		"execute 'set runtimepath^=' . fnameescape(" + vimString(cfg.VimLSP) + ")",
+		"execute 'set runtimepath^=' . fnameescape(" + vimString(cfg.Vim9LSP) + ")",
 		"execute 'set runtimepath^=' . fnameescape(" + vimString(root) + ")",
 		"runtime plugin/lsp.vim",
 		"runtime plugin/hq.vim",
@@ -243,7 +241,6 @@ func writeVimScript(root string, cfg Config) (string, error) {
 		"call mkdir(fnamemodify("+vimString(cfg.Buffer)+", ':h'), 'p')",
 		"execute 'edit ' . fnameescape("+vimString(cfg.Buffer)+")",
 		"set filetype=hqjson",
-		"setlocal omnifunc=lsp#complete",
 	)
 	if cfg.StartOnly {
 		lines = append(lines,
@@ -255,18 +252,21 @@ func writeVimScript(root string, cfg Config) (string, error) {
 			"qa!",
 		)
 	} else {
-		lines = append(lines, "HqStart")
+		lines = append(lines,
+			"HqStart",
+			"let hq_ready_deadline = reltimefloat(reltime()) + 10.0",
+			"while !g:LspServerReady() && reltimefloat(reltime()) < hq_ready_deadline",
+			"  sleep 10m",
+			"endwhile",
+			"if !g:LspServerReady() | cquit 43 | endif",
+		)
 	}
 	if cfg.Headless && !cfg.StartOnly {
 		if cfg.ExpectedCompletionLabel != "" {
 			lines = append(lines,
 				"call setline(1, "+vimValue(cfg.CompletionText)+")",
 				"call cursor(1, strlen(getline(1)) + 1)",
-				"doautocmd TextChanged",
-				"let hq_completion_response = hq#request('textDocument/completion', {",
-				"      \\ 'textDocument': lsp#get_text_document_identifier(),",
-				"      \\ 'position': {'line': 0, 'character': strlen(getline(1))},",
-				"      \\ })",
+				"let hq_completion_response = g:HqVimCompletionRequest()",
 				"let hq_completion_result = get(hq_completion_response, 'result', {})",
 				"let hq_completion_items = type(hq_completion_result) == v:t_dict ? get(hq_completion_result, 'items', []) : hq_completion_result",
 				"let hq_completion_found = 0",
@@ -287,13 +287,12 @@ func writeVimScript(root string, cfg Config) (string, error) {
 			lines = append(lines,
 				"call setline(1, "+vimValue(cfg.BufferText)+")",
 				"call cursor(1, strlen(getline(1)) + 1)",
-				"doautocmd TextChanged",
 			)
 			if cfg.ResultPath == "" {
 				lines = append(lines, "HqSubmit")
 			} else {
 				lines = append(lines,
-					"let hq_submit_result = hq#submit()",
+					"let hq_submit_result = g:HqVimSubmit()",
 					"call writefile([json_encode(hq_submit_result)], "+vimString(cfg.ResultPath)+")",
 				)
 			}

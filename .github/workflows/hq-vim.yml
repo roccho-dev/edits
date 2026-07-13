@@ -52,9 +52,22 @@ jobs:
           "VIM_EXE=$($vim.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & $vim.FullName --version | Select-Object -First 3
 
-      - name: Install Vim on Linux
+      - name: Setup pinned Vim on Linux
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y vim
+        id: linux-vim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          version: v9.2.0478
+
+      - name: Resolve pinned Vim on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          PINNED_VIM: ${{ steps.linux-vim.outputs.executable }}
+        run: |
+          test -x "$PINNED_VIM"
+          echo "VIM_EXE=$PINNED_VIM" >> "$GITHUB_ENV"
+          "$PINNED_VIM" --version | head -n 3
 
       - name: Checkout pinned yegappan/lsp
         uses: actions/checkout@v4

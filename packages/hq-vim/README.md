@@ -32,6 +32,12 @@ provider execution, worker lifecycle, and `result.v1` remain outside edits.
 does not search `PATH`, shell profiles, user or machine environment paths, or an
 unqualified executable name.
 
+The selected client integration requires Vim patch `9.0.1629` or newer. This is
+the first yegappan/lsp patch gate used for negotiated UTF-8, UTF-16, and UTF-32
+position conversion. hq-vim converts the current Vim byte location to the
+client's UTF-32 input and delegates final LSP encoding to the pinned client. It
+does not send raw `col()` or `strlen()` byte offsets as LSP positions.
+
 The minimal Vim init is:
 
 ```vim
@@ -78,7 +84,8 @@ go test ./...
 
 Local tests use a temporary external stub only for fail-closed and process
 boundary checks. CI additionally checks out the accepted `roccho-dev/hq`
-`proposals` branch, builds its official binary, and proves on Windows and Linux:
+`proposals` branch, builds its official binary, and proves on native Windows Vim
+and Linux Vim `9.2.0478`:
 
 ```text
 real Vim
@@ -92,4 +99,6 @@ real Vim
 ```
 
 The complete installed Windows proof, exact artifact placement, activation, and
-deployment receipt remain owned by `roccho-dev/envs#5`.
+deployment receipt remain owned by `roccho-dev/envs#5`. Native popup detail,
+multi-line acceptance, one-step undo, and the complete Unicode/CRLF matrix remain
+owned by `roccho-dev/edits#70`.

@@ -2,6 +2,7 @@ vim9script
 
 import autoload 'lsp/buffer.vim' as lspbuf
 import autoload 'lsp/util.vim' as lsputil
+import autoload 'lsp/offset.vim' as lspoffset
 
 var serverName = 'hq-lsp'
 
@@ -14,6 +15,7 @@ export def Doctor(): dict<any>
     hq_bin_absolute: IsAbsolute(hq),
     hq_bin_ok: executable(hq) == 1,
     profile: get(g:, 'hq_profile', 'local'),
+    negotiated_position_support: has('patch-9.0.1629'),
   }
 enddef
 
@@ -24,6 +26,9 @@ enddef
 export def Start(profileArg: string = ''): number
   if !has('vim9script') || v:version < 900
     throw 'hq.vim requires Vim 9.0 or newer'
+  endif
+  if !has('patch-9.0.1629')
+    throw 'hq.vim requires Vim patch 9.0.1629 or newer for negotiated LSP positions'
   endif
   if exists('*g:LspAddServer') != 1
     throw 'hq.vim requires yegappan/lsp on runtimepath'
@@ -61,7 +66,7 @@ export def Start(profileArg: string = ''): number
   return 1
 enddef
 
-def Request(method: string, params: any): dict<any>
+def ReadyServer(method: string): dict<any>
   if !g:LspServerReady()
     throw $'hq LSP is not ready for {method}'
   endif
@@ -69,6 +74,10 @@ def Request(method: string, params: any): dict<any>
   if server->empty()
     throw $'hq LSP server is not attached: {serverName}'
   endif
+  return server
+enddef
+
+def Request(server: dict<any>, method: string, params: any): dict<any>
   if method->stridx('textDocument/') == 0
     server.textdocDidChange(bufnr())
   endif
@@ -79,22 +88,48 @@ def Request(method: string, params: any): dict<any>
   return response
 enddef
 
+def CursorPosition(server: dict<any>): dict<number>
+  var text = getline('.')
+  var byteColumn = col('.') - 1
+  var byteLength = text->strlen()
+  if byteColumn < 0
+    byteColumn = 0
+  elseif byteColumn > byteLength
+    byteColumn = byteLength
+  endif
+  var character = byteColumn == byteLength
+    ? text->strchars()
+    : text->charidx(byteColumn, true)
+  var position = {line: line('.') - 1, character: character}
+  lspoffset.EncodePosition(server, bufnr(), position)
+  return position
+enddef
+
+def CurrentLineRange(server: dict<any>): dict<dict<number>>
+  var lineNr = line('.') - 1
+  var range = {
+    start: {line: lineNr, character: 0},
+    end: {line: lineNr, character: getline('.')->strchars()},
+  }
+  lspoffset.EncodeRange(server, bufnr(), range)
+  return range
+enddef
+
 export def CompletionRequest(): dict<any>
-  return Request('textDocument/completion', {
+  var method = 'textDocument/completion'
+  var server = ReadyServer(method)
+  return Request(server, method, {
     textDocument: {uri: lsputil.LspBufnrToUri(bufnr())},
-    position: {line: line('.') - 1, character: col('.') - 1},
+    position: CursorPosition(server),
   })
 enddef
 
 export def Submit(): dict<any>
-  var lineNr = line('.') - 1
-  var lineLen = getline('.')->strlen()
-  var actionResponse = Request('textDocument/codeAction', {
+  var method = 'textDocument/codeAction'
+  var server = ReadyServer(method)
+  var actionResponse = Request(server, method, {
     textDocument: {uri: lsputil.LspBufnrToUri(bufnr())},
-    range: {
-      start: {line: lineNr, character: 0},
-      end: {line: lineNr, character: lineLen},
-    },
+    range: CurrentLineRange(server),
     context: {diagnostics: []},
   })
   var actions = actionResponse.result
@@ -106,7 +141,7 @@ export def Submit(): dict<any>
     throw $'unexpected hq command action: {cmd->string()}'
   endif
 
-  var execResponse = Request('workspace/executeCommand', cmd)
+  var execResponse = Request(server, 'workspace/executeCommand', cmd)
   var result = execResponse.result
   if result->get('kind', '') != 'hq.submitResult.v1'
       || result->get('status', '') != 'queued'

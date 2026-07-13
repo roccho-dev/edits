@@ -225,7 +225,7 @@ func completionItems() []map[string]any {
 		out = append(out, map[string]any{
 			"label":      label,
 			"kind":       14,
-			"insertText": strconv.Quote(label),
+			"insertText": strings.TrimPrefix(label, "task:"),
 			"data": map[string]any{"suggestion": map[string]any{
 				"label":          label,
 				"id":             "sug_stub_" + strings.ReplaceAll(label, ":", "_"),

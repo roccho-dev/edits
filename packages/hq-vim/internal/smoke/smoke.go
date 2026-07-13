@@ -32,6 +32,7 @@ type Config struct {
 	VimLog                  string
 	LSPLog                  string
 	ResultPath              string
+	NativePopupArtifact     string
 }
 
 func Run(cfg Config) error {
@@ -73,6 +74,14 @@ func Run(cfg Config) error {
 	}
 	if cfg.ResultPath != "" {
 		if err := os.MkdirAll(filepath.Dir(cfg.ResultPath), 0o755); err != nil {
+			return err
+		}
+	}
+	if cfg.NativePopupArtifact != "" {
+		if cfg.ExpectedCompletionLabel == "" {
+			return errors.New("native popup proof requires ExpectedCompletionLabel")
+		}
+		if err := os.MkdirAll(filepath.Dir(cfg.NativePopupArtifact), 0o755); err != nil {
 			return err
 		}
 	}
@@ -261,7 +270,10 @@ func writeVimScript(root string, cfg Config) (string, error) {
 			"if !g:LspServerReady() | cquit 43 | endif",
 		)
 	}
-	if cfg.Headless && !cfg.StartOnly {
+	if cfg.NativePopupArtifact != "" && !cfg.StartOnly {
+		lines = append(lines, "runtime testdata/native_popup_force.vim")
+		lines = append(lines, nativePopupProofLines(cfg)...)
+	} else if cfg.Headless && !cfg.StartOnly {
 		if cfg.ExpectedCompletionLabel != "" {
 			lines = append(lines,
 				"call setline(1, "+vimValue(cfg.CompletionText)+")",
@@ -308,6 +320,63 @@ func writeVimScript(root string, cfg Config) (string, error) {
 		return "", err
 	}
 	return f.Name(), nil
+}
+
+func nativePopupProofLines(cfg Config) []string {
+	return []string{
+		"let g:hq_native_deadline = reltimefloat(reltime()) + 10.0",
+		"function! HqNativePopupFinish(status, detail) abort",
+		"  call writefile([json_encode({'status': a:status, 'detail': a:detail, 'line': getline(1), 'items': get(g:, 'hq_native_items', [])})], " + vimString(cfg.NativePopupArtifact) + ")",
+		"  if a:status ==# 'passed'",
+		"    qa!",
+		"  else",
+		"    cquit 46",
+		"  endif",
+		"endfunction",
+		"function! HqNativePopupVerify(timer) abort",
+		"  if getline(1) !~# " + vimValue(cfg.ExpectedCompletionLabel),
+		"    call HqNativePopupFinish('failed', 'selected buffer does not contain expected candidate')",
+		"    return",
+		"  endif",
+		"  call HqNativePopupFinish('passed', 'native popup candidate selected')",
+		"endfunction",
+		"function! HqNativePopupPoll(timer) abort",
+		"  if reltimefloat(reltime()) >= g:hq_native_deadline",
+		"    call HqNativePopupFinish('failed', 'native popup timeout')",
+		"    return",
+		"  endif",
+		"  let l:info = complete_info(['items'])",
+		"  if !pumvisible() || empty(l:info.items)",
+		"    call timer_start(20, function('HqNativePopupPoll'))",
+		"    return",
+		"  endif",
+		"  let g:hq_native_items = map(copy(l:info.items), {_, item -> {'word': get(item, 'word', ''), 'abbr': get(item, 'abbr', ''), 'menu': get(item, 'menu', '')}})",
+		"  let l:index = -1",
+		"  for l:i in range(len(l:info.items))",
+		"    if get(l:info.items[l:i], 'word', '') =~# " + vimValue(cfg.ExpectedCompletionLabel) + " || get(l:info.items[l:i], 'abbr', '') ==# " + vimValue(cfg.ExpectedCompletionLabel),
+		"      let l:index = l:i",
+		"      break",
+		"    endif",
+		"  endfor",
+		"  if l:index < 0",
+		"    call HqNativePopupFinish('failed', 'expected candidate absent from native popup')",
+		"    return",
+		"  endif",
+		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1) . \"\\<C-Y>\\<Esc>\", 'n')",
+		"  call timer_start(100, function('HqNativePopupVerify'))",
+		"endfunction",
+		"function! HqNativePopupForce(timer) abort",
+		"  call g:HqNativePopupForceCompletion()",
+		"  call timer_start(20, function('HqNativePopupPoll'))",
+		"endfunction",
+		"function! HqNativePopupType(timer) abort",
+		"  call feedkeys('i' . " + vimValue(cfg.CompletionText) + ", 'n')",
+		"  call timer_start(20, function('HqNativePopupForce'))",
+		"endfunction",
+		"call setline(1, '')",
+		"call cursor(1, 1)",
+		"call timer_start(10, function('HqNativePopupType'))",
+	}
 }
 
 func vimString(path string) string {

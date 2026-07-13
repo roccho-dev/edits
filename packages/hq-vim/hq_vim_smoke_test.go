@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/roccho-dev/edits/packages/hq-vim/internal/smoke"
 )
@@ -98,6 +99,54 @@ func TestRealVim9LspConfirmQueueSmoke(t *testing.T) {
 	}
 	if row.Path != target {
 		t.Fatalf("queue path = %q, want buffer path %q", row.Path, target)
+	}
+}
+
+func TestNativePopupSelectionDoesNotQueue(t *testing.T) {
+	if os.Getenv("HQ_NATIVE_POPUP_PROOF") != "1" {
+		t.Skip("set HQ_NATIVE_POPUP_PROOF=1 and run under a real terminal")
+	}
+	root := mustPackageRoot(t)
+	profileRoot := prepareProfile(t, root, "local")
+	queue := filepath.Join(profileRoot, "local", "queue.jsonl")
+	artifact := filepath.Join(t.TempDir(), "native-popup.json")
+	cfg := smoke.Config{
+		HQBin:                   buildHQStub(t),
+		Vim:                     requireVim(t),
+		Vim9LSP:                 requireVim9LSP(t),
+		PluginRoot:              root,
+		Profile:                 "local",
+		Buffer:                  filepath.Join(t.TempDir(), "native-popup.hqjson"),
+		CompletionText:          "task:t",
+		ExpectedCompletionLabel: "task:t2",
+		NativePopupArtifact:     artifact,
+		Env:                     map[string]string{"HQ_STUB_ROOT": profileRoot},
+		Timeout:                 15 * time.Second,
+	}
+	if err := smoke.Run(cfg); err != nil {
+		artifactBody, _ := os.ReadFile(artifact)
+		t.Fatalf("native popup smoke failed: %v\nartifact: %s", err, artifactBody)
+	}
+	var result struct {
+		Status string `json:"status"`
+		Line   string `json:"line"`
+	}
+	b, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatalf("read native popup artifact: %v", err)
+	}
+	if err := json.Unmarshal(b, &result); err != nil {
+		t.Fatalf("decode native popup artifact: %v\n%s", err, b)
+	}
+	if result.Status != "passed" || result.Line != "task:t2" {
+		t.Fatalf("native popup result = %#v", result)
+	}
+	queued, err := os.ReadFile(queue)
+	if err != nil {
+		t.Fatalf("read queue after native selection: %v", err)
+	}
+	if strings.TrimSpace(string(queued)) != "" {
+		t.Fatalf("native completion selection wrote queue: %s", queued)
 	}
 }
 

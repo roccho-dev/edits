@@ -76,6 +76,20 @@ go run ./cmd/hq-vim-smoke -headless -hq-bin /absolute/path/to/hq -vim9-lsp /abso
 go test ./...
 ```
 
+The native popup proof must run under a real terminal; a redirected or
+headless Vim cannot make `pumvisible()` observable. Run it explicitly with:
+
+```sh
+HQ_NATIVE_POPUP_PROOF=1 \
+VIM_EXE=/absolute/path/to/vim \
+VIM9_LSP_PATH=/absolute/path/to/yegappan-lsp \
+go test -run '^TestNativePopupSelectionDoesNotQueue$' -v
+```
+
+The proof types through Vim, observes yegappan/lsp's native popup, selects the
+expected candidate, verifies the resulting buffer, and asserts that selection
+appends no queue row. It adds no hq popup or completion mapping.
+
 Local tests use a temporary external stub only for fail-closed and process
 boundary checks. CI additionally checks out the accepted `roccho-dev/hq`
 `proposals` branch, builds its official binary, and proves on Windows and Linux:

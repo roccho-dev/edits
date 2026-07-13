@@ -1,0 +1,6 @@
+role: ceo
+finance_owner: cfo
+package: @factory/core
+created_at: 2026-07-10T19:30:00+09:00
+
+raw text must remain searchable, copyable, and saveable.

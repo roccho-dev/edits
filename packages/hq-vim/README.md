@@ -16,6 +16,7 @@ This package owns only:
 - `plugin/hq.vim`
 - `autoload/hq.vim`
 - fail-closed client dependency checks
+- version-guarded application of hq-owned standard LSP draft edits
 - real Vim 9/yegappan-lsp conformance tests
 
 The `hq` repository builds, tests, and publishes the official `hq` artifact.
@@ -62,6 +63,25 @@ worker, registry, or environment layout paths.
 Yegappan/lsp owns completion presentation and is configured with
 `autoComplete: true`. This package defines no completion key mapping.
 
+## Submit result
+
+`HqSubmit` remains the only durable-effect entry point. After hq reports a
+successful append and supplies `hq.draftConsumption.v1`, hq-vim applies its
+single standard LSP text edit only when the submitted URI/version still match
+the current Vim buffer. It does not parse command syntax or calculate object
+boundaries.
+
+- unchanged accepted object: consume it from the draft;
+- last object consumed: return to Vim's canonical one-line empty buffer;
+- other objects present: preserve them byte-for-byte;
+- newer local edit: keep it unchanged;
+- missing, malformed, or locally unapplicable edit: keep the draft and show a
+  warning;
+- one native Vim undo: restore consumed text only; the accepted row remains.
+
+There is no submitted marker, duplicate guard, force-submit path, confirmation,
+new buffer, or editor-owned accepted state.
+
 ## Manual smoke
 
 After the official `hq` artifact and yegappan/lsp have already been placed:
@@ -82,6 +102,20 @@ go run ./cmd/hq-vim-smoke -headless -hq-bin /absolute/path/to/hq -vim9-lsp /abso
 go test ./...
 ```
 
+The native popup proof must run under a real terminal; redirected/headless Vim
+cannot make `pumvisible()` observable. Run it explicitly with:
+
+```sh
+HQ_NATIVE_POPUP_PROOF=1 \
+VIM_EXE=/absolute/path/to/vim \
+VIM9_LSP_PATH=/absolute/path/to/yegappan-lsp \
+go test -run '^TestNativePopupSelectionDoesNotQueue$' -v
+```
+
+This proof types through Vim, observes yegappan/lsp's native popup, selects the
+expected candidate, verifies the resulting buffer, and asserts that selection
+appends no accepted row. It adds no hq popup or completion mapping.
+
 Local tests use a temporary external stub only for fail-closed and process
 boundary checks. CI additionally checks out the accepted `roccho-dev/hq`
 `proposals` branch, builds its official binary, and proves on native Windows Vim
@@ -95,10 +129,14 @@ real Vim
   -> zero completion writes
   -> :HqSubmit
   -> exactly one accepted.instruction per explicit submit
+  -> accepted object consumed only after success
+  -> successive objects can be submitted from the same buffer
+  -> one Vim undo restores the last consumed object text only
   -> two submits have distinct accepted identities
 ```
 
 The complete installed Windows proof, exact artifact placement, activation, and
 deployment receipt remain owned by `roccho-dev/envs#5`. Native popup detail,
-multi-line acceptance, one-step undo, and the complete Unicode/CRLF matrix remain
-owned by `roccho-dev/edits#70`.
+multi-line completion acceptance, accepted-history recall, and the complete
+cross-platform Unicode/CRLF presentation matrix remain closure gates of
+`roccho-dev/edits#70`.

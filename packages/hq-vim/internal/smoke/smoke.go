@@ -27,11 +27,16 @@ type Config struct {
 	StartOnly               bool
 	OmitHQBin               bool
 	SkipSubmit              bool
+	SubmitCount             int
 	Env                     map[string]string
 	Timeout                 time.Duration
 	VimLog                  string
 	LSPLog                  string
 	ResultPath              string
+	BufferResultPath        string
+	UndoResultPath          string
+	MessagesPath            string
+	NativePopupArtifact     string
 }
 
 func Run(cfg Config) error {
@@ -62,6 +67,12 @@ func Run(cfg Config) error {
 	if cfg.Profile == "" {
 		cfg.Profile = "local"
 	}
+	if cfg.SubmitCount == 0 {
+		cfg.SubmitCount = 1
+	}
+	if cfg.SubmitCount < 0 {
+		return errors.New("SubmitCount cannot be negative")
+	}
 	if cfg.Buffer == "" {
 		cfg.Buffer = filepath.Join(root, ".tmp", "manual.hqjson")
 	}
@@ -71,10 +82,15 @@ func Run(cfg Config) error {
 	if err := os.MkdirAll(filepath.Dir(cfg.Buffer), 0o755); err != nil {
 		return err
 	}
-	if cfg.ResultPath != "" {
-		if err := os.MkdirAll(filepath.Dir(cfg.ResultPath), 0o755); err != nil {
-			return err
+	for _, path := range []string{cfg.ResultPath, cfg.BufferResultPath, cfg.UndoResultPath, cfg.MessagesPath, cfg.NativePopupArtifact} {
+		if path != "" {
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				return err
+			}
 		}
+	}
+	if cfg.NativePopupArtifact != "" && cfg.ExpectedCompletionLabel == "" {
+		return errors.New("native popup proof requires ExpectedCompletionLabel")
 	}
 
 	cleanupLogs := false
@@ -261,10 +277,13 @@ func writeVimScript(root string, cfg Config) (string, error) {
 			"if !g:LspServerReady() | cquit 43 | endif",
 		)
 	}
-	if cfg.Headless && !cfg.StartOnly {
+	if cfg.NativePopupArtifact != "" && !cfg.StartOnly {
+		lines = append(lines, "runtime testdata/native_popup_force.vim")
+		lines = append(lines, nativePopupProofLines(cfg)...)
+	} else if cfg.Headless && !cfg.StartOnly {
 		if cfg.ExpectedCompletionLabel != "" {
 			lines = append(lines,
-				"call setline(1, "+vimValue(cfg.CompletionText)+")",
+				"call setline(1, "+vimLines(cfg.CompletionText)+")",
 				"call cursor(1, strlen(getline(1)) + 1)",
 				"let hq_completion_response = g:HqVimCompletionRequest()",
 				"let hq_completion_result = get(hq_completion_response, 'result', {})",
@@ -285,16 +304,30 @@ func writeVimScript(root string, cfg Config) (string, error) {
 			lines = append(lines, "qa!")
 		} else {
 			lines = append(lines,
-				"call setline(1, "+vimValue(cfg.BufferText)+")",
+				"call setline(1, "+vimLines(cfg.BufferText)+")",
 				"call cursor(1, strlen(getline(1)) + 1)",
+				"call feedkeys(\"\\<Esc>\", 'xt')",
 			)
-			if cfg.ResultPath == "" {
-				lines = append(lines, "HqSubmit")
-			} else {
+			lines = append(lines,
+				"let hq_submit_result = {}",
+				fmt.Sprintf("for hq_submit_index in range(1, %d)", cfg.SubmitCount),
+				"  let hq_submit_result = g:HqVimSubmit()",
+				"endfor",
+			)
+			if cfg.ResultPath != "" {
+				lines = append(lines, "call writefile([json_encode(hq_submit_result)], "+vimString(cfg.ResultPath)+")")
+			}
+			if cfg.BufferResultPath != "" {
+				lines = append(lines, "call writefile([json_encode({'lines': getline(1, '$'), 'changedtick': b:changedtick})], "+vimString(cfg.BufferResultPath)+")")
+			}
+			if cfg.UndoResultPath != "" {
 				lines = append(lines,
-					"let hq_submit_result = g:HqVimSubmit()",
-					"call writefile([json_encode(hq_submit_result)], "+vimString(cfg.ResultPath)+")",
+					"silent undo",
+					"call writefile([json_encode({'lines': getline(1, '$'), 'changedtick': b:changedtick})], "+vimString(cfg.UndoResultPath)+")",
 				)
+			}
+			if cfg.MessagesPath != "" {
+				lines = append(lines, "call writefile(split(execute('messages'), \"\\n\"), "+vimString(cfg.MessagesPath)+")")
 			}
 			lines = append(lines, "qa!")
 		}
@@ -310,6 +343,63 @@ func writeVimScript(root string, cfg Config) (string, error) {
 	return f.Name(), nil
 }
 
+func nativePopupProofLines(cfg Config) []string {
+	return []string{
+		"let g:hq_native_deadline = reltimefloat(reltime()) + 10.0",
+		"function! HqNativePopupFinish(status, detail) abort",
+		"  call writefile([json_encode({'status': a:status, 'detail': a:detail, 'line': getline(1), 'items': get(g:, 'hq_native_items', [])})], " + vimString(cfg.NativePopupArtifact) + ")",
+		"  if a:status ==# 'passed'",
+		"    qa!",
+		"  else",
+		"    cquit 46",
+		"  endif",
+		"endfunction",
+		"function! HqNativePopupVerify(timer) abort",
+		"  if getline(1) !~# " + vimValue(cfg.ExpectedCompletionLabel),
+		"    call HqNativePopupFinish('failed', 'selected buffer does not contain expected candidate')",
+		"    return",
+		"  endif",
+		"  call HqNativePopupFinish('passed', 'native popup candidate selected')",
+		"endfunction",
+		"function! HqNativePopupPoll(timer) abort",
+		"  if reltimefloat(reltime()) >= g:hq_native_deadline",
+		"    call HqNativePopupFinish('failed', 'native popup timeout')",
+		"    return",
+		"  endif",
+		"  let l:info = complete_info(['items'])",
+		"  if !pumvisible() || empty(l:info.items)",
+		"    call timer_start(20, function('HqNativePopupPoll'))",
+		"    return",
+		"  endif",
+		"  let g:hq_native_items = map(copy(l:info.items), {_, item -> {'word': get(item, 'word', ''), 'abbr': get(item, 'abbr', ''), 'menu': get(item, 'menu', '')}})",
+		"  let l:index = -1",
+		"  for l:i in range(len(l:info.items))",
+		"    if get(l:info.items[l:i], 'word', '') =~# " + vimValue(cfg.ExpectedCompletionLabel) + " || get(l:info.items[l:i], 'abbr', '') ==# " + vimValue(cfg.ExpectedCompletionLabel),
+		"      let l:index = l:i",
+		"      break",
+		"    endif",
+		"  endfor",
+		"  if l:index < 0",
+		"    call HqNativePopupFinish('failed', 'expected candidate absent from native popup')",
+		"    return",
+		"  endif",
+		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1) . \"\\<C-Y>\\<Esc>\", 'n')",
+		"  call timer_start(100, function('HqNativePopupVerify'))",
+		"endfunction",
+		"function! HqNativePopupForce(timer) abort",
+		"  call g:HqNativePopupForceCompletion()",
+		"  call timer_start(20, function('HqNativePopupPoll'))",
+		"endfunction",
+		"function! HqNativePopupType(timer) abort",
+		"  call feedkeys('i' . " + vimValue(cfg.CompletionText) + ", 'n')",
+		"  call timer_start(20, function('HqNativePopupForce'))",
+		"endfunction",
+		"call setline(1, '')",
+		"call cursor(1, 1)",
+		"call timer_start(10, function('HqNativePopupType'))",
+	}
+}
+
 func vimString(path string) string {
 	s := filepath.ToSlash(path)
 	return vimValue(s)
@@ -317,5 +407,10 @@ func vimString(path string) string {
 
 func vimValue(value string) string {
 	b, _ := json.Marshal(value)
+	return string(b)
+}
+
+func vimLines(value string) string {
+	b, _ := json.Marshal(strings.Split(value, "\n"))
 	return string(b)
 }

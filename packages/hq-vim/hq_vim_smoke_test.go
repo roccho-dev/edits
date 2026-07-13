@@ -14,13 +14,13 @@ import (
 
 func TestMissingHQBinaryFailsFast(t *testing.T) {
 	root := mustPackageRoot(t)
-	vimLSP := requireVimLSP(t)
+	vimLSP := requireVim9LSP(t)
 	vim := requireVim(t)
 	missing := filepath.Join(t.TempDir(), exeName("missing-hq"))
 	cfg := smoke.Config{
 		HQBin:      missing,
 		Vim:        vim,
-		VimLSP:     vimLSP,
+		Vim9LSP:    vimLSP,
 		PluginRoot: root,
 		Profile:    "local",
 		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
@@ -44,7 +44,7 @@ func TestReadableNonExecutableHQFailsFast(t *testing.T) {
 	cfg := smoke.Config{
 		HQBin:      notExecutable,
 		Vim:        requireVim(t),
-		VimLSP:     requireVimLSP(t),
+		Vim9LSP:    requireVim9LSP(t),
 		PluginRoot: root,
 		Profile:    "local",
 		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
@@ -56,9 +56,9 @@ func TestReadableNonExecutableHQFailsFast(t *testing.T) {
 	}
 }
 
-func TestRealVimLspConfirmQueueSmoke(t *testing.T) {
+func TestRealVim9LspConfirmQueueSmoke(t *testing.T) {
 	root := mustPackageRoot(t)
-	vimLSP := requireVimLSP(t)
+	vimLSP := requireVim9LSP(t)
 	vim := requireVim(t)
 	hqBin := buildHQStub(t)
 	profileRoot := prepareProfile(t, root, "local")
@@ -71,7 +71,7 @@ func TestRealVimLspConfirmQueueSmoke(t *testing.T) {
 	cfg := smoke.Config{
 		HQBin:      hqBin,
 		Vim:        vim,
-		VimLSP:     vimLSP,
+		Vim9LSP:    vimLSP,
 		PluginRoot: root,
 		Profile:    "local",
 		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
@@ -147,18 +147,18 @@ func mustPackageRoot(t *testing.T) string {
 	return root
 }
 
-func requireVimLSP(t *testing.T) string {
+func requireVim9LSP(t *testing.T) string {
 	t.Helper()
-	if v := os.Getenv("VIM_LSP_PATH"); v != "" && smoke.Exists(filepath.Join(v, "plugin", "lsp.vim")) {
+	if v := os.Getenv("VIM9_LSP_PATH"); v != "" && smoke.Exists(filepath.Join(v, "plugin", "lsp.vim")) {
 		return v
 	}
 	if runtime.GOOS == "windows" {
-		cand := filepath.Join(os.Getenv("LOCALAPPDATA"), "codex-proof", "vim-lsp")
+		cand := filepath.Join(os.Getenv("LOCALAPPDATA"), "codex-proof", "yegappan-lsp")
 		if smoke.Exists(filepath.Join(cand, "plugin", "lsp.vim")) {
 			return cand
 		}
 	}
-	t.Skip("vim-lsp not found; set VIM_LSP_PATH")
+	t.Skip("yegappan/lsp not found; set VIM9_LSP_PATH")
 	return ""
 }
 

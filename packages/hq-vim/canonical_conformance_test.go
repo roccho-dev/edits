@@ -15,7 +15,7 @@ import (
 func TestMissingExplicitHQBindingFailsFast(t *testing.T) {
 	cfg := smoke.Config{
 		Vim:        requireVim(t),
-		VimLSP:     requireVimLSP(t),
+		Vim9LSP:    requireVim9LSP(t),
 		PluginRoot: mustPackageRoot(t),
 		Profile:    "local",
 		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
@@ -40,7 +40,7 @@ func TestRelativeHQBinaryFailsFast(t *testing.T) {
 	cfg := smoke.Config{
 		HQBin:      relative,
 		Vim:        requireVim(t),
-		VimLSP:     requireVimLSP(t),
+		Vim9LSP:    requireVim9LSP(t),
 		PluginRoot: root,
 		Profile:    "local",
 		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
@@ -69,7 +69,7 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 	completionCfg := smoke.Config{
 		HQBin:                   hqBin,
 		Vim:                     requireVim(t),
-		VimLSP:                  requireVimLSP(t),
+		Vim9LSP:                 requireVim9LSP(t),
 		PluginRoot:              root,
 		Profile:                 "local",
 		Buffer:                  filepath.Join(t.TempDir(), "completion-only.hqjson"),
@@ -92,7 +92,7 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 		cfg := smoke.Config{
 			HQBin:      hqBin,
 			Vim:        requireVim(t),
-			VimLSP:     requireVimLSP(t),
+			Vim9LSP:    requireVim9LSP(t),
 			PluginRoot: root,
 			Profile:    "local",
 			Buffer:     filepath.Join(t.TempDir(), "submit.hqjson"),
@@ -150,7 +150,7 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 		"submitIdentityMatches": true,
 		"pathLookupUsed":        false,
 		"binding":               "explicit-absolute-g:hq_bin",
-		"boundary":              "real Vim -> real vim-lsp -> canonical hq lsp -> accepted.instruction",
+		"boundary":              "real Vim 9 -> pinned yegappan/lsp -> canonical hq lsp -> accepted.instruction",
 	})
 	t.Logf("canonical hq Vim conformance passed against %s", os.Getenv("HQ_CANONICAL_SOURCE_SHA"))
 }

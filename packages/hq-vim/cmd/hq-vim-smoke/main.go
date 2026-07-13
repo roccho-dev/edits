@@ -12,7 +12,7 @@ func main() {
 	var cfg smoke.Config
 	flag.StringVar(&cfg.HQBin, "hq-bin", os.Getenv("HQ_BIN"), "existing hq binary path")
 	flag.StringVar(&cfg.Vim, "vim", os.Getenv("VIM_EXE"), "vim executable path")
-	flag.StringVar(&cfg.VimLSP, "vim-lsp", os.Getenv("VIM_LSP_PATH"), "vim-lsp checkout path")
+	flag.StringVar(&cfg.Vim9LSP, "vim9-lsp", os.Getenv("VIM9_LSP_PATH"), "yegappan/lsp checkout path")
 	flag.StringVar(&cfg.PluginRoot, "plugin-root", "", "hq-vim package root")
 	flag.StringVar(&cfg.Profile, "profile", "local", "hq endpoint profile")
 	flag.StringVar(&cfg.Buffer, "buffer", "", "buffer path to open")

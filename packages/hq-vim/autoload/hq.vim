@@ -1,118 +1,152 @@
-let s:server = 'hq-lsp'
-let s:last_response = {}
-let s:done = 0
+vim9script
 
-function! s:is_absolute(path) abort
-  if type(a:path) != v:t_string || empty(a:path)
-    return 0
-  endif
-  if has('win32') || has('win64')
-    return a:path =~? '^[A-Z]:[\\/]' || a:path =~# '^\\\\'
-  endif
-  return a:path =~# '^/'
-endfunction
+import autoload 'lsp/buffer.vim' as lspbuf
+import autoload 'lsp/util.vim' as lsputil
+import autoload 'lsp/offset.vim' as lspoffset
 
-function! s:server_started_or_terminal() abort
-  let l:status = lsp#get_server_status(s:server)
-  return lsp#is_server_running(s:server) || l:status ==# 'failed' || l:status ==# 'exited'
-endfunction
+var serverName = 'hq-lsp'
 
-function! hq#doctor() abort
-  let l:hq = get(g:, 'hq_bin', '')
-  let l:absolute = s:is_absolute(l:hq)
+export def Doctor(): dict<any>
+  var hq = get(g:, 'hq_bin', '')
   return {
-        \ 'vim_lsp': !empty(globpath(&runtimepath, 'autoload/lsp.vim')),
-        \ 'hq_bin': l:hq,
-        \ 'hq_bin_explicit': !empty(l:hq),
-        \ 'hq_bin_absolute': l:absolute,
-        \ 'hq_bin_ok': l:absolute && executable(l:hq),
-        \ 'profile': get(g:, 'hq_profile', 'local'),
-        \ 'server': s:server,
-        \ 'server_status': exists('*lsp#get_server_status') ? lsp#get_server_status(s:server) : 'vim-lsp-unavailable',
-        \ }
-endfunction
+    vim9_lsp: exists('*g:LspAddServer') == 1,
+    hq_bin: hq,
+    hq_bin_explicit: !hq->empty(),
+    hq_bin_absolute: IsAbsolute(hq),
+    hq_bin_ok: executable(hq) == 1,
+    profile: get(g:, 'hq_profile', 'local'),
+    negotiated_position_support: has('patch-9.0.1629'),
+  }
+enddef
 
-function! hq#start(...) abort
-  if empty(globpath(&runtimepath, 'autoload/lsp.vim'))
-    throw 'hq.vim requires vim-lsp on runtimepath'
+def IsAbsolute(path: string): bool
+  return path =~# '^/' || path =~# '^\\\\' || path =~# '^\a:[\\/]'
+enddef
+
+export def Start(profileArg: string = ''): number
+  if !has('vim9script') || v:version < 900
+    throw 'hq.vim requires Vim 9.0 or newer'
   endif
-  runtime plugin/lsp.vim
-  let l:profile = a:0 == 1 && !empty(a:1) ? a:1 : get(g:, 'hq_profile', 'local')
-  let l:hq = get(g:, 'hq_bin', '')
-  if !s:is_absolute(l:hq)
-    throw 'hq.vim requires an explicit absolute g:hq_bin'
+  if !has('patch-9.0.1629')
+    throw 'hq.vim requires Vim patch 9.0.1629 or newer for negotiated LSP positions'
   endif
-  if !executable(l:hq)
-    throw 'hq.vim requires g:hq_bin to be executable'
+  if exists('*g:LspAddServer') != 1
+    throw 'hq.vim requires yegappan/lsp on runtimepath'
   endif
-  if empty(l:profile)
+
+  var profile = !profileArg->empty() ? profileArg : get(g:, 'hq_profile', 'local')
+  var hq = get(g:, 'hq_bin', '')
+  if !IsAbsolute(hq)
+    throw 'hq.vim requires g:hq_bin to be an explicit absolute path'
+  endif
+  if executable(hq) != 1
+    throw 'hq.vim requires an executable g:hq_bin'
+  endif
+  if profile->empty()
     throw 'hq.vim requires a non-empty hq profile'
   endif
-  let s:server = get(g:, 'hq_server_name', 'hq-lsp')
-  call lsp#register_server({
-        \ 'name': s:server,
-        \ 'cmd': [l:hq, 'lsp', '--profile', l:profile],
-        \ 'allowlist': ['hqjson'],
-        \ })
-  call lsp#enable()
-  call lsp#activate()
-  let l:wait_result = lsp#utils#_wait(10000, function('s:server_started_or_terminal'), 10)
-  let l:status = lsp#get_server_status(s:server)
-  if l:wait_result != 0 || !lsp#is_server_running(s:server)
-    throw 'hq LSP failed to start: status=' . l:status . ' wait=' . l:wait_result
-  endif
+
+  serverName = get(g:, 'hq_server_name', 'hq-lsp')
+  g:LspOptionsSet({
+    autoComplete: true,
+    autoHighlightDiags: true,
+    showDiagWithVirtualText: false,
+    showDiagInPopup: true,
+    semanticHighlight: false,
+    useBufferCompletion: false,
+  })
+  g:LspAddServer([{
+    name: serverName,
+    filetype: ['hqjson'],
+    path: hq,
+    args: ['lsp', '--profile', profile],
+    syncInit: true,
+  }])
+  g:LspEnable()
   return 1
-endfunction
+enddef
 
-function! hq#request(method, params) abort
-  if !lsp#is_server_running(s:server)
-    throw 'hq LSP is not running: ' . lsp#get_server_status(s:server)
+def ReadyServer(method: string): dict<any>
+  if !g:LspServerReady()
+    throw $'hq LSP is not ready for {method}'
   endif
-  let s:done = 0
-  let s:last_response = {}
-  call lsp#send_request(s:server, {
-        \ 'method': a:method,
-        \ 'params': a:params,
-        \ 'on_notification': function('s:on_response'),
-        \ })
-  let l:wait_result = lsp#utils#_wait(5000, {-> s:done}, 10)
-  if l:wait_result != 0
-    throw 'vim-lsp request timed out: ' . a:method . ' status=' . lsp#get_server_status(s:server)
+  var server = lspbuf.CurbufGetServerByName(serverName)
+  if server->empty()
+    throw $'hq LSP server is not attached: {serverName}'
   endif
-  if !has_key(s:last_response, 'response')
-    throw 'vim-lsp response missing for ' . a:method . ': ' . string(s:last_response)
-  endif
-  return s:last_response.response
-endfunction
+  return server
+enddef
 
-function! hq#submit() abort
-  let l:line_nr = line('.') - 1
-  let l:line_len = strlen(getline('.'))
-  let l:action_response = hq#request('textDocument/codeAction', {
-        \ 'textDocument': lsp#get_text_document_identifier(),
-        \ 'range': {
-        \   'start': {'line': l:line_nr, 'character': 0},
-        \   'end': {'line': l:line_nr, 'character': l:line_len},
-        \ },
-        \ 'context': {'diagnostics': []},
-        \ })
-  let l:actions = get(l:action_response, 'result', [])
-  if type(l:actions) != v:t_list || empty(l:actions)
+def Request(server: dict<any>, method: string, params: any): dict<any>
+  if method->stridx('textDocument/') == 0
+    server.textdocDidChange(bufnr())
+  endif
+  var response = server.rpc(method, params, {timeout: 5000})
+  if response->empty() || !response->has_key('result')
+    throw $'hq LSP response missing for {method}: {response->string()}'
+  endif
+  return response
+enddef
+
+def CursorPosition(server: dict<any>): dict<number>
+  var text = getline('.')
+  var byteColumn = col('.') - 1
+  var byteLength = text->strlen()
+  if byteColumn < 0
+    byteColumn = 0
+  elseif byteColumn > byteLength
+    byteColumn = byteLength
+  endif
+  var character = byteColumn == byteLength
+    ? text->strchars()
+    : text->charidx(byteColumn, true)
+  var position = {line: line('.') - 1, character: character}
+  lspoffset.EncodePosition(server, bufnr(), position)
+  return position
+enddef
+
+def CurrentLineRange(server: dict<any>): dict<dict<number>>
+  var lineNr = line('.') - 1
+  var range = {
+    start: {line: lineNr, character: 0},
+    end: {line: lineNr, character: getline('.')->strchars()},
+  }
+  lspoffset.EncodeRange(server, bufnr(), range)
+  return range
+enddef
+
+export def CompletionRequest(): dict<any>
+  var method = 'textDocument/completion'
+  var server = ReadyServer(method)
+  return Request(server, method, {
+    textDocument: {uri: lsputil.LspBufnrToUri(bufnr())},
+    position: CursorPosition(server),
+  })
+enddef
+
+export def Submit(): dict<any>
+  var method = 'textDocument/codeAction'
+  var server = ReadyServer(method)
+  var actionResponse = Request(server, method, {
+    textDocument: {uri: lsputil.LspBufnrToUri(bufnr())},
+    range: CurrentLineRange(server),
+    context: {diagnostics: []},
+  })
+  var actions = actionResponse.result
+  if actions->type() != v:t_list || actions->empty()
     throw 'no hq code actions returned'
   endif
-  let l:cmd = get(l:actions[0], 'command', {})
-  if get(l:cmd, 'command', '') !=# 'hq.submit'
-    throw 'unexpected hq command action: ' . string(l:cmd)
+  var cmd = actions[0]->get('command', {})
+  if cmd->get('command', '') != 'hq.submit'
+    throw $'unexpected hq command action: {cmd->string()}'
   endif
-  let l:exec_response = hq#request('workspace/executeCommand', l:cmd)
-  let l:result = get(l:exec_response, 'result', {})
-  if get(l:result, 'kind', '') !=# 'hq.submitResult.v1' || get(l:result, 'status', '') !=# 'queued'
-    throw 'hq.submit did not queue the buffer: ' . string(l:result)
-  endif
-  return l:result
-endfunction
 
-function! s:on_response(data) abort
-  let s:last_response = a:data
-  let s:done = 1
-endfunction
+  var execResponse = Request(server, 'workspace/executeCommand', cmd)
+  var result = execResponse.result
+  if result->get('kind', '') != 'hq.submitResult.v1'
+      || result->get('status', '') != 'queued'
+    throw $'hq.submit did not queue the buffer: {result->string()}'
+  endif
+  echomsg $'hq queued {result->get("queueId", "")}'
+  return result
+enddef

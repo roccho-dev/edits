@@ -1,8 +1,28 @@
-if exists('g:loaded_hq_vim')
+vim9script
+
+if get(g:, 'loaded_hq_vim', false)
   finish
 endif
-let g:loaded_hq_vim = 1
+g:loaded_hq_vim = true
 
-command! -nargs=? HqStart call hq#start(<f-args>)
-command! HqSubmit call hq#submit()
-command! HqDoctor echo string(hq#doctor())
+import autoload '../autoload/hq.vim' as hq
+
+def g:HqVimStart(profile: string = '')
+  hq.Start(profile)
+enddef
+
+def g:HqVimSubmit(): dict<any>
+  return hq.Submit()
+enddef
+
+def g:HqVimDoctor()
+  echo hq.Doctor()
+enddef
+
+def g:HqVimCompletionRequest(): dict<any>
+  return hq.CompletionRequest()
+enddef
+
+command! -nargs=? HqStart g:HqVimStart(<q-args>)
+command! HqSubmit g:HqVimSubmit()
+command! HqDoctor g:HqVimDoctor()

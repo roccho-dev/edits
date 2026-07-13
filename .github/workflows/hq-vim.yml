@@ -52,16 +52,29 @@ jobs:
           "VIM_EXE=$($vim.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & $vim.FullName --version | Select-Object -First 3
 
-      - name: Install Vim on Linux
+      - name: Setup pinned Vim on Linux
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y vim
+        id: linux-vim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          version: v9.2.0478
 
-      - name: Checkout pinned vim-lsp
+      - name: Resolve pinned Vim on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          PINNED_VIM: ${{ steps.linux-vim.outputs.executable }}
+        run: |
+          test -x "$PINNED_VIM"
+          echo "VIM_EXE=$PINNED_VIM" >> "$GITHUB_ENV"
+          "$PINNED_VIM" --version | head -n 3
+
+      - name: Checkout pinned yegappan/lsp
         uses: actions/checkout@v4
         with:
-          repository: prabirshrestha/vim-lsp
-          ref: 474c656659b5fb51eec6770309e0211c8aa49b5b
-          path: vim-lsp
+          repository: yegappan/lsp
+          ref: 989016ae2ae4cbf304a9ca29478f47fec794493f
+          path: yegappan-lsp
 
       - name: Checkout accepted canonical hq
         uses: actions/checkout@v4
@@ -94,7 +107,7 @@ jobs:
         working-directory: packages/hq-vim
         shell: bash
         env:
-          VIM_LSP_PATH: ${{ github.workspace }}/vim-lsp
+          VIM9_LSP_PATH: ${{ github.workspace }}/yegappan-lsp
           HQ_CONFORMANCE_ARTIFACT: ${{ github.workspace }}/artifacts/hq-vim-conformance-${{ runner.os }}.json
         run: |
           mkdir -p "${{ github.workspace }}/artifacts"

@@ -61,7 +61,9 @@ Vim receives the profile name only. It does not receive JSONL, provider,
 worker, registry, or environment layout paths.
 
 Yegappan/lsp owns completion presentation and is configured with
-`autoComplete: true`. This package defines no completion key mapping.
+`autoComplete: true`. In Insert mode, `Ctrl-N`/`Ctrl-P` navigate the popup and
+`Ctrl-Y` accepts the selected item. This package defines no completion key
+mapping or manual-completion fallback.
 
 ## Submit result
 
@@ -102,19 +104,22 @@ go run ./cmd/hq-vim-smoke -headless -hq-bin /absolute/path/to/hq -vim9-lsp /abso
 go test ./...
 ```
 
-The native popup proof must run under a real terminal; redirected/headless Vim
-cannot make `pumvisible()` observable. Run it explicitly with:
+The native popup proof starts non-headless Vim with an exact external hq
+executable and a temporary strict selected-world profile. Run it explicitly
+with:
 
 ```sh
-HQ_NATIVE_POPUP_PROOF=1 \
+HQ_NATIVE_HQ_FUZZY_PROOF=1 \
+HQ_BIN=/absolute/path/to/hq \
 VIM_EXE=/absolute/path/to/vim \
 VIM9_LSP_PATH=/absolute/path/to/yegappan-lsp \
-go test -run '^TestNativePopupSelectionDoesNotQueue$' -v
+go test -run '^TestNativeHQFuzzyAutomaticPopupDoesNotAccept$' -v
 ```
 
-This proof types through Vim, observes yegappan/lsp's native popup, selects the
-expected candidate, verifies the resulting buffer, and asserts that selection
-appends no accepted row. It adds no hq popup or completion mapping.
+This proof types a non-prefix query through Vim, waits for yegappan/lsp's
+automatic native popup without forcing completion, selects the hq candidate,
+verifies the resulting buffer, and asserts that selection appends no accepted
+row. It adds no hq popup, matcher, completion mapping, or fallback.
 
 Local tests use a temporary external stub only for fail-closed and process
 boundary checks. CI additionally checks out the accepted `roccho-dev/hq`

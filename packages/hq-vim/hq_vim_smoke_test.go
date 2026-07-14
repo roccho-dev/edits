@@ -160,30 +160,33 @@ func TestVersionGuardKeepsNewerDraft(t *testing.T) {
 	}
 }
 
-func TestNativePopupSelectionDoesNotQueue(t *testing.T) {
-	if os.Getenv("HQ_NATIVE_POPUP_PROOF") != "1" {
-		t.Skip("set HQ_NATIVE_POPUP_PROOF=1 and run under a real terminal")
+func TestNativeHQFuzzyAutomaticPopupDoesNotAccept(t *testing.T) {
+	if os.Getenv("HQ_NATIVE_HQ_FUZZY_PROOF") != "1" {
+		t.Skip("set HQ_NATIVE_HQ_FUZZY_PROOF=1 and run under a real terminal")
+	}
+	hqBin := os.Getenv("HQ_BIN")
+	if hqBin == "" {
+		t.Fatal("HQ_BIN is required for the real-hq fuzzy popup proof")
 	}
 	root := mustPackageRoot(t)
-	profileRoot := prepareProfile(t, root, "local")
-	queue := filepath.Join(profileRoot, "local", "queue.jsonl")
-	artifact := filepath.Join(t.TempDir(), "native-popup.json")
+	profileEnv, accepted := prepareStrictHQProfile(t, root, "local")
+	artifact := filepath.Join(t.TempDir(), "native-hq-fuzzy-popup.json")
 	cfg := smoke.Config{
-		HQBin:                   buildHQStub(t),
+		HQBin:                   hqBin,
 		Vim:                     requireVim(t),
 		Vim9LSP:                 requireVim9LSP(t),
 		PluginRoot:              root,
 		Profile:                 "local",
-		Buffer:                  filepath.Join(t.TempDir(), "native-popup.hqjson"),
-		CompletionText:          "task:t",
-		ExpectedCompletionLabel: "task:t2",
+		Buffer:                  filepath.Join(t.TempDir(), "native-hq-fuzzy-popup.hqjson"),
+		CompletionText:          "@qce",
+		ExpectedCompletionLabel: "queue.create",
 		NativePopupArtifact:     artifact,
-		Env:                     map[string]string{"HQ_STUB_ROOT": profileRoot},
+		Env:                     profileEnv,
 		Timeout:                 15 * time.Second,
 	}
 	if err := smoke.Run(cfg); err != nil {
 		artifactBody, _ := os.ReadFile(artifact)
-		t.Fatalf("native popup smoke failed: %v\nartifact: %s", err, artifactBody)
+		t.Fatalf("native real-hq fuzzy popup smoke failed: %v\nartifact: %s", err, artifactBody)
 	}
 	var result struct {
 		Status string `json:"status"`
@@ -191,20 +194,20 @@ func TestNativePopupSelectionDoesNotQueue(t *testing.T) {
 	}
 	b, err := os.ReadFile(artifact)
 	if err != nil {
-		t.Fatalf("read native popup artifact: %v", err)
+		t.Fatalf("read native real-hq popup artifact: %v", err)
 	}
 	if err := json.Unmarshal(b, &result); err != nil {
-		t.Fatalf("decode native popup artifact: %v\n%s", err, b)
+		t.Fatalf("decode native real-hq popup artifact: %v\n%s", err, b)
 	}
-	if result.Status != "passed" || result.Line != "task:t2" {
-		t.Fatalf("native popup result = %#v", result)
+	if result.Status != "passed" || result.Line != "@queue.create" {
+		t.Fatalf("native real-hq fuzzy popup result = %#v", result)
 	}
-	queued, err := os.ReadFile(queue)
+	acceptedBody, err := os.ReadFile(accepted)
 	if err != nil {
-		t.Fatalf("read queue after native selection: %v", err)
+		t.Fatalf("read accepted log after native selection: %v", err)
 	}
-	if strings.TrimSpace(string(queued)) != "" {
-		t.Fatalf("native completion selection wrote queue: %s", queued)
+	if strings.TrimSpace(string(acceptedBody)) != "" {
+		t.Fatalf("native completion selection wrote accepted evidence: %s", acceptedBody)
 	}
 }
 
@@ -342,6 +345,57 @@ func prepareProfile(t *testing.T, packageRoot, profile string) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+func prepareStrictHQProfile(t *testing.T, packageRoot, profile string) (map[string]string, string) {
+	t.Helper()
+	configRoot := t.TempDir()
+	profileRoot := filepath.Join(configRoot, "roccho", "hq", "profiles")
+	if err := os.MkdirAll(profileRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runtimeRoot := t.TempDir()
+	workspace := filepath.Join(runtimeRoot, "workspace")
+	events := filepath.Join(runtimeRoot, "events", "events.jsonl")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(events), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	world := filepath.Join(runtimeRoot, "world.jsonl")
+	worldBytes, err := os.ReadFile(filepath.Join(packageRoot, "testdata", "strict-world.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(world, worldBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	accepted := filepath.Join(runtimeRoot, "accepted.jsonl")
+	if err := os.WriteFile(accepted, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	capabilities := filepath.Join(runtimeRoot, "capabilities.json")
+	if err := os.WriteFile(capabilities, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	profileBytes, err := json.Marshal(map[string]any{
+		"kind": "hq.profile.v1", "name": profile, "deployment_id": "hq-vim-native-fuzzy-proof",
+		"world_path": world, "accepted_path": accepted, "workspace_root": workspace,
+		"events_path": events, "capabilities_path": capabilities,
+		"poll_interval_ms": 50, "health_timeout_ms": 2000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profileRoot, profile+".json"), append(profileBytes, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	key := "XDG_CONFIG_HOME"
+	if runtime.GOOS == "windows" {
+		key = "APPDATA"
+	}
+	return map[string]string{key: configRoot}, accepted
 }
 
 func exeName(name string) string {

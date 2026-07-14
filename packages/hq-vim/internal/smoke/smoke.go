@@ -278,7 +278,6 @@ func writeVimScript(root string, cfg Config) (string, error) {
 		)
 	}
 	if cfg.NativePopupArtifact != "" && !cfg.StartOnly {
-		lines = append(lines, "runtime testdata/native_popup_force.vim")
 		lines = append(lines, nativePopupProofLines(cfg)...)
 	} else if cfg.Headless && !cfg.StartOnly {
 		if cfg.ExpectedCompletionLabel != "" {
@@ -386,13 +385,9 @@ func nativePopupProofLines(cfg Config) []string {
 		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1) . \"\\<C-Y>\\<Esc>\", 'n')",
 		"  call timer_start(100, function('HqNativePopupVerify'))",
 		"endfunction",
-		"function! HqNativePopupForce(timer) abort",
-		"  call g:HqNativePopupForceCompletion()",
-		"  call timer_start(20, function('HqNativePopupPoll'))",
-		"endfunction",
 		"function! HqNativePopupType(timer) abort",
 		"  call feedkeys('i' . " + vimValue(cfg.CompletionText) + ", 'n')",
-		"  call timer_start(20, function('HqNativePopupForce'))",
+		"  call timer_start(20, function('HqNativePopupPoll'))",
 		"endfunction",
 		"call setline(1, '')",
 		"call cursor(1, 1)",

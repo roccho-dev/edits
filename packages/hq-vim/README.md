@@ -65,6 +65,13 @@ Yegappan/lsp owns completion presentation and is configured with
 `Ctrl-Y` accepts the selected item. This package defines no completion key
 mapping or manual-completion fallback.
 
+The pinned client inserts a selected completion in the same Vim undo block as
+the typed query. The compatibility adapter establishes one mechanical undo
+boundary when the native popup first opens, then immediately resumes the same
+client-owned automatic completion. One native undo therefore restores the
+exact pre-selection query. This adds no completion key mapping, alternate
+request path, matcher, candidate meaning, or editor-owned text edit.
+
 ## Submit result
 
 `HqSubmit` remains the only durable-effect entry point. After hq reports a
@@ -116,10 +123,14 @@ VIM9_LSP_PATH=/absolute/path/to/yegappan-lsp \
 go test -run '^TestNativeHQFuzzyAutomaticPopupDoesNotAccept$' -v
 ```
 
-This proof types a non-prefix query through Vim, waits for yegappan/lsp's
-automatic native popup without forcing completion, selects the hq candidate,
-verifies the resulting buffer, and asserts that selection appends no accepted
-row. It adds no hq popup, matcher, completion mapping, or fallback.
+This proof uses yegappan/lsp's automatic native popup without a manual
+completion fallback. It proves fuzzy schema-template, field-key, and
+Unicode/CRLF field-value journeys; visible detail and the complete
+documentation popup; exact multi-line text edits; one native undo to the exact
+query; and zero accepted rows before explicit submit. It adds no hq popup,
+matcher, completion mapping, or fallback. The existing CI matrix runs this
+proof on native Windows Vim and pinned Linux Vim against the same canonical hq
+source head.
 
 Local tests use a temporary external stub only for fail-closed and process
 boundary checks. CI additionally checks out the accepted `roccho-dev/hq`
@@ -141,7 +152,6 @@ real Vim
 ```
 
 The complete installed Windows proof, exact artifact placement, activation, and
-deployment receipt remain owned by `roccho-dev/envs#5`. Native popup detail,
-multi-line completion acceptance, accepted-history recall, and the complete
-cross-platform Unicode/CRLF presentation matrix remain closure gates of
-`roccho-dev/edits#70`.
+deployment receipt remain owned by `roccho-dev/envs#34`. Safe accepted-history
+recall remains gated by `roccho-dev/hq#117`; the resulting empty-draft recall
+journey remains a closure gate of `roccho-dev/edits#70`.

@@ -1,11 +1,55 @@
 vim9script
 
 import autoload 'lsp/buffer.vim' as lspbuf
+import autoload 'lsp/completion.vim' as lspcompletion
 import autoload 'lsp/util.vim' as lsputil
 import autoload 'lsp/offset.vim' as lspoffset
 import autoload 'lsp/textedit.vim' as lsptextedit
 
 var serverName = 'hq-lsp'
+
+def InstallCompletionUndoBoundary()
+  augroup hq_vim_completion
+    autocmd! CompleteChanged <buffer>
+    autocmd! CompleteDone <buffer>
+    autocmd CompleteChanged <buffer> CompletionUndoBreak()
+    autocmd CompleteDone <buffer> CompletionUndoReset()
+  augroup END
+enddef
+
+def CompletionUndoBreak()
+  if mode(1) !~# '^i' || !pumvisible()
+      || get(b:, 'hq_completion_undo_armed', false)
+    return
+  endif
+  b:hq_completion_undo_armed = true
+  timer_start(0, (_) => CompletionUndoApply())
+enddef
+
+def CompletionUndoApply()
+  if mode(1) =~# '^i' && pumvisible()
+      && get(b:, 'hq_completion_undo_armed', false)
+    b:hq_completion_undo_restarting = true
+    feedkeys("\<C-G>u", 'n')
+  endif
+enddef
+
+def CompletionUndoReset()
+  if get(b:, 'hq_completion_undo_restarting', false)
+    b:hq_completion_undo_restarting = false
+    timer_start(0, (_) => CompletionUndoResume())
+    return
+  endif
+  b:hq_completion_undo_armed = false
+enddef
+
+def CompletionUndoResume()
+  if mode(1) !~# '^i' || !get(b:, 'hq_completion_undo_armed', false)
+    b:hq_completion_undo_armed = false
+    return
+  endif
+  lspcompletion.LspComplete(true)
+enddef
 
 export def Doctor(): dict<any>
   var hq = get(g:, 'hq_bin', '')
@@ -64,6 +108,7 @@ export def Start(profileArg: string = ''): number
     syncInit: true,
   }])
   g:LspEnable()
+  InstallCompletionUndoBoundary()
   return 1
 enddef
 

@@ -169,45 +169,94 @@ func TestNativeHQFuzzyAutomaticPopupDoesNotAccept(t *testing.T) {
 		t.Fatal("HQ_BIN is required for the real-hq fuzzy popup proof")
 	}
 	root := mustPackageRoot(t)
-	profileEnv, accepted := prepareStrictHQProfile(t, root, "local")
-	artifact := filepath.Join(t.TempDir(), "native-hq-fuzzy-popup.json")
-	cfg := smoke.Config{
-		HQBin:                   hqBin,
-		Vim:                     requireVim(t),
-		Vim9LSP:                 requireVim9LSP(t),
-		PluginRoot:              root,
-		Profile:                 "local",
-		Buffer:                  filepath.Join(t.TempDir(), "native-hq-fuzzy-popup.hqjson"),
-		CompletionText:          "@qce",
-		ExpectedCompletionLabel: "queue.create",
-		NativePopupArtifact:     artifact,
-		Env:                     profileEnv,
-		Timeout:                 15 * time.Second,
-	}
-	if err := smoke.Run(cfg); err != nil {
-		artifactBody, _ := os.ReadFile(artifact)
-		t.Fatalf("native real-hq fuzzy popup smoke failed: %v\nartifact: %s", err, artifactBody)
-	}
-	var result struct {
-		Status string `json:"status"`
-		Line   string `json:"line"`
-	}
-	b, err := os.ReadFile(artifact)
-	if err != nil {
-		t.Fatalf("read native real-hq popup artifact: %v", err)
-	}
-	if err := json.Unmarshal(b, &result); err != nil {
-		t.Fatalf("decode native real-hq popup artifact: %v\n%s", err, b)
-	}
-	if result.Status != "passed" || result.Line != "@queue.create" {
-		t.Fatalf("native real-hq fuzzy popup result = %#v", result)
-	}
-	acceptedBody, err := os.ReadFile(accepted)
-	if err != nil {
-		t.Fatalf("read accepted log after native selection: %v", err)
-	}
-	if strings.TrimSpace(string(acceptedBody)) != "" {
-		t.Fatalf("native completion selection wrote accepted evidence: %s", acceptedBody)
+	for _, tc := range []struct {
+		name       string
+		query      string
+		label      string
+		want       string
+		detail     string
+		docPreview string
+		fileFormat string
+	}{
+		{
+			name: "fuzzy schema template", query: "@qce", label: "queue.create",
+			want: "@queue.create\npath=", detail: "schema_template | world declaration",
+			docPreview: "Preview:\n@queue.create\npath=", fileFormat: "unix",
+		},
+		{
+			name: "field key", query: "@queue.create\npa", label: "path",
+			want: "@queue.create\npath=", detail: "missing_key | path | world declaration",
+			docPreview: "Preview:\npath=", fileFormat: "unix",
+		},
+		{
+			name: "unicode CRLF field value", query: "@queue.create\npath=日😀éj", label: "日本語-😀-é.jsonl",
+			want: "@queue.create\npath=日本語-😀-é.jsonl", detail: "field_value | sources: field.example | world declaration",
+			docPreview: "Preview:\n日本語-😀-é.jsonl", fileFormat: "dos",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			profileEnv, accepted := prepareStrictHQProfile(t, root, "local")
+			artifact := filepath.Join(t.TempDir(), "native-hq-popup.json")
+			cfg := smoke.Config{
+				HQBin:                   hqBin,
+				Vim:                     requireVim(t),
+				Vim9LSP:                 requireVim9LSP(t),
+				PluginRoot:              root,
+				Profile:                 "local",
+				Buffer:                  filepath.Join(t.TempDir(), "native-hq-popup.hqjson"),
+				CompletionText:          tc.query,
+				ExpectedCompletionLabel: tc.label,
+				ExpectedCompletionText:  tc.want,
+				NativePopupFileFormat:   tc.fileFormat,
+				NativePopupArtifact:     artifact,
+				Env:                     profileEnv,
+				Timeout:                 15 * time.Second,
+			}
+			if err := smoke.Run(cfg); err != nil {
+				artifactBody, _ := os.ReadFile(artifact)
+				t.Fatalf("native real-hq popup smoke failed: %v\nartifact: %s", err, artifactBody)
+			}
+			var result struct {
+				Status                 string   `json:"status"`
+				Failure                string   `json:"failure"`
+				Lines                  []string `json:"lines"`
+				UndoLines              []string `json:"undo_lines"`
+				CandidateDetail        string   `json:"candidate_detail"`
+				CandidateDocumentation string   `json:"candidate_documentation"`
+				DocumentationPopup     []string `json:"documentation_popup"`
+				FileFormat             string   `json:"fileformat"`
+			}
+			b, err := os.ReadFile(artifact)
+			if err != nil {
+				t.Fatalf("read native real-hq popup artifact: %v", err)
+			}
+			if err := json.Unmarshal(b, &result); err != nil {
+				t.Fatalf("decode native real-hq popup artifact: %v\n%s", err, b)
+			}
+			if result.Status != "passed" || result.Failure != "" {
+				t.Fatalf("native real-hq popup result = %#v", result)
+			}
+			if strings.Join(result.Lines, "\n") != tc.want || strings.Join(result.UndoLines, "\n") != tc.query {
+				t.Fatalf("native edit/undo result = %#v", result)
+			}
+			if result.CandidateDetail != tc.detail || !strings.Contains(result.CandidateDocumentation, tc.docPreview) {
+				t.Fatalf("native detail/documentation result = %#v", result)
+			}
+			wantPopup := result.CandidateDocumentation
+			if strings.Join(result.DocumentationPopup, "\n") != wantPopup || result.FileFormat != tc.fileFormat {
+				t.Fatalf("native documentation/format result = %#v", result)
+			}
+			acceptedBody, err := os.ReadFile(accepted)
+			if err != nil {
+				t.Fatalf("read accepted log after native selection: %v", err)
+			}
+			if strings.TrimSpace(string(acceptedBody)) != "" {
+				t.Fatalf("native completion selection wrote accepted evidence: %s", acceptedBody)
+			}
+			t.Logf("native UI evidence: fileformat=%s query=%q completed=%q undo=%q detail=%q documentation=%q",
+				result.FileFormat, tc.query, tc.want, strings.Join(result.UndoLines, "\n"),
+				result.CandidateDetail, result.CandidateDocumentation)
+		})
 	}
 }
 

@@ -1,3 +1,1 @@
-{"key":"op","type":"enum","required":true,"description":"operation to compile into instruction","group":"instruction","enum":["queue.create"]}
-{"key":"target","type":"enum","required":true,"description":"resolver / dispatch target","group":"instruction","enum":["ctx"]}
-{"key":"payload","type":"object","required":true,"description":"user data or operation arguments","group":"data"}
+{"kind":"hq.command.v1","name":"queue.create","description":"queue one context file","instruction":{"version":"instruction.v1","op":"queue.create","target":"ctx","payload":{}},"fields":[{"name":"path","type":"path","required":true,"description":"context JSONL path","bind":"payload.path"}]}

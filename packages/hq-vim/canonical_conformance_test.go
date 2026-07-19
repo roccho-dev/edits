@@ -63,8 +63,8 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 	root := mustPackageRoot(t)
 	profile := prepareCanonicalProfile(t)
 	assertCanonicalProfileStarts(t, hqBin, profile.Env)
-	completionText := `{"op":q`
-	submitText := `{"op":"queue.create","target":"ctx","payload":{"path":"demo.jsonl"}}`
+	completionText := `@queue`
+	submitText := "@queue.create\npath=demo.jsonl"
 
 	completionCfg := smoke.Config{
 		HQBin:                   hqBin,
@@ -88,18 +88,25 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 
 	var acceptedIDs []string
 	for run := 1; run <= 2; run++ {
-		resultPath := filepath.Join(t.TempDir(), "submit-result.json")
+		resultRoot := t.TempDir()
+		resultPath := filepath.Join(resultRoot, "submit-result.json")
+		bufferResult := filepath.Join(resultRoot, "buffer-after.json")
+		undoResult := filepath.Join(resultRoot, "buffer-undo.json")
+		messages := filepath.Join(resultRoot, "messages.txt")
 		cfg := smoke.Config{
-			HQBin:      hqBin,
-			Vim:        requireVim(t),
-			Vim9LSP:    requireVim9LSP(t),
-			PluginRoot: root,
-			Profile:    "local",
-			Buffer:     filepath.Join(t.TempDir(), "submit.hqjson"),
-			BufferText: submitText,
-			Headless:   true,
-			Env:        profile.Env,
-			ResultPath: resultPath,
+			HQBin:            hqBin,
+			Vim:              requireVim(t),
+			Vim9LSP:          requireVim9LSP(t),
+			PluginRoot:       root,
+			Profile:          "local",
+			Buffer:           filepath.Join(t.TempDir(), "submit.hqjson"),
+			BufferText:       submitText,
+			Headless:         true,
+			Env:              profile.Env,
+			ResultPath:       resultPath,
+			BufferResultPath: bufferResult,
+			UndoResultPath:   undoResult,
+			MessagesPath:     messages,
 		}
 		if err := smoke.Run(cfg); err != nil {
 			t.Fatalf("canonical hq Vim submit run %d failed: %v", run, err)
@@ -133,11 +140,77 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 		if result["deploymentId"] != "edits-ci" {
 			t.Fatalf("submit deploymentId = %v", result["deploymentId"])
 		}
+		consumption, ok := result["draftConsumption"].(map[string]any)
+		if !ok || consumption["kind"] != "hq.draftConsumption.v1" {
+			t.Fatalf("submit draftConsumption = %#v", result["draftConsumption"])
+		}
+		if got := readVimBuffer(t, bufferResult); len(got.Lines) != 1 || got.Lines[0] != "" {
+			t.Fatalf("accepted draft was not consumed: %#v", got)
+		}
+		if got := readVimBuffer(t, undoResult); strings.Join(got.Lines, "\n") != submitText {
+			t.Fatalf("one Vim undo did not restore submitted text: %#v", got)
+		}
+		if got := readText(t, messages); !strings.Contains(got, "draft consumed") {
+			t.Fatalf("missing consumed outcome: %s", got)
+		}
 		acceptedIDs = append(acceptedIDs, id)
 	}
 	if acceptedIDs[0] == acceptedIDs[1] {
 		t.Fatalf("repeated explicit submits reused id %q", acceptedIDs[0])
 	}
+
+	multiText := "@queue.create\npath=first.jsonl\n\n@queue.create\npath=second.jsonl"
+	t.Run("one object is consumed without touching the next draft", func(t *testing.T) {
+		resultRoot := t.TempDir()
+		bufferResult := filepath.Join(resultRoot, "buffer-after.json")
+		undoResult := filepath.Join(resultRoot, "buffer-undo.json")
+		cfg := smoke.Config{
+			HQBin: hqBin, Vim: requireVim(t), Vim9LSP: requireVim9LSP(t),
+			PluginRoot: root, Profile: "local", Buffer: filepath.Join(t.TempDir(), "multi.hqjson"),
+			BufferText: multiText, Headless: true, Env: profile.Env,
+			BufferResultPath: bufferResult, UndoResultPath: undoResult,
+		}
+		if err := smoke.Run(cfg); err != nil {
+			t.Fatalf("single multi-object submit failed: %v", err)
+		}
+		wantRemaining := "@queue.create\npath=second.jsonl"
+		if got := readVimBuffer(t, bufferResult); strings.Join(got.Lines, "\n") != wantRemaining {
+			t.Fatalf("unaccepted draft changed: %#v", got)
+		}
+		if got := readVimBuffer(t, undoResult); strings.Join(got.Lines, "\n") != multiText {
+			t.Fatalf("one undo did not restore consumed object: %#v", got)
+		}
+		rows := readJSONLRows(t, profile.AcceptedPath)
+		if len(rows) != 3 || acceptedPath(t, rows[2]) != "first.jsonl" {
+			t.Fatalf("accepted rows=%#v", rows)
+		}
+	})
+
+	t.Run("successive submits consume successive objects", func(t *testing.T) {
+		resultRoot := t.TempDir()
+		bufferResult := filepath.Join(resultRoot, "buffer-after.json")
+		messages := filepath.Join(resultRoot, "messages.txt")
+		cfg := smoke.Config{
+			HQBin: hqBin, Vim: requireVim(t), Vim9LSP: requireVim9LSP(t),
+			PluginRoot: root, Profile: "local", Buffer: filepath.Join(t.TempDir(), "successive.hqjson"),
+			BufferText: multiText, Headless: true, Env: profile.Env, SubmitCount: 2,
+			BufferResultPath: bufferResult, MessagesPath: messages,
+		}
+		if err := smoke.Run(cfg); err != nil {
+			t.Fatalf("successive multi-object submit failed: %v", err)
+		}
+		if got := readVimBuffer(t, bufferResult); len(got.Lines) != 1 || got.Lines[0] != "" {
+			t.Fatalf("successive submits did not reach canonical empty: %#v", got)
+		}
+		if got := readText(t, messages); strings.Count(got, "draft consumed") != 2 {
+			t.Fatalf("successive outcomes=%s", got)
+		}
+		rows := readJSONLRows(t, profile.AcceptedPath)
+		if len(rows) != 5 || acceptedPath(t, rows[3]) != "first.jsonl" || acceptedPath(t, rows[4]) != "second.jsonl" {
+			t.Fatalf("accepted rows=%#v", rows)
+		}
+	})
+
 	writeCanonicalArtifact(t, map[string]any{
 		"kind":                  "edits.hqVimConformance.v1",
 		"status":                "passed",
@@ -145,14 +218,31 @@ func TestCanonicalHQVimConformance(t *testing.T) {
 		"completionLabel":       "queue.create",
 		"completionWrites":      0,
 		"explicitSubmitRuns":    2,
-		"acceptedRows":          2,
+		"acceptedRows":          5,
 		"acceptedIDsDistinct":   true,
 		"submitIdentityMatches": true,
+		"acceptedDraftConsumed": true,
+		"multiObjectPreserved":  true,
+		"successiveSubmitCount": 2,
 		"pathLookupUsed":        false,
 		"binding":               "explicit-absolute-g:hq_bin",
 		"boundary":              "real Vim 9 -> pinned yegappan/lsp -> canonical hq lsp -> accepted.instruction",
 	})
 	t.Logf("canonical hq Vim conformance passed against %s", os.Getenv("HQ_CANONICAL_SOURCE_SHA"))
+}
+
+func acceptedPath(t *testing.T, row map[string]any) string {
+	t.Helper()
+	instruction, ok := row["instruction"].(map[string]any)
+	if !ok {
+		t.Fatalf("accepted row has no instruction: %#v", row)
+	}
+	payload, ok := instruction["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("accepted instruction has no payload: %#v", instruction)
+	}
+	path, _ := payload["path"].(string)
+	return path
 }
 
 type canonicalProfile struct {

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode/utf16"
 )
 
 func main() {
@@ -88,9 +89,14 @@ type message struct {
 	Error   any             `json:"error,omitempty"`
 }
 
+type document struct {
+	text    string
+	version int
+}
+
 func serve(r io.Reader, w io.Writer, queue string) error {
 	br := bufio.NewReader(r)
-	docs := map[string]string{}
+	docs := map[string]document{}
 	for {
 		msg, err := readMessage(br)
 		if err == io.EOF {
@@ -122,19 +128,21 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 		case "textDocument/didOpen":
 			var p struct {
 				TextDocument struct {
-					URI  string `json:"uri"`
-					Text string `json:"text"`
+					URI     string `json:"uri"`
+					Text    string `json:"text"`
+					Version int    `json:"version"`
 				} `json:"textDocument"`
 			}
 			_ = json.Unmarshal(msg.Params, &p)
-			docs[p.TextDocument.URI] = p.TextDocument.Text
+			docs[p.TextDocument.URI] = document{text: p.TextDocument.Text, version: p.TextDocument.Version}
 			if err := writeDiagnostics(w, p.TextDocument.URI); err != nil {
 				return err
 			}
 		case "textDocument/didChange":
 			var p struct {
 				TextDocument struct {
-					URI string `json:"uri"`
+					URI     string `json:"uri"`
+					Version int    `json:"version"`
 				} `json:"textDocument"`
 				ContentChanges []struct {
 					Text string `json:"text"`
@@ -142,7 +150,7 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 			}
 			_ = json.Unmarshal(msg.Params, &p)
 			if len(p.ContentChanges) > 0 {
-				docs[p.TextDocument.URI] = p.ContentChanges[len(p.ContentChanges)-1].Text
+				docs[p.TextDocument.URI] = document{text: p.ContentChanges[len(p.ContentChanges)-1].Text, version: p.TextDocument.Version}
 			}
 			if err := writeDiagnostics(w, p.TextDocument.URI); err != nil {
 				return err
@@ -159,13 +167,19 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 				TextDocument struct {
 					URI string `json:"uri"`
 				} `json:"textDocument"`
+				Range struct {
+					Start struct {
+						Line int `json:"line"`
+					} `json:"start"`
+				} `json:"range"`
 			}
 			_ = json.Unmarshal(msg.Params, &p)
+			doc := docs[p.TextDocument.URI]
 			actions := []map[string]any{{
 				"title": "HQ Submit", "kind": "quickfix",
 				"command": map[string]any{
 					"title": "HQ Submit", "command": "hq.submit",
-					"arguments": []any{map[string]any{"uri": p.TextDocument.URI}},
+					"arguments": []any{map[string]any{"uri": p.TextDocument.URI, "version": doc.version, "line": p.Range.Start.Line}},
 				},
 			}}
 			if err := writeMessage(w, message{JSONRPC: "2.0", ID: msg.ID, Result: actions}); err != nil {
@@ -175,7 +189,8 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 			var p struct {
 				Command   string `json:"command"`
 				Arguments []struct {
-					URI string `json:"uri"`
+					URI     string `json:"uri"`
+					Version int    `json:"version"`
 				} `json:"arguments"`
 			}
 			if err := json.Unmarshal(msg.Params, &p); err != nil || p.Command != "hq.submit" || len(p.Arguments) != 1 {
@@ -184,10 +199,15 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 				}
 				continue
 			}
-			var request struct {
-				Path string `json:"path"`
+			doc, ok := docs[p.Arguments[0].URI]
+			if !ok || doc.version != p.Arguments[0].Version {
+				if err := writeError(w, msg.ID, -32602, "stale hq.submit document"); err != nil {
+					return err
+				}
+				continue
 			}
-			if err := json.Unmarshal([]byte(docs[p.Arguments[0].URI]), &request); err != nil || request.Path == "" {
+			path := hostOpenPath(doc.text)
+			if path == "" {
 				if err := writeError(w, msg.ID, -32602, "invalid host-open buffer"); err != nil {
 					return err
 				}
@@ -198,13 +218,20 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 				"id":          "hqcmd_stub",
 				"status":      "queued",
 				"command":     "host.open",
-				"path":        request.Path,
+				"path":        path,
 				"confirmedBy": "yegappan/lsp",
 			}
 			if err := appendJSONL(queue, row); err != nil {
 				return err
 			}
 			result := map[string]any{"kind": "hq.submitResult.v1", "status": "queued", "queueKind": row["kind"], "queueId": row["id"]}
+			switch os.Getenv("HQ_STUB_PLAN_MODE") {
+			case "none":
+			case "invalid":
+				result["draftConsumption"] = draftConsumption(p.Arguments[0].URI, doc.version, map[string]int{"line": 999, "character": 0})
+			default:
+				result["draftConsumption"] = draftConsumption(p.Arguments[0].URI, doc.version, documentEnd(doc.text))
+			}
 			if err := writeMessage(w, message{JSONRPC: "2.0", ID: msg.ID, Result: result}); err != nil {
 				return err
 			}
@@ -219,13 +246,46 @@ func serve(r io.Reader, w io.Writer, queue string) error {
 	}
 }
 
+func hostOpenPath(text string) string {
+	var request struct {
+		Path string `json:"path"`
+	}
+	if json.Unmarshal([]byte(text), &request) == nil && request.Path != "" {
+		return request.Path
+	}
+	for _, line := range strings.Split(text, "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if ok && key == "path" {
+			return strings.Trim(strings.TrimSpace(value), `"`)
+		}
+	}
+	return ""
+}
+
+func documentEnd(text string) map[string]int {
+	lines := strings.Split(text, "\n")
+	last := strings.TrimSuffix(lines[len(lines)-1], "\r")
+	return map[string]int{"line": len(lines) - 1, "character": len(utf16.Encode([]rune(last)))}
+}
+
+func draftConsumption(uri string, version int, end map[string]int) map[string]any {
+	return map[string]any{
+		"kind":         "hq.draftConsumption.v1",
+		"textDocument": map[string]any{"uri": uri, "version": version},
+		"edits": []any{map[string]any{
+			"range":   map[string]any{"start": map[string]int{"line": 0, "character": 0}, "end": end},
+			"newText": "",
+		}},
+	}
+}
+
 func completionItems() []map[string]any {
 	out := []map[string]any{}
 	for _, label := range []string{"task:t1", "task:t2", "task:t3"} {
 		out = append(out, map[string]any{
 			"label":      label,
 			"kind":       14,
-			"insertText": strconv.Quote(label),
+			"insertText": strings.TrimPrefix(label, "task:"),
 			"data": map[string]any{"suggestion": map[string]any{
 				"label":          label,
 				"id":             "sug_stub_" + strings.ReplaceAll(label, ":", "_"),

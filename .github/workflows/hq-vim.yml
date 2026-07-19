@@ -111,6 +111,8 @@ jobs:
           HQ_CONFORMANCE_ARTIFACT: ${{ github.workspace }}/artifacts/hq-vim-conformance-${{ runner.os }}.json
         run: |
           mkdir -p "${{ github.workspace }}/artifacts"
+          export HQ_NATIVE_HQ_FUZZY_PROOF=1
+          export HQ_BIN="$HQ_CANONICAL_BIN"
           set -o pipefail
           go test -v ./... 2>&1 | tee "${{ github.workspace }}/artifacts/hq-vim-conformance-${RUNNER_OS}.log"
 

@@ -16,6 +16,7 @@ This package owns only:
 - `plugin/hq.vim`
 - `autoload/hq.vim`
 - fail-closed client dependency checks
+- version-guarded application of hq-owned standard LSP draft edits
 - real Vim 9/yegappan-lsp conformance tests
 
 The `hq` repository builds, tests, and publishes the official `hq` artifact.
@@ -60,7 +61,35 @@ Vim receives the profile name only. It does not receive JSONL, provider,
 worker, registry, or environment layout paths.
 
 Yegappan/lsp owns completion presentation and is configured with
-`autoComplete: true`. This package defines no completion key mapping.
+`autoComplete: true`. In Insert mode, `Ctrl-N`/`Ctrl-P` navigate the popup and
+`Ctrl-Y` accepts the selected item. This package defines no completion key
+mapping or manual-completion fallback.
+
+The pinned client inserts a selected completion in the same Vim undo block as
+the typed query. The compatibility adapter establishes one mechanical undo
+boundary when the native popup first opens, then immediately resumes the same
+client-owned automatic completion. One native undo therefore restores the
+exact pre-selection query. This adds no completion key mapping, alternate
+request path, matcher, candidate meaning, or editor-owned text edit.
+
+## Submit result
+
+`HqSubmit` remains the only durable-effect entry point. After hq reports a
+successful append and supplies `hq.draftConsumption.v1`, hq-vim applies its
+single standard LSP text edit only when the submitted URI/version still match
+the current Vim buffer. It does not parse command syntax or calculate object
+boundaries.
+
+- unchanged accepted object: consume it from the draft;
+- last object consumed: return to Vim's canonical one-line empty buffer;
+- other objects present: preserve them byte-for-byte;
+- newer local edit: keep it unchanged;
+- missing, malformed, or locally unapplicable edit: keep the draft and show a
+  warning;
+- one native Vim undo: restore consumed text only; the accepted row remains.
+
+There is no submitted marker, duplicate guard, force-submit path, confirmation,
+new buffer, or editor-owned accepted state.
 
 ## Manual smoke
 
@@ -82,6 +111,27 @@ go run ./cmd/hq-vim-smoke -headless -hq-bin /absolute/path/to/hq -vim9-lsp /abso
 go test ./...
 ```
 
+The native popup proof starts non-headless Vim with an exact external hq
+executable and a temporary strict selected-world profile. Run it explicitly
+with:
+
+```sh
+HQ_NATIVE_HQ_FUZZY_PROOF=1 \
+HQ_BIN=/absolute/path/to/hq \
+VIM_EXE=/absolute/path/to/vim \
+VIM9_LSP_PATH=/absolute/path/to/yegappan-lsp \
+go test -run '^TestNativeHQFuzzyAutomaticPopupDoesNotAccept$' -v
+```
+
+This proof uses yegappan/lsp's automatic native popup without a manual
+completion fallback. It proves fuzzy schema-template, field-key, and
+Unicode/CRLF field-value journeys; visible detail and the complete
+documentation popup; exact multi-line text edits; one native undo to the exact
+query; and zero accepted rows before explicit submit. It adds no hq popup,
+matcher, completion mapping, or fallback. The existing CI matrix runs this
+proof on native Windows Vim and pinned Linux Vim against the same canonical hq
+source head.
+
 Local tests use a temporary external stub only for fail-closed and process
 boundary checks. CI additionally checks out the accepted `roccho-dev/hq`
 `proposals` branch, builds its official binary, and proves on native Windows Vim
@@ -95,10 +145,13 @@ real Vim
   -> zero completion writes
   -> :HqSubmit
   -> exactly one accepted.instruction per explicit submit
+  -> accepted object consumed only after success
+  -> successive objects can be submitted from the same buffer
+  -> one Vim undo restores the last consumed object text only
   -> two submits have distinct accepted identities
 ```
 
 The complete installed Windows proof, exact artifact placement, activation, and
-deployment receipt remain owned by `roccho-dev/envs#5`. Native popup detail,
-multi-line acceptance, one-step undo, and the complete Unicode/CRLF matrix remain
-owned by `roccho-dev/edits#70`.
+deployment receipt remain owned by `roccho-dev/envs#34`. Safe accepted-history
+recall remains gated by `roccho-dev/hq#117`; the resulting empty-draft recall
+journey remains a closure gate of `roccho-dev/edits#70`.

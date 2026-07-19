@@ -6,6 +6,7 @@ endif
 g:loaded_hq_vim = true
 
 import autoload '../autoload/hq.vim' as hq
+import autoload '../autoload/hq_completion.vim' as hqcompletion
 
 def g:HqVimStart(profile: string = '')
   hq.Start(profile)
@@ -13,6 +14,10 @@ enddef
 
 def g:HqVimSubmit(): dict<any>
   return hq.Submit()
+enddef
+
+def g:HqVimComplete(): number
+  return hqcompletion.Complete()
 enddef
 
 def g:HqVimDoctor()
@@ -25,4 +30,5 @@ enddef
 
 command! -nargs=? HqStart g:HqVimStart(<q-args>)
 command! HqSubmit g:HqVimSubmit()
+command! HqComplete g:HqVimComplete()
 command! HqDoctor g:HqVimDoctor()

@@ -1,0 +1,169 @@
+name: bounded vim nix herdr oci proof runner
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: bounded-vim-nix-herdr-oci-proof
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.issue.number == 74 &&
+      github.event.comment.user.login == github.repository_owner &&
+      startsWith(github.event.comment.body, '/run-vim-nix-oci')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      ARTIFACT: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+      IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
+      OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
+    steps:
+      - id: request
+        name: Resolve exact bounded request
+        shell: bash
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          python3 - "$GITHUB_OUTPUT" "$RUNNER_TEMP/request.json" <<'PY'
+          import json, os, pathlib, re, sys
+
+          body = os.environ['COMMENT_BODY'].replace('\r\n', '\n')
+          prefix = '/run-vim-nix-oci\n'
+          if not body.startswith(prefix):
+              raise SystemExit('request must start with /run-vim-nix-oci followed by JSON')
+          request = json.loads(body[len(prefix):].strip())
+          if request.get('schema') != 'edits.vimNixOciProofRequest/1':
+              raise SystemExit('unsupported request schema')
+          commit = request.get('commit', '')
+          tree = request.get('tree', '')
+          ref = request.get('ref', '')
+          if not re.fullmatch(r'[0-9a-f]{40}', commit):
+              raise SystemExit('commit must be exact 40-hex')
+          if not re.fullmatch(r'[0-9a-f]{40}', tree):
+              raise SystemExit('tree must be exact 40-hex')
+          if ref != 'refs/heads/proof/vim-nix-herdr-oci-20260821':
+              raise SystemExit('ref is outside the bounded proof branch')
+          canonical = {
+              'schema': 'edits.vimNixOciProofRequest/1',
+              'commit': commit,
+              'tree': tree,
+              'ref': ref,
+          }
+          pathlib.Path(sys.argv[2]).write_text(
+              json.dumps(canonical, sort_keys=True, separators=(',', ':')) + '\n',
+              encoding='utf-8',
+          )
+          with open(sys.argv[1], 'a', encoding='utf-8') as output:
+              print(f'commit={commit}', file=output)
+              print(f'tree={tree}', file=output)
+              print(f'ref={ref}', file=output)
+          PY
+
+      - name: Announce exact run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 74,
+              body: [
+                '## Bounded OCI / WSLC proof run started',
+                '',
+                `- commit: \`${{ steps.request.outputs.commit }}\``,
+                `- tree: \`${{ steps.request.outputs.tree }}\``,
+                `- run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                `- request: ${{ github.event.comment.html_url }}`
+              ].join('\n')
+            });
+
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.request.outputs.commit }}
+          fetch-depth: 1
+          path: candidate
+          persist-credentials: false
+
+      - name: Verify exact commit tree ref and proof surface
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ steps.request.outputs.commit }}
+          EXPECTED_TREE: ${{ steps.request.outputs.tree }}
+          EXPECTED_REF: ${{ steps.request.outputs.ref }}
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE"
+          test "$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "$EXPECTED_REF" | cut -f1)" = "$EXPECTED_COMMIT"
+          test -f candidate/proofs/vim-nix/flake.nix
+          test -f candidate/proofs/vim-nix/flake.lock
+          test -f candidate/proofs/vim-nix/verify_oci.py
+          test -f candidate/proofs/vim-nix/WSLC-TEST.md
+          test "$(find candidate/proofs/vim-nix/ci.parts -type f | wc -l | tr -d ' ')" = 2
+          test "$(find candidate/proofs/vim-nix/run-proof.parts -type f | wc -l | tr -d ' ')" = 4
+          git -C candidate status --porcelain=v1 | test ! -s /dev/stdin
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - name: Execute complete materialization and runtime proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="$GITHUB_WORKSPACE/candidate"
+          cat "$candidate"/proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          chmod 0700 "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          GITHUB_WORKSPACE="$candidate" "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+
+      - name: Upload downloadable OCI and WSLC proof pack
+        if: success()
+        id: artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vim-nix-herdr-hq-oci-wslc-${{ steps.request.outputs.commit }}
+          path: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Return bounded result to Issue 74
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const body = [
+              '## Bounded OCI / WSLC proof result',
+              '',
+              `- status: \`${status}\``,
+              `- commit: \`${{ steps.request.outputs.commit || 'unresolved' }}\``,
+              `- tree: \`${{ steps.request.outputs.tree || 'unresolved' }}\``,
+              `- run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              `- artifact-id: \`${{ steps.artifact.outputs.artifact-id || 'not-created' }}\``,
+              `- artifact-url: ${{ steps.artifact.outputs.artifact-url || 'not-created' }}`,
+              `- artifact-digest: \`${{ steps.artifact.outputs.artifact-digest || 'not-created' }}\``,
+              '',
+              status === 'success'
+                ? 'Exact Nix/offline build, full Herdr PTY/Vim/HQ/worker proof, Docker runtime, OCI runtime, mutation rejection, semantic parity, WSLC handoff, source ZIP, and Git bundle all passed.'
+                : 'The run failed closed. No completion claim is made.'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 74,
+              body
+            });

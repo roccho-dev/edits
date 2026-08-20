@@ -1,0 +1,13 @@
+diff --git a/packages/hq-vim/internal/smoke/smoke.go b/packages/hq-vim/internal/smoke/smoke.go
+index 53b9af2..b74af10 100644
+--- a/packages/hq-vim/internal/smoke/smoke.go
++++ b/packages/hq-vim/internal/smoke/smoke.go
+@@ -447,7 +447,7 @@ func nativePopupProofLines(cfg Config) []string {
+ 		"    return",
+ 		"  endif",
+ 		"  let g:hq_native_expected_index = l:index",
+-		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1), 'n')",
++		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1), 'nx')",
+ 		"  call timer_start(20, function('HqNativePopupObserve'))",
+ 		"endfunction",
+ 		"function! HqNativePopupType(timer) abort",

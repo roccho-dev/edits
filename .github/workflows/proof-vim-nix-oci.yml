@@ -1,0 +1,102 @@
+name: proof vim nix herdr hq oci
+
+on:
+  push:
+    branches:
+      - proof/vim-nix-herdr-oci-20260821
+    paths:
+      - "proofs/vim-nix/**"
+      - ".github/workflows/proof-vim-nix-oci.yml"
+  pull_request:
+    branches:
+      - proposals
+    paths:
+      - "proofs/vim-nix/**"
+      - ".github/workflows/proof-vim-nix-oci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: proof-vim-nix-herdr-oci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      ARTIFACT: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+      IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
+      OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
+    steps:
+      - name: Checkout exact proof candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Announce run to Issue 74
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 74,
+              body: [
+                '## OCI / WSLC materialization run started',
+                '',
+                `workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                `workflow commit: \`${context.sha}\``
+              ].join('\n')
+            });
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - name: Execute complete materialization and runtime proof
+        run: |
+          set -euo pipefail
+          cat proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          chmod 0700 "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+
+      - name: Upload downloadable OCI and WSLC proof pack
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vim-nix-herdr-hq-oci-wslc-${{ github.sha }}
+          path: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Report result to Issue 74
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ok = '${{ job.status }}' === 'success';
+            const body = [
+              '## OCI / WSLC materialization run',
+              '',
+              `status: \`${ok ? 'success' : 'failure'}\``,
+              `workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              `workflow commit: \`${context.sha}\``,
+              '',
+              ok
+                ? 'The exact minimal Nix closure, full Herdr PTY/Vim/HQ/worker proof, Docker runtime, OCI projection/runtime, descriptor verification, mutation rejection, semantic parity, downloadable WSLC archive, source ZIP, and Git bundle all passed.'
+                : 'The run failed closed. Inspect the exact job logs; no completion claim is made.'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 74,
+              body
+            });

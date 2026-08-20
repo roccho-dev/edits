@@ -15,7 +15,6 @@ concurrency:
 jobs:
   proof:
     if: >-
-      github.event.issue.pull_request == null &&
       github.event.issue.number == 74 &&
       github.event.comment.user.login == github.repository_owner &&
       startsWith(github.event.comment.body, '/run-vim-nix-oci')
@@ -111,7 +110,7 @@ jobs:
           test -f candidate/proofs/vim-nix/WSLC-TEST.md
           test "$(find candidate/proofs/vim-nix/ci.parts -type f | wc -l | tr -d ' ')" = 2
           test "$(find candidate/proofs/vim-nix/run-proof.parts -type f | wc -l | tr -d ' ')" = 4
-          git -C candidate status --porcelain=v1 | test ! -s /dev/stdin
+          test -z "$(git -C candidate status --porcelain=v1)"
 
       - name: Install Nix
         uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
@@ -131,7 +130,6 @@ jobs:
 
       - name: Upload downloadable OCI and WSLC proof pack
         if: success()
-        id: artifact
         uses: actions/upload-artifact@v4
         with:
           name: vim-nix-herdr-hq-oci-wslc-${{ steps.request.outputs.commit }}
@@ -146,24 +144,20 @@ jobs:
         with:
           script: |
             const status = '${{ job.status }}';
-            const body = [
-              '## Bounded OCI / WSLC proof result',
-              '',
-              `- status: \`${status}\``,
-              `- commit: \`${{ steps.request.outputs.commit || 'unresolved' }}\``,
-              `- tree: \`${{ steps.request.outputs.tree || 'unresolved' }}\``,
-              `- run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              `- artifact-id: \`${{ steps.artifact.outputs.artifact-id || 'not-created' }}\``,
-              `- artifact-url: ${{ steps.artifact.outputs.artifact-url || 'not-created' }}`,
-              `- artifact-digest: \`${{ steps.artifact.outputs.artifact-digest || 'not-created' }}\``,
-              '',
-              status === 'success'
-                ? 'Exact Nix/offline build, full Herdr PTY/Vim/HQ/worker proof, Docker runtime, OCI runtime, mutation rejection, semantic parity, WSLC handoff, source ZIP, and Git bundle all passed.'
-                : 'The run failed closed. No completion claim is made.'
-            ].join('\n');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: 74,
-              body
+              body: [
+                '## Bounded OCI / WSLC proof result',
+                '',
+                `- status: \`${status}\``,
+                `- commit: \`${{ steps.request.outputs.commit }}\``,
+                `- tree: \`${{ steps.request.outputs.tree }}\``,
+                `- run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                '',
+                status === 'success'
+                  ? 'Exact Nix/offline build, full Herdr PTY/Vim/HQ/worker proof, Docker runtime, OCI runtime, mutation rejection, semantic parity, WSLC handoff, source ZIP, and Git bundle all passed.'
+                  : 'The run failed closed. No completion claim is made.'
+              ].join('\n')
             });

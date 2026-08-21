@@ -1,10 +1,6 @@
-diff --git a/packages/hq-vim/internal/smoke/smoke.go b/packages/hq-vim/internal/smoke/smoke.go
-index 53b9af2..d9cb754 100644
 --- a/packages/hq-vim/internal/smoke/smoke.go
 +++ b/packages/hq-vim/internal/smoke/smoke.go
-@@ -135,8 +135,18 @@ func Run(cfg Config) error {
- 	cmd := exec.CommandContext(ctx, cfg.Vim, args...)
- 	cmd.Stdout = os.Stdout
+@@ -137,6 +137,16 @@
  	cmd.Stderr = os.Stderr
  	cmd.Stdin = os.Stdin
  	cmd.Env = environmentWithOverrides(os.Environ(), cfg.Env)
@@ -21,12 +17,11 @@ index 53b9af2..d9cb754 100644
  	err = cmd.Run()
  	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
  		return diagnosticError(fmt.Errorf("Vim smoke timed out after %s", timeout), cfg)
-@@ -447,7 +457,7 @@ func nativePopupProofLines(cfg Config) []string {
- 		"    return",
- 		"  endif",
- 		"  let g:hq_native_expected_index = l:index",
--		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1), 'n')",
-+		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1), 'nx')",
- 		"  call timer_start(20, function('HqNativePopupObserve'))",
- 		"endfunction",
- 		"function! HqNativePopupType(timer) abort",
+@@ -252,6 +262,7 @@
+ 	lines := []string{
+ 		"set nocompatible",
+ 		"set noswapfile",
++		"set encoding=utf-8",
+ 		"execute 'set runtimepath^=' . fnameescape(" + vimString(cfg.Vim9LSP) + ")",
+ 		"execute 'set runtimepath^=' . fnameescape(" + vimString(root) + ")",
+ 		"runtime plugin/lsp.vim",

@@ -1,0 +1,151 @@
+name: materialize vim nix related heads
+
+on:
+  push:
+    branches:
+      - proposals
+    paths:
+      - "proofs/vim-nix/requests/current.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout full repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Build exact related-head snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/edits-vim-nix-related-heads"
+          rm -rf "$out"
+          mkdir -p "$out/heads"
+
+          readarray -t selected < <(python3 - <<'PY'
+          import json, pathlib, re
+          request = json.loads(pathlib.Path('proofs/vim-nix/requests/current.json').read_text(encoding='utf-8'))
+          if request.get('schema') != 'edits.vimNixOciProofRequest/1':
+              raise SystemExit('unsupported request schema')
+          for key in ('commit', 'tree'):
+              if not re.fullmatch(r'[0-9a-f]{40}', request.get(key, '')):
+                  raise SystemExit(f'invalid {key}')
+          if request.get('ref') != 'refs/heads/proof/vim-nix-herdr-oci-current-20260821':
+              raise SystemExit('request ref outside bounded branch')
+          print(request['commit'])
+          print(request['tree'])
+          print(request['ref'])
+          PY
+          )
+          selected_commit=${selected[0]}
+          selected_tree=${selected[1]}
+          selected_ref=${selected[2]}
+
+          branches=(
+            proposals
+            proof/vim-nix-herdr-oci-20260821
+            proof/vim-nix-herdr-oci-current-20260821
+            proof/vim-nix-herdr-oci-exec-e5ff3770
+            proof/vim-nix-herdr-oci-runner-base-20260821
+            proposal/bounded-vim-nix-oci-runner-20260821
+            proposal/fix-bounded-vim-nix-oci-runner-20260821
+            proposal/hq-vim-oci-proof-job-20260821
+            proposal/push-vim-nix-oci-runner-20260821
+          )
+
+          git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+          selected_remote="refs/remotes/origin/${selected_ref#refs/heads/}"
+          test "$(git rev-parse "$selected_remote^{commit}")" = "$selected_commit"
+          test "$(git rev-parse "$selected_commit^{tree}")" = "$selected_tree"
+
+          refs=()
+          : > "$out/HEADS.tsv"
+          for branch in "${branches[@]}"; do
+            remote="refs/remotes/origin/$branch"
+            git show-ref --verify --quiet "$remote"
+            sha=$(git rev-parse "$remote^{commit}")
+            tree=$(git rev-parse "$sha^{tree}")
+            safe=${branch//\//__}
+            local_ref="refs/heads/materialized/$safe"
+            git update-ref "$local_ref" "$sha"
+            refs+=("$local_ref")
+            printf '%s\t%s\t%s\n' "$branch" "$sha" "$tree" >> "$out/HEADS.tsv"
+            git archive --format=tar --prefix="edits-$safe/" "$sha" | gzip -n > "$out/heads/$safe.tar.gz"
+          done
+
+          git bundle create "$out/edits-vim-nix-related-heads.git.bundle" "${refs[@]}"
+          git bundle verify "$out/edits-vim-nix-related-heads.git.bundle" > "$out/bundle-verify.txt"
+
+          python3 - "$out" "$selected_commit" "$selected_tree" "${branches[@]}" <<'PY'
+          import hashlib, json, pathlib, subprocess, sys
+          out = pathlib.Path(sys.argv[1])
+          selected_commit, selected_tree = sys.argv[2:4]
+          rows = []
+          for branch in sys.argv[4:]:
+              ref = f'refs/remotes/origin/{branch}'
+              sha = subprocess.check_output(['git', 'rev-parse', f'{ref}^{{commit}}'], text=True).strip()
+              tree = subprocess.check_output(['git', 'rev-parse', f'{sha}^{{tree}}'], text=True).strip()
+              parents = subprocess.check_output(['git', 'rev-list', '--parents', '-n', '1', sha], text=True).split()[1:]
+              merge_base = subprocess.check_output(['git', 'merge-base', sha, 'refs/remotes/origin/proposals'], text=True).strip()
+              changed = subprocess.check_output(['git', 'diff', '--name-status', merge_base, sha], text=True).splitlines()
+              safe = branch.replace('/', '__')
+              archive = out / 'heads' / f'{safe}.tar.gz'
+              rows.append({
+                  'branch': branch,
+                  'commit': sha,
+                  'tree': tree,
+                  'parents': parents,
+                  'mergeBaseWithProposals': merge_base,
+                  'changedPaths': changed,
+                  'archive': f'heads/{archive.name}',
+                  'archiveBytes': archive.stat().st_size,
+                  'archiveSha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
+              })
+          manifest = {
+              'schema': 'edits.vimNixRelatedHeadsSnapshot/1',
+              'repository': 'roccho-dev/edits',
+              'status': 'PASS',
+              'selected': {'commit': selected_commit, 'tree': selected_tree},
+              'heads': rows,
+          }
+          (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+          PY
+
+          find "$out" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$out/SHA256SUMS"
+          (cd "$out" && sha256sum --check SHA256SUMS)
+
+      - name: Upload exact related-head snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: edits-vim-nix-related-heads
+          path: ${{ runner.temp }}/edits-vim-nix-related-heads
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Report run to Issue 74
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 74,
+              body: [
+                '## Related-head materialization run',
+                '',
+                `status: \`${{ job.status }}\``,
+                `run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                `control commit: \`${context.sha}\``
+              ].join('\n')
+            });

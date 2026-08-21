@@ -1,0 +1,211 @@
+name: Proof canonical Vim Nix runtime via legacy trigger
+
+on:
+  push:
+    branches:
+      - proof/vim-nix-herdr-oci-20260821
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: proof-canonical-vim-nix-runtime-legacy-trigger
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      SOURCE_COMMIT: b6f84f74bb2a1cf9e94b6d77d1d0381679385636
+      SOURCE_TREE: 7f9da1fad43838e7198cbbf87ee904484d29bc39
+      CLOSURE: ${{ runner.temp }}/vim-nix-exact-runtime-closure
+      ARTIFACT: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+      IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
+      OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
+    steps:
+      - name: Checkout canonical proof source
+        uses: actions/checkout@v4
+        with:
+          ref: b6f84f74bb2a1cf9e94b6d77d1d0381679385636
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify canonical source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^{commit})" = "$SOURCE_COMMIT"
+          test "$(git rev-parse HEAD^{tree})" = "$SOURCE_TREE"
+          test -z "$(git status --porcelain=v1)"
+          test "$(sha256sum proofs/vim-nix/flake.lock | cut -d' ' -f1)" = \
+            35cdda5fa9645ab469924c69f36992db2f8637360fce128e7c7fd372c3a4ce0f
+
+      - name: Announce exact run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 74,
+              body: [
+                '## Canonical exact runtime run started through proven legacy trigger',
+                '',
+                `run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                `source commit: \`${process.env.SOURCE_COMMIT}\``,
+                `source tree: \`${process.env.SOURCE_TREE}\``
+              ].join('\n')
+            });
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - id: materialize
+        name: Materialize and export exact runtime closure first
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$CLOSURE"
+          mkdir -p "$CLOSURE"/{source,product,nix-cache}
+          pushd proofs/vim-nix >/dev/null
+          lock_before=$(sha256sum flake.lock | cut -d' ' -f1)
+          product=$(nix build --no-link --print-out-paths .#default)
+          product_offline=$(nix build --offline --no-write-lock-file --no-link --print-out-paths .#default)
+          lock_after=$(sha256sum flake.lock | cut -d' ' -f1)
+          popd >/dev/null
+          test "$lock_before" = "$lock_after"
+          test "$product" = "$product_offline"
+          test -d "$product"
+
+          printf '%s\n' "$SOURCE_COMMIT" > "$CLOSURE/source/commit.txt"
+          printf '%s\n' "$SOURCE_TREE" > "$CLOSURE/source/tree.txt"
+          printf '%s\n' "$product" > "$CLOSURE/product/store-path.txt"
+          printf '%s\n' "$lock_before" > "$CLOSURE/product/flake-lock.sha256"
+          nix-store -qR "$product" | sort > "$CLOSURE/product/runtime-closure-paths.txt"
+          nix path-info -rS "$product" > "$CLOSURE/product/runtime-closure-size.txt"
+          nix path-info -r --json "$product" > "$CLOSURE/product/runtime-closure.json"
+          "$product/bin/herdr" --version > "$CLOSURE/product/herdr.version.txt"
+          "$product/bin/vim" --version > "$CLOSURE/product/vim.version.txt"
+          "$product/bin/hq" --help > "$CLOSURE/product/hq.help.txt"
+          nix copy --to "file://$CLOSURE/nix-cache" "$product"
+          git bundle create "$CLOSURE/source/edits-vim-nix-current.git.bundle" HEAD
+          git bundle verify "$CLOSURE/source/edits-vim-nix-current.git.bundle" > "$CLOSURE/source/bundle-verify.txt"
+
+          python3 - <<'PY'
+          import json, os, pathlib
+          root=pathlib.Path(os.environ['CLOSURE'])
+          data={
+            'schema':'edits.vimNixExactRuntimeClosure/1',
+            'status':'PASS',
+            'sourceCommit':os.environ['SOURCE_COMMIT'],
+            'sourceTree':os.environ['SOURCE_TREE'],
+            'productStorePath':(root/'product/store-path.txt').read_text().strip(),
+            'flakeLockSha256':(root/'product/flake-lock.sha256').read_text().strip(),
+            'normalOfflineSamePath':True,
+            'nixFileCache':'nix-cache',
+            'currentSandboxImport':'PENDING_DOWNLOAD'
+          }
+          (root/'receipt.json').write_text(json.dumps(data,indent=2)+'\n')
+          PY
+          (cd "$CLOSURE" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          (cd "$CLOSURE" && sha256sum --check SHA256SUMS)
+          echo "product=$product" >> "$GITHUB_OUTPUT"
+
+      - id: closure_upload
+        name: Upload exact runtime closure before product E2E
+        uses: actions/upload-artifact@v4
+        with:
+          name: vim-nix-exact-runtime-closure-b6f84f74
+          path: ${{ runner.temp }}/vim-nix-exact-runtime-closure/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Report closure artifact
+        uses: actions/github-script@v7
+        env:
+          ARTIFACT_ID: ${{ steps.closure_upload.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.closure_upload.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.closure_upload.outputs.artifact-digest }}
+          PRODUCT: ${{ steps.materialize.outputs.product }}
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 74,
+              body: [
+                '## Exact runtime closure artifact ready',
+                '',
+                `product: \`${process.env.PRODUCT}\``,
+                `artifact id: \`${process.env.ARTIFACT_ID}\``,
+                `artifact digest: \`${process.env.ARTIFACT_DIGEST}\``,
+                `artifact: ${process.env.ARTIFACT_URL}`,
+                `run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              ].join('\n')
+            });
+
+      - id: complete
+        name: Execute complete PTY worker Docker OCI proof
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          chmod 0700 "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+
+      - name: Preserve reached full-proof evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT/source"
+          printf '%s\n' "$SOURCE_COMMIT" > "$ARTIFACT/source/commit.txt"
+          printf '%s\n' "$SOURCE_TREE" > "$ARTIFACT/source/tree.txt"
+          git bundle create "$ARTIFACT/source/edits-vim-nix-current.git.bundle" HEAD
+          git status --porcelain=v1 > "$ARTIFACT/source/git-status.txt"
+          (cd "$ARTIFACT" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+
+      - id: evidence_upload
+        name: Upload all reached full-proof evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vim-nix-full-proof-evidence-b6f84f74
+          path: ${{ runner.temp }}/vim-nix-herdr-oci-proof/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Report terminal result
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          COMPLETE: ${{ steps.complete.outcome }}
+          ARTIFACT_ID: ${{ steps.evidence_upload.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.evidence_upload.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.evidence_upload.outputs.artifact-digest }}
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 74,
+              body: [
+                '## Canonical exact runtime terminal result',
+                '',
+                `complete E2E: \`${process.env.COMPLETE}\``,
+                `evidence artifact id: \`${process.env.ARTIFACT_ID}\``,
+                `evidence artifact digest: \`${process.env.ARTIFACT_DIGEST}\``,
+                `evidence artifact: ${process.env.ARTIFACT_URL}`,
+                `run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              ].join('\n')
+            });

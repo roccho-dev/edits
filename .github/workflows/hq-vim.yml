@@ -4,7 +4,11 @@ on:
   pull_request:
     paths:
       - 'packages/hq-vim/**'
+      - 'proofs/vim-nix/**'
       - '.github/workflows/hq-vim.yml'
+
+permissions:
+  contents: read
 
 concurrency:
   group: hq-vim-${{ github.event.pull_request.number || github.ref }}
@@ -124,4 +128,58 @@ jobs:
           path: |
             artifacts/hq-vim-conformance-${{ runner.os }}.json
             artifacts/hq-vim-conformance-${{ runner.os }}.log
+          if-no-files-found: error
+
+  vim-nix-oci-proof:
+    if: github.event.pull_request.head.ref == 'proof/vim-nix-herdr-oci-current-20260821'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      ARTIFACT: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+      IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
+      OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
+    steps:
+      - name: Checkout isolated proof candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify bounded proof surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_HEAD_REF" = 'proof/vim-nix-herdr-oci-current-20260821'
+          test -f proofs/vim-nix/flake.nix
+          test -f proofs/vim-nix/flake.lock
+          test -f proofs/vim-nix/verify_oci.py
+          test -f proofs/vim-nix/WSLC-TEST.md
+          test "$(find proofs/vim-nix/ci.parts -type f | wc -l | tr -d ' ')" = 2
+          test "$(find proofs/vim-nix/run-proof.parts -type f | wc -l | tr -d ' ')" = 4
+          test -z "$(git status --porcelain=v1)"
+          git rev-parse HEAD > "$RUNNER_TEMP/proof-commit.txt"
+          git rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/proof-tree.txt"
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - name: Execute complete materialization and runtime proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          chmod 0700 "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+
+      - name: Upload downloadable OCI and WSLC proof pack
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vim-nix-herdr-hq-oci-wslc-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+          compression-level: 0
+          retention-days: 90
           if-no-files-found: error

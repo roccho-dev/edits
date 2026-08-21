@@ -110,3 +110,98 @@ jobs:
           python3 packages/hq-modeling-queue/tools/validate_queue.py .local/receipt.jsonl
       - name: Prove legacy vertical slice script
         run: bash packages/hq-local-worker/proofs/vertical_slice.sh
+
+  vim-nix-exact-proof:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.ref == 'proof/vim-nix-herdr-oci-current-20260821'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      ARTIFACT: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+      IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
+      OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
+    steps:
+      - name: Checkout exact canonical proof head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact request, commit, tree, and branch
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          test "$EXPECTED_BRANCH" = 'proof/vim-nix-herdr-oci-current-20260821'
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git fetch --no-tags origin proposals
+          git show origin/proposals:proofs/vim-nix/requests/current.json > "$RUNNER_TEMP/vim-nix-request.json"
+          python3 - "$RUNNER_TEMP/vim-nix-request.json" "$EXPECTED_HEAD" "$(git rev-parse 'HEAD^{tree}')" <<'PY'
+          import json, pathlib, sys
+          request = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))
+          expected_commit, expected_tree = sys.argv[2:]
+          assert request['schema'] == 'edits.vimNixOciProofRequest/1'
+          assert request['commit'] == expected_commit
+          assert request['tree'] == expected_tree
+          assert request['ref'] == 'refs/heads/proof/vim-nix-herdr-oci-current-20260821'
+          PY
+          test -z "$(git status --porcelain=v1)"
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - name: Execute exact Nix, Herdr PTY, worker, Docker, and OCI proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_commit=$(git rev-parse HEAD)
+          cat proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          chmod 0700 "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          GITHUB_SHA="$source_commit" "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+
+      - name: Preserve exact source and partial evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT/source"
+          git bundle create "$ARTIFACT/source/edits-vim-nix-herdr-oci.git.bundle" HEAD
+          python3 - <<'PY'
+          import pathlib, zipfile
+          out = pathlib.Path(__import__('os').environ['ARTIFACT']) / 'source' / 'edits-vim-nix-herdr-oci.source.zip'
+          paths = [
+              pathlib.Path('proofs/vim-nix'),
+              pathlib.Path('tools/vim-nix-local'),
+              pathlib.Path('docs/operations/vim-nix-local-first.md'),
+              pathlib.Path('.github/workflows/proof-vim-nix-oci.yml'),
+          ]
+          with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+              for path in paths:
+                  if path.is_dir():
+                      for file in sorted(path.rglob('*')):
+                          if file.is_file():
+                              archive.write(file, file.as_posix())
+                  elif path.is_file():
+                      archive.write(path, path.as_posix())
+          PY
+          git status --porcelain=v1 > "$ARTIFACT/source/git-status.txt"
+          printf '%s\n' "$(git rev-parse HEAD)" > "$ARTIFACT/source/commit.txt"
+          printf '%s\n' "$(git rev-parse 'HEAD^{tree}')" > "$ARTIFACT/source/tree.txt"
+
+      - name: Upload exact runtime and evidence pack
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vim-nix-herdr-hq-exact-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error

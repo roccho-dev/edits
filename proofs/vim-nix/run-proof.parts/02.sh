@@ -83,7 +83,7 @@ LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color \
   > "$OUT/submit.log" 2>&1
 code=\$?
 cat "$OUT/submit.log"
-printf '__VIM_NIX_SUBMIT_EXIT_%s__\\n' "\$code"
+printf '\\n__VIM_NIX_SUBMIT_EXIT_%s__\\n' "\$code"
 exit 0
 EOF_SUBMIT
 chmod 700 "$RUNTIME/run-submit.sh"

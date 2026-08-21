@@ -17,6 +17,8 @@ on:
       - 'packages/hq-modeling-queue/**'
       - 'packages/hq-local-worker/**'
       - '.github/workflows/hq-modeling-queue.yml'
+  schedule:
+    - cron: '*/5 * * * *'
 
 jobs:
   validate-samples:
@@ -113,8 +115,12 @@ jobs:
 
   vim-nix-exact-proof:
     if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.ref == 'proof/vim-nix-herdr-oci-current-20260821'
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.ref == 'proof/vim-nix-herdr-oci-current-20260821')
+    concurrency:
+      group: vim-nix-exact-proof-20260821-008
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -122,33 +128,46 @@ jobs:
       IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
       OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
     steps:
-      - name: Checkout exact canonical proof head
+      - name: Checkout control revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: proposals
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify exact request, commit, tree, and branch
+      - id: request
+        name: Read request and checkout exact canonical proof head
         shell: bash
-        env:
-          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
-          EXPECTED_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
-          test "$EXPECTED_BRANCH" = 'proof/vim-nix-herdr-oci-current-20260821'
-          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          git fetch --no-tags origin proposals
-          git show origin/proposals:proofs/vim-nix/requests/current.json > "$RUNNER_TEMP/vim-nix-request.json"
-          python3 - "$RUNNER_TEMP/vim-nix-request.json" "$EXPECTED_HEAD" "$(git rev-parse 'HEAD^{tree}')" <<'PY'
-          import json, pathlib, sys
-          request = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))
-          expected_commit, expected_tree = sys.argv[2:]
-          assert request['schema'] == 'edits.vimNixOciProofRequest/1'
-          assert request['commit'] == expected_commit
-          assert request['tree'] == expected_tree
-          assert request['ref'] == 'refs/heads/proof/vim-nix-herdr-oci-current-20260821'
+          python3 - "$GITHUB_OUTPUT" <<'PY'
+          import json, pathlib, re, sys
+          request = json.loads(pathlib.Path('proofs/vim-nix/requests/current.json').read_text(encoding='utf-8'))
+          if request.get('schema') != 'edits.vimNixOciProofRequest/1':
+              raise SystemExit('unsupported request schema')
+          commit = request.get('commit', '')
+          tree = request.get('tree', '')
+          ref = request.get('ref', '')
+          if not re.fullmatch(r'[0-9a-f]{40}', commit):
+              raise SystemExit('invalid request commit')
+          if not re.fullmatch(r'[0-9a-f]{40}', tree):
+              raise SystemExit('invalid request tree')
+          if ref != 'refs/heads/proof/vim-nix-herdr-oci-current-20260821':
+              raise SystemExit('request ref outside canonical proof branch')
+          with open(sys.argv[1], 'a', encoding='utf-8') as output:
+              print(f'commit={commit}', file=output)
+              print(f'tree={tree}', file=output)
+              print(f'ref={ref}', file=output)
           PY
+          commit=$(jq -er '.commit' proofs/vim-nix/requests/current.json)
+          tree=$(jq -er '.tree' proofs/vim-nix/requests/current.json)
+          ref=$(jq -er '.ref' proofs/vim-nix/requests/current.json)
+          git fetch --no-tags origin "$ref"
+          test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$commit"
+          test "$(git rev-parse "$commit^{tree}")" = "$tree"
+          git checkout --detach "$commit"
+          test "$(git rev-parse HEAD)" = "$commit"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$tree"
           test -z "$(git status --porcelain=v1)"
 
       - name: Install Nix
@@ -200,7 +219,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vim-nix-herdr-hq-exact-${{ github.event.pull_request.head.sha }}
+          name: vim-nix-herdr-hq-exact-${{ steps.request.outputs.commit }}
           path: ${{ runner.temp }}/vim-nix-herdr-oci-proof
           compression-level: 0
           retention-days: 90

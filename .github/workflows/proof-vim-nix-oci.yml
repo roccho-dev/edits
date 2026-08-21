@@ -1,0 +1,191 @@
+name: proof vim nix herdr hq oci
+
+on:
+  push:
+    branches:
+      - proof/vim-nix-herdr-oci-current-20260821
+    paths:
+      - "proofs/vim-nix/**"
+      - ".github/workflows/proof-vim-nix-oci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: proof-vim-nix-herdr-oci-current
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CLOSURE_ARTIFACT: ${{ runner.temp }}/vim-nix-exact-runtime-closure
+      ARTIFACT: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+      IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
+      OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
+    steps:
+      - name: Checkout exact canonical proof head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Announce exact run to Issue 74
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 74,
+              body: [
+                '## Canonical exact-runtime / OCI run started',
+                '',
+                `run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                `commit: \`${context.sha}\``
+              ].join('\n')
+            });
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - id: materialize
+        name: Build and export exact runtime closure first
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$CLOSURE_ARTIFACT"
+          mkdir -p "$CLOSURE_ARTIFACT"/{source,product,nix-cache}
+
+          git rev-parse HEAD > "$CLOSURE_ARTIFACT/source/commit.txt"
+          git rev-parse HEAD^{tree} > "$CLOSURE_ARTIFACT/source/tree.txt"
+          git status --porcelain=v1 > "$CLOSURE_ARTIFACT/source/git-status.txt"
+          test ! -s "$CLOSURE_ARTIFACT/source/git-status.txt"
+          git bundle create "$CLOSURE_ARTIFACT/source/edits-vim-nix-current.git.bundle" HEAD
+          git bundle verify "$CLOSURE_ARTIFACT/source/edits-vim-nix-current.git.bundle" \
+            > "$CLOSURE_ARTIFACT/source/bundle-verify.txt"
+
+          pushd proofs/vim-nix >/dev/null
+          lock_before=$(sha256sum flake.lock | cut -d' ' -f1)
+          product=$(nix build --no-link --print-out-paths .#default)
+          product_offline=$(nix build --offline --no-write-lock-file --no-link --print-out-paths .#default)
+          lock_after=$(sha256sum flake.lock | cut -d' ' -f1)
+          test "$lock_before" = "$lock_after"
+          test "$product" = "$product_offline"
+
+          printf '%s\n' "$product" > "$CLOSURE_ARTIFACT/product/store-path.txt"
+          printf '%s\n' "$lock_before" > "$CLOSURE_ARTIFACT/product/flake-lock.sha256"
+          nix-store -qR "$product" | sort > "$CLOSURE_ARTIFACT/product/closure-paths.txt"
+          nix path-info -rS "$product" > "$CLOSURE_ARTIFACT/product/closure-size.txt"
+          nix path-info -r --json "$product" > "$CLOSURE_ARTIFACT/product/closure.json"
+          "$product/bin/herdr" --version > "$CLOSURE_ARTIFACT/product/herdr.version.txt"
+          "$product/bin/vim" --version > "$CLOSURE_ARTIFACT/product/vim.version.txt"
+          "$product/bin/hq" --help > "$CLOSURE_ARTIFACT/product/hq.help.txt"
+          popd >/dev/null
+
+          nix copy --to "file://$CLOSURE_ARTIFACT/nix-cache" "$product"
+          printf '%s\n' "$product" > "$CLOSURE_ARTIFACT/nix-cache-root.txt"
+
+          python3 - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['CLOSURE_ARTIFACT'])
+          receipt = {
+              'schema': 'edits.vimNixExactRuntimeClosure/1',
+              'status': 'PASS',
+              'commit': (root/'source/commit.txt').read_text().strip(),
+              'tree': (root/'source/tree.txt').read_text().strip(),
+              'productStorePath': (root/'product/store-path.txt').read_text().strip(),
+              'flakeLockSha256': (root/'product/flake-lock.sha256').read_text().strip(),
+              'normalOfflineSamePath': True,
+              'nixFileCache': 'nix-cache',
+              'productRuntimeProbe': 'PASS',
+              'fullProductE2E': 'SEPARATE_NEXT_STEP'
+          }
+          (root/'receipt.json').write_text(json.dumps(receipt, indent=2)+'\n')
+          PY
+          (cd "$CLOSURE_ARTIFACT" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          (cd "$CLOSURE_ARTIFACT" && sha256sum --check SHA256SUMS)
+
+      - name: Upload exact runtime closure immediately
+        uses: actions/upload-artifact@v4
+        with:
+          name: vim-nix-exact-runtime-closure-${{ github.sha }}
+          path: ${{ runner.temp }}/vim-nix-exact-runtime-closure
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error
+
+      - id: complete
+        name: Execute complete Herdr PTY, worker, Docker, and OCI proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          chmod 0700 "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+
+      - name: Preserve exact source and reached evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT/source"
+          git rev-parse HEAD > "$ARTIFACT/source/commit.txt"
+          git rev-parse HEAD^{tree} > "$ARTIFACT/source/tree.txt"
+          git status --porcelain=v1 > "$ARTIFACT/source/git-status.txt"
+          git bundle create "$ARTIFACT/source/edits-vim-nix-herdr-oci.git.bundle" HEAD
+          git bundle verify "$ARTIFACT/source/edits-vim-nix-herdr-oci.git.bundle" \
+            > "$ARTIFACT/source/bundle-verify.txt"
+          python3 - <<'PY'
+          import pathlib, zipfile, os
+          out = pathlib.Path(os.environ['ARTIFACT']) / 'source' / 'edits-vim-nix-herdr-oci.source.zip'
+          paths = [pathlib.Path('proofs/vim-nix'), pathlib.Path('.github/workflows/proof-vim-nix-oci.yml')]
+          with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for path in paths:
+                  if path.is_dir():
+                      for item in sorted(path.rglob('*')):
+                          if item.is_file(): z.write(item, item.as_posix())
+                  elif path.is_file(): z.write(path, path.as_posix())
+          PY
+          (cd "$ARTIFACT" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+
+      - name: Upload OCI, WSLC, evidence, and exact source pack
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vim-nix-herdr-hq-oci-wslc-${{ github.sha }}
+          path: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Report exact result to Issue 74
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const complete = '${{ steps.complete.outcome }}' === 'success';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 74,
+              body: [
+                '## Canonical exact-runtime / OCI run',
+                '',
+                `closure materialization: \`${{ steps.materialize.outcome }}\``,
+                `complete E2E: \`${{ steps.complete.outcome }}\``,
+                `run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                `commit: \`${context.sha}\``,
+                '',
+                complete
+                  ? 'Exact runtime closure, PTY UX, worker lifecycle, Docker, OCI, mutation rejection, semantic parity, and WSLC projection passed.'
+                  : 'Failed closed after preserving the exact source and any reached evidence. The separately uploaded runtime-closure artifact remains usable when materialization passed.'
+              ].join('\n')
+            });

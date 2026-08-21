@@ -48,3 +48,25 @@ source delta, so they remain a separate later CI lane:
 A local PASS does not claim those gates. Conversely, absence of the exact Nix
 closure no longer blocks implementation, review, or targeted TTY/race/adapter
 verification.
+
+## Immediate UX and Carry
+
+The single entrypoint is:
+
+```bash
+tools/vim-nix-local/vim-nix doctor
+tools/vim-nix-local/vim-nix verify
+tools/vim-nix-local/vim-nix pack --herdr /absolute/path/to/herdr
+```
+
+`verify` auto-discovers Herdr from `HERDR_BIN`, `./bin/herdr`,
+`./.carry/bin/herdr`, or `PATH`. `pack` emits a deterministic ZIP, a strict
+single-line standard-Base64 Carrier, and an external manifest. The extracted
+pack starts with:
+
+```bash
+bash run
+```
+
+The Carry contains the low-cost local development surface, not the deferred
+exact-product Nix closure.

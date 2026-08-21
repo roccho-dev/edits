@@ -1,0 +1,126 @@
+name: proof exact current Vim Nix runtime
+
+on:
+  pull_request:
+    branches:
+      - proposals
+    paths:
+      - "proofs/vim-nix/requests/current.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: proof-exact-current-vim-nix-runtime
+  cancel-in-progress: false
+
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      ARTIFACT: ${{ runner.temp }}/vim-nix-current-runtime
+      IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
+      OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
+      SELECTED_COMMIT: e4565840165d941fc4bd02489ee619905faa6fa7
+      SELECTED_TREE: 590c79cd7b1358df88879d5e634e0d3e6970633b
+    steps:
+      - name: Checkout exact selected candidate
+        uses: actions/checkout@v4
+        with:
+          ref: e4565840165d941fc4bd02489ee619905faa6fa7
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact commit, tree, and clean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^{commit})" = "$SELECTED_COMMIT"
+          test "$(git rev-parse HEAD^{tree})" = "$SELECTED_TREE"
+          test -z "$(git status --porcelain=v1)"
+          sha256sum proofs/vim-nix/flake.lock
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - id: proof
+        name: Execute exact Nix, Herdr, Docker, and OCI proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT"
+          export GITHUB_SHA="$(git rev-parse HEAD)"
+          cat proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/vim-nix-current-ci.sh"
+          chmod 0700 "$RUNNER_TEMP/vim-nix-current-ci.sh"
+          "$RUNNER_TEMP/vim-nix-current-ci.sh"
+
+      - name: Preserve exact source, reached closure, and runner receipt
+        if: always()
+        shell: bash
+        env:
+          PROOF_OUTCOME: ${{ steps.proof.outcome }}
+          EVENT_SHA: ${{ github.sha }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT/source"
+          printf '%s\n' "$SELECTED_COMMIT" > "$ARTIFACT/source/selected-commit.txt"
+          printf '%s\n' "$SELECTED_TREE" > "$ARTIFACT/source/selected-tree.txt"
+          git bundle create "$ARTIFACT/source/edits-vim-nix-current.git.bundle" HEAD
+          git bundle verify "$ARTIFACT/source/edits-vim-nix-current.git.bundle" > "$ARTIFACT/source/bundle-verify.txt"
+          git status --porcelain=v1 > "$ARTIFACT/source/git-status.txt"
+
+          python3 - <<'PY'
+          import json, os, pathlib, zipfile
+          artifact = pathlib.Path(os.environ['ARTIFACT'])
+          source_zip = artifact / 'source' / 'edits-vim-nix-current.source.zip'
+          paths = [pathlib.Path('proofs/vim-nix'), pathlib.Path('.github/workflows/proof-vim-nix-oci.yml')]
+          with zipfile.ZipFile(source_zip, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+              for path in paths:
+                  if path.is_dir():
+                      for item in sorted(path.rglob('*')):
+                          if item.is_file():
+                              archive.write(item, item.as_posix())
+                  elif path.is_file():
+                      archive.write(path, path.as_posix())
+          receipt = {
+              'schema': 'edits.vimNixExactCurrentRunner/1',
+              'selectedCommit': os.environ['SELECTED_COMMIT'],
+              'selectedTree': os.environ['SELECTED_TREE'],
+              'eventSha': os.environ['EVENT_SHA'],
+              'eventRef': os.environ['EVENT_REF'],
+              'proofOutcome': os.environ['PROOF_OUTCOME'],
+          }
+          (artifact / 'runner-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+          PY
+
+          if test -s "$ARTIFACT/product/store-path.txt"; then
+            product=$(cat "$ARTIFACT/product/store-path.txt")
+            test -e "$product"
+            printf '%s\n' "$product" > "$ARTIFACT/nix-cache-root.txt"
+            rm -rf "$ARTIFACT/nix-cache"
+            if nix copy --to "file://$ARTIFACT/nix-cache" "$product"; then
+              printf 'PASS\n' > "$ARTIFACT/nix-cache-export.txt"
+            else
+              printf 'FAIL\n' > "$ARTIFACT/nix-cache-export.txt"
+            fi
+          fi
+
+          (cd "$ARTIFACT" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          (cd "$ARTIFACT" && sha256sum --check SHA256SUMS)
+
+      - name: Upload exact current runtime and all reached evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vim-nix-current-runtime-e4565840
+          path: ${{ runner.temp }}/vim-nix-current-runtime
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error

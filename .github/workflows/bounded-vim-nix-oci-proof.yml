@@ -8,6 +8,8 @@ on:
       - proposals
     paths:
       - 'proofs/vim-nix/requests/current.json'
+  schedule:
+    - cron: '*/5 * * * *'
 
 permissions:
   contents: read
@@ -21,6 +23,7 @@ jobs:
   proof:
     if: >-
       github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
       (github.event.issue.number == 74 &&
        github.event.comment.user.login == github.repository_owner &&
        startsWith(github.event.comment.body, '/run-vim-nix-oci'))
@@ -51,7 +54,7 @@ jobs:
           import json, os, pathlib, re, sys
 
           event_name = os.environ['EVENT_NAME']
-          if event_name == 'push':
+          if event_name in {'push', 'schedule'}:
               request = json.loads(pathlib.Path(os.environ['REQUEST_PATH']).read_text(encoding='utf-8'))
           else:
               body = os.environ.get('COMMENT_BODY', '').replace('\r\n', '\n')
@@ -141,12 +144,27 @@ jobs:
 
       - name: Execute complete materialization and runtime proof
         shell: bash
+        env:
+          SOURCE_COMMIT: ${{ steps.request.outputs.commit }}
         run: |
           set -euo pipefail
           candidate="$GITHUB_WORKSPACE/candidate"
           cat "$candidate"/proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/vim-nix-proof-ci.sh"
           chmod 0700 "$RUNNER_TEMP/vim-nix-proof-ci.sh"
-          GITHUB_WORKSPACE="$candidate" "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          GITHUB_SHA="$SOURCE_COMMIT" GITHUB_WORKSPACE="$candidate" "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+
+      - name: Withhold final Git bundles until independent WSLC acceptance
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          find "$ARTIFACT/source" -maxdepth 1 -type f -name '*.git.bundle' -delete
+          if test -f "$ARTIFACT/ci-receipt.json"; then
+            jq '. + {finalGitBundlesIncluded:false}' "$ARTIFACT/ci-receipt.json" > "$RUNNER_TEMP/ci-receipt.json"
+            mv "$RUNNER_TEMP/ci-receipt.json" "$ARTIFACT/ci-receipt.json"
+          fi
+          find "$ARTIFACT" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$ARTIFACT/SHA256SUMS"
+          (cd "$ARTIFACT" && sha256sum --check SHA256SUMS)
 
       - name: Upload downloadable OCI and WSLC proof pack
         if: success()
@@ -177,7 +195,7 @@ jobs:
                 `- run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
                 '',
                 status === 'success'
-                  ? 'Exact Nix/offline build, full Herdr PTY/Vim/HQ/worker proof, Docker runtime, OCI runtime, mutation rejection, semantic parity, WSLC handoff, source ZIP, and Git bundle all passed.'
+                  ? 'Exact Nix/offline build, full Herdr PTY/Vim/HQ/worker proof, Docker runtime, OCI runtime, mutation rejection, semantic parity, and the WSLC handoff passed. Final Git bundles remain withheld until independent WSLC acceptance.'
                   : 'The run failed closed. No completion claim is made.'
               ].join('\n')
             });

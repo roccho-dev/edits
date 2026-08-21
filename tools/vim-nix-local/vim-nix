@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+
+usage() {
+  cat <<'EOF'
+Usage: tools/vim-nix-local/vim-nix [verify|doctor|pack] [options]
+
+Commands:
+  verify   Run the low-cost local proof (default).
+  doctor   Check the local prerequisites and optional Herdr adapter.
+  pack     Create a self-contained ZIP + Base64 Carrier.
+
+verify options:
+  --herdr PATH    Use this Herdr 0.8.0 binary.
+  --no-herdr      Skip the optional Herdr two-pane probe.
+  --out DIR       Evidence output directory.
+
+pack options:
+  --herdr PATH    Bundle this verified Herdr 0.8.0 binary.
+  --no-herdr      Build a source-only carry pack.
+  --out DIR       Output directory (default: dist/carry).
+
+Examples:
+  tools/vim-nix-local/vim-nix
+  tools/vim-nix-local/vim-nix verify --herdr ./bin/herdr
+  tools/vim-nix-local/vim-nix pack --herdr ./bin/herdr
+EOF
+}
+
+resolve_herdr() {
+  local explicit=${1:-}
+  local candidate
+  if test -n "$explicit"; then
+    candidate=$explicit
+  elif test -n "${HERDR_BIN:-}"; then
+    candidate=$HERDR_BIN
+  elif test -x "$repo_root/bin/herdr"; then
+    candidate="$repo_root/bin/herdr"
+  elif test -x "$repo_root/.carry/bin/herdr"; then
+    candidate="$repo_root/.carry/bin/herdr"
+  elif command -v herdr >/dev/null 2>&1; then
+    candidate=$(command -v herdr)
+  else
+    return 1
+  fi
+  test -x "$candidate"
+  test "$($candidate --version)" = 'herdr 0.8.0'
+  printf '%s\n' "$candidate"
+}
+
+run_doctor() {
+  local explicit_herdr=${1:-}
+  local missing=()
+  local command
+  for command in bash git go vim python3 script timeout sha256sum; do
+    command -v "$command" >/dev/null 2>&1 || missing+=("$command")
+  done
+  if test "${#missing[@]}" -ne 0; then
+    printf 'BLOCKED missing commands:' >&2
+    printf ' %s' "${missing[@]}" >&2
+    printf '\n' >&2
+    return 2
+  fi
+
+  test "$(uname -s)" = Linux
+  case "$(uname -m)" in
+    x86_64|amd64) ;;
+    *) printf 'BLOCKED unsupported architecture: %s\n' "$(uname -m)" >&2; return 2 ;;
+  esac
+
+  local lock="$repo_root/proofs/vim-nix/flake.lock"
+  local expected=35cdda5fa9645ab469924c69f36992db2f8637360fce128e7c7fd372c3a4ce0f
+  test -f "$lock"
+  test "$(sha256sum "$lock" | cut -d' ' -f1)" = "$expected"
+  vim -Nu NONE -n -i NONE -es \
+    '+if !has("patch-9.0.1629") || !has("timers") || !has("popupwin") || !has("insert_expand") || !has("multi_byte") | cquit 1 | endif' \
+    '+quitall!'
+
+  local herdr=none
+  if herdr=$(resolve_herdr "$explicit_herdr" 2>/dev/null); then :; else herdr=not-installed-optional; fi
+
+  printf 'READY os=%s arch=%s go=%s vim=%s herdr=%s\n' \
+    "$(uname -s)" "$(uname -m)" "$(go env GOVERSION)" \
+    "$(vim --version | sed -n '1s/ /_/gp')" "$herdr"
+}
+
+run_verify() {
+  local explicit_herdr= no_herdr=0 out=
+  while test "$#" -gt 0; do
+    case "$1" in
+      --herdr) test "$#" -ge 2; explicit_herdr=$2; shift 2 ;;
+      --no-herdr) no_herdr=1; shift ;;
+      --out) test "$#" -ge 2; out=$2; shift 2 ;;
+      -h|--help) usage; return 0 ;;
+      *) printf 'unknown verify option: %s\n' "$1" >&2; return 2 ;;
+    esac
+  done
+
+  run_doctor "$explicit_herdr"
+  test -n "$out" || out="$repo_root/.local/vim-nix-proof"
+  local -a env_args=("LOCAL_PROOF_OUT=$out")
+  if test "$no_herdr" -eq 0; then
+    local herdr
+    if herdr=$(resolve_herdr "$explicit_herdr" 2>/dev/null); then
+      env_args+=("HERDR_BIN=$herdr")
+    fi
+  fi
+
+  env "${env_args[@]}" "$script_dir/verify.sh"
+  python3 - "$out/receipt.json" "$out" <<'PY'
+import json, pathlib, sys
+receipt = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))
+if receipt.get('status') != 'PASS':
+    raise SystemExit('local proof did not return PASS')
+gates = receipt['localLowCostGates']
+print('PASS vim-nix-local-first')
+print('evidence=' + str(pathlib.Path(sys.argv[2]).resolve()))
+print('herdr=' + str(gates['herdrTopologyProbe']))
+print('vim=' + str(gates['vimRuntimeObserved']))
+print('deferred_high_cost=' + str(len(receipt['deferredHighCostGates'])))
+PY
+}
+
+run_pack() {
+  local explicit_herdr= no_herdr=0 out="$repo_root/dist/carry"
+  while test "$#" -gt 0; do
+    case "$1" in
+      --herdr) test "$#" -ge 2; explicit_herdr=$2; shift 2 ;;
+      --no-herdr) no_herdr=1; shift ;;
+      --out) test "$#" -ge 2; out=$2; shift 2 ;;
+      -h|--help) usage; return 0 ;;
+      *) printf 'unknown pack option: %s\n' "$1" >&2; return 2 ;;
+    esac
+  done
+
+  run_doctor "$explicit_herdr"
+  local -a args=(--repo-root "$repo_root" --output-dir "$out")
+  if test "$no_herdr" -eq 0; then
+    local herdr
+    if herdr=$(resolve_herdr "$explicit_herdr" 2>/dev/null); then
+      args+=(--herdr "$herdr")
+    fi
+  fi
+  python3 "$script_dir/pack.py" "${args[@]}"
+}
+
+command=${1:-verify}
+if test "$#" -gt 0; then shift; fi
+case "$command" in
+  verify) run_verify "$@" ;;
+  doctor) run_doctor "${1:-}" ;;
+  pack) run_pack "$@" ;;
+  -h|--help|help) usage ;;
+  *) printf 'unknown command: %s\n' "$command" >&2; usage >&2; exit 2 ;;
+esac

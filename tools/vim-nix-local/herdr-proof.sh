@@ -26,15 +26,21 @@ cleanup() {
   wait "$server_pid" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
-for _ in $(seq 1 100); do
-  if "$herdr" status server --json >"$out/evidence/herdr-status-running.json" 2>/dev/null; then break; fi
-  sleep 0.05
-done
-python3 - "$out/evidence/herdr-status-running.json" <<'PY'
+server_ready=0
+for _ in $(seq 1 200); do
+  if "$herdr" status server --json >"$out/evidence/herdr-status-running.json" 2>/dev/null && \
+      python3 - "$out/evidence/herdr-status-running.json" <<'PY'
 import json, sys
 state = json.load(open(sys.argv[1]))
-assert state["running"] and state["compatible"] and state["version"] == "0.8.0"
+raise SystemExit(0 if state.get("running") and state.get("compatible") and state.get("version") == "0.8.0" else 1)
 PY
+  then
+    server_ready=1
+    break
+  fi
+  sleep 0.05
+done
+test "$server_ready" -eq 1
 
 "$herdr" workspace create --cwd "$repo_root" --label local-first --no-focus >"$out/evidence/herdr-workspace-create.json"
 workspace=$(python3 - "$out/evidence/herdr-workspace-create.json" <<'PY'

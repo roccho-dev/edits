@@ -1,0 +1,13 @@
+{
+  "schema": "edits.vimHqSourceCarryRequest/1",
+  "purpose": "materialize-exact-source-authorities",
+  "editsCurrent": "d6d0f6d584883267b05559b0d058bce127f83d9c",
+  "editsProof": "58a1c3e2f329605c016a051c4254e3c04f5d0671",
+  "editsProductBase": "d83bf4c4860e02f37d6b41cc54fe8c881af4c779",
+  "hq": "3118886f34ac5615e8a7732a6297bd41900e21e1",
+  "yegappanLsp": "989016ae2ae4cbf304a9ca29478f47fec794493f",
+  "vim": "8aecd377f08e9fbdf0092478ab7ec3ce5e0f04ec",
+  "herdr": "v0.8.0",
+  "nixpkgs": "0ae2bc1419c3f345984c2629e72e7a631820fa4d",
+  "goNixpkgs": "cbb826608f7d081948eeb4ea0211b0cbd867b9d1"
+}

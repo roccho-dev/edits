@@ -1,1 +1,6 @@
-{"schema":"edits.vimNixOciProofRequest/1","commit":"bd47ebce24a5219328fbde7842c13c1a24e53aae","tree":"85fdfdbf63a5b73789a0444868afb1b5479459c2","ref":"refs/heads/proof/vim-nix-herdr-oci-current-20260821"}
+{
+  "schema": "edits.vimNixOciProofRequest/1",
+  "commit": "bd47ebce24a5219328fbde7842c13c1a24e53aae",
+  "tree": "85fdfdbf63a5b73789a0444868afb1b5479459c2",
+  "ref": "refs/heads/proof/vim-nix-herdr-oci-current-20260821"
+}

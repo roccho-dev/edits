@@ -113,8 +113,3 @@
         '';
         installPhase = ''
           runHook preInstall
-          install -Dm755 "$TMPDIR/hq-vim.test" "$out/bin/hq-vim.test"
-          install -Dm755 "$TMPDIR/hq-vim-smoke" "$out/bin/hq-vim-smoke"
-          runHook postInstall
-        '';
-      };

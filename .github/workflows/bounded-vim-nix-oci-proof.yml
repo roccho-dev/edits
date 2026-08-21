@@ -1,6 +1,9 @@
 name: bounded vim nix herdr oci proof runner
 
 on:
+  issue_comment:
+    types:
+      - created
   push:
     branches:
       - proposals
@@ -24,8 +27,13 @@ concurrency:
 jobs:
   snapshot-heads:
     if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.id == 32437204492
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.id == 32437204492) ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.number == 74 &&
+       github.event.comment.user.login == github.repository_owner &&
+       startsWith(github.event.comment.body, '/run-vim-nix-oci'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

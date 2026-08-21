@@ -93,5 +93,5 @@ receipt = {
 }
 pathlib.Path(path).write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
 PY
-(cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS && sha256sum --check SHA256SUMS)
 printf 'VIM_NIX_LOCAL_FIRST_PROOF_PASS\n' | tee -a "$out/logs/summary.txt"
+(cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS && sha256sum --check SHA256SUMS)

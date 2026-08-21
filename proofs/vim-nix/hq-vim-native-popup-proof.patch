@@ -1,8 +1,27 @@
 diff --git a/packages/hq-vim/internal/smoke/smoke.go b/packages/hq-vim/internal/smoke/smoke.go
-index 53b9af2..b74af10 100644
+index 53b9af2..d9cb754 100644
 --- a/packages/hq-vim/internal/smoke/smoke.go
 +++ b/packages/hq-vim/internal/smoke/smoke.go
-@@ -447,7 +447,7 @@ func nativePopupProofLines(cfg Config) []string {
+@@ -135,10 +135,23 @@ func Run(cfg Config) error {
+ 	cmd := exec.CommandContext(ctx, cfg.Vim, args...)
+ 	cmd.Stdout = os.Stdout
+ 	cmd.Stderr = os.Stderr
+ 	cmd.Stdin = os.Stdin
+ 	cmd.Env = environmentWithOverrides(os.Environ(), cfg.Env)
++	if cfg.NativePopupArtifact != "" && runtime.GOOS != "windows" {
++		terminal, terminalErr := os.OpenFile("/dev/tty", os.O_RDWR, 0)
++		if terminalErr != nil {
++			return diagnosticError(fmt.Errorf("open controlling terminal: %w", terminalErr), cfg)
++		}
++		defer terminal.Close()
++		cmd.Stdout = terminal
++		cmd.Stderr = terminal
++		cmd.Stdin = terminal
++	}
+ 	err = cmd.Run()
+ 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+ 		return diagnosticError(fmt.Errorf("Vim smoke timed out after %s", timeout), cfg)
+@@ -447,7 +460,7 @@ func nativePopupProofLines(cfg Config) []string {
  		"    return",
  		"  endif",
  		"  let g:hq_native_expected_index = l:index",

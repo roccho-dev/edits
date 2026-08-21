@@ -1,2 +1,2 @@
-run_id=vim-nix-herdr-oci-current-20260821-002
-proof_parent=7f17368602e9d8f7b295621a5de7233c5f3d425d
+run_id=vim-nix-herdr-oci-current-20260821-004
+proof_parent=b197829eac713f1439cf67671703202886313608

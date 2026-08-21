@@ -83,8 +83,14 @@
         cp -R ${edits-src + "/packages/hq-vim/testdata"} "$out/testdata"
       '';
 
+      yegappan-lsp-patched = pkgs.applyPatches {
+        name = "yegappan-lsp-989016ae-unicode";
+        src = yegappan-lsp;
+        patches = [ (root + "/yegappan-lsp-unicode.patch") ];
+      };
+
       yegappan-lsp-runtime = pkgs.runCommand "yegappan-lsp" { } ''
-        cp -R ${yegappan-lsp} "$out"
+        cp -R ${yegappan-lsp-patched} "$out"
         chmod -R u+w "$out"
       '';
 
@@ -107,3 +113,8 @@
         '';
         installPhase = ''
           runHook preInstall
+          install -Dm755 "$TMPDIR/hq-vim.test" "$out/bin/hq-vim.test"
+          install -Dm755 "$TMPDIR/hq-vim-smoke" "$out/bin/hq-vim-smoke"
+          runHook postInstall
+        '';
+      };

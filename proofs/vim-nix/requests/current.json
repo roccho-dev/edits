@@ -1,6 +1,6 @@
 {
   "schema": "edits.vimNixOciProofRequest/1",
-  "commit": "52baf44f8c9bc2d5f19af0c3a64c0ab03dcf34fa",
-  "tree": "fc97774dbb6f06948c106776a316eb185f289063",
+  "commit": "e5ff3770c23d2be0cd9c5a410f8f1d27f8714570",
+  "tree": "c7cff16ea601126b97ea5af87b3010a58132dc84",
   "ref": "refs/heads/proof/vim-nix-herdr-oci-current-20260821"
 }

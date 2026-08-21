@@ -1,6 +1,6 @@
 {
   "schema": "edits.vimNixOciProofRequest/1",
-  "requestId": "vim-nix-current-sandbox-screenshots-20260821-01",
+  "requestId": "vim-nix-current-sandbox-screenshots-20260821-02",
   "commit": "e4565840165d941fc4bd02489ee619905faa6fa7",
   "tree": "590c79cd7b1358df88879d5e634e0d3e6970633b",
   "ref": "refs/heads/proof/vim-nix-herdr-oci-current-20260821"

@@ -3,7 +3,7 @@ name: proof vim nix herdr hq oci
 on:
   push:
     branches:
-      - proof/vim-nix-herdr-oci-20260821
+      - proof/vim-nix-herdr-oci-current-20260821
     paths:
       - "proofs/vim-nix/**"
       - ".github/workflows/proof-vim-nix-oci.yml"

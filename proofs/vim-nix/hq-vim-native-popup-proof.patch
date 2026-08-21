@@ -2,7 +2,7 @@ diff --git a/packages/hq-vim/internal/smoke/smoke.go b/packages/hq-vim/internal/
 index 53b9af2..d9cb754 100644
 --- a/packages/hq-vim/internal/smoke/smoke.go
 +++ b/packages/hq-vim/internal/smoke/smoke.go
-@@ -135,10 +135,23 @@ func Run(cfg Config) error {
+@@ -135,8 +135,18 @@ func Run(cfg Config) error {
  	cmd := exec.CommandContext(ctx, cfg.Vim, args...)
  	cmd.Stdout = os.Stdout
  	cmd.Stderr = os.Stderr
@@ -21,7 +21,7 @@ index 53b9af2..d9cb754 100644
  	err = cmd.Run()
  	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
  		return diagnosticError(fmt.Errorf("Vim smoke timed out after %s", timeout), cfg)
-@@ -447,7 +460,7 @@ func nativePopupProofLines(cfg Config) []string {
+@@ -447,7 +457,7 @@ func nativePopupProofLines(cfg Config) []string {
  		"    return",
  		"  endif",
  		"  let g:hq_native_expected_index = l:index",

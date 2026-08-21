@@ -4,6 +4,12 @@ on:
   issue_comment:
     types:
       - created
+  pull_request:
+    branches:
+      - proposals
+    types:
+      - reopened
+      - synchronize
   push:
     branches:
       - proposals
@@ -29,6 +35,8 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.ref == 'proof/vim-nix-herdr-oci-current-20260821') ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.id == 32437204492) ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.number == 74 &&

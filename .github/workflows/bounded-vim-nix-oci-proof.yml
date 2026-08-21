@@ -86,7 +86,8 @@ jobs:
           )
 
           git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
-          test "$(git rev-parse "$SELECTED_REF^{commit}")" = "$SELECTED_COMMIT"
+          selected_remote="refs/remotes/origin/${SELECTED_REF#refs/heads/}"
+          test "$(git rev-parse "$selected_remote^{commit}")" = "$SELECTED_COMMIT"
           test "$(git rev-parse "$SELECTED_COMMIT^{tree}")" = "$SELECTED_TREE"
 
           refs=()

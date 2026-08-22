@@ -1,0 +1,35 @@
+name: materialize PTY screenshot source
+
+on:
+  push:
+    branches:
+      - proof/pty-screenshot-materialize-20260822
+
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Archive exact proven source
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact=6fbcdd0147b55975492954405e1f562074ddb9c2
+          git cat-file -e "$exact^{commit}"
+          mkdir -p out
+          git archive --format=tar.gz --prefix=edits-$exact/ "$exact" > out/edits-$exact.tar.gz
+          sha256sum out/edits-$exact.tar.gz > out/SHA256SUMS
+          printf '{"schema":"edits.pty-source/1","commit":"%s","tree":"%s"}\n' \
+            "$exact" "$(git show -s --format=%T "$exact")" > out/manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edits-pty-source-6fbcdd0147b5
+          path: out/
+          if-no-files-found: error
+          retention-days: 7

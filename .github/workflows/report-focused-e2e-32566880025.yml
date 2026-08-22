@@ -1,0 +1,58 @@
+name: report focused E2E run 32566880025
+
+on:
+  push:
+    branches:
+      - automation/watch-focused-e2e-20260822
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TARGET_RUN: "32566880025"
+      REPORT_PATH: proofs/vim-nix/focused-e2e-run-32566880025.failure.txt
+      TARGET_BRANCH: automation/watch-focused-e2e-20260822
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Materialize concise artifact failure report
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/focused-artifact"
+          mkdir -p "$root"
+          metadata=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN/artifacts")
+          artifact_id=$(printf '%s' "$metadata" | jq -er '.artifacts | sort_by(.id) | last.id')
+          artifact_name=$(printf '%s' "$metadata" | jq -er '.artifacts | sort_by(.id) | last.name')
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > "$root/artifact.zip"
+          unzip -q "$root/artifact.zip" -d "$root/unpacked"
+
+          find "$root/unpacked" -type f -printf '%P\n' | sort > "$root/files.txt"
+          grep -RInE -- '--- FAIL:|selected completion documentation|timeout|FAIL$|panic:' \
+            "$root/unpacked" > "$root/failures.txt" || true
+
+          {
+            printf 'run=%s\nartifact=%s\nartifact_id=%s\nfile_count=%s\n\n' \
+              "$TARGET_RUN" "$artifact_name" "$artifact_id" "$(wc -l < "$root/files.txt")"
+            printf '[failure matches]\n'
+            sed -n '1,100p' "$root/failures.txt"
+            printf '\n[focused log tails]\n'
+            while IFS= read -r file; do
+              case "$file" in
+                e2e/*.log|screenshots/*.log|screenshots/runtime-evidence/*.log)
+                  printf '\n== %s ==\n' "$file"
+                  tail -80 "$root/unpacked/$file"
+                  ;;
+              esac
+            done < "$root/files.txt"
+          } > "$root/report.txt"
+
+          encoded=$(base64 -w0 "$root/report.txt")
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$REPORT_PATH" \
+            -f message='proof: record exact focused E2E failure boundary' \
+            -f content="$encoded" \
+            -f branch="$TARGET_BRANCH" >/dev/null

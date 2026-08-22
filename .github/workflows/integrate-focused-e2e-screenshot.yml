@@ -27,7 +27,7 @@ jobs:
       PATCH_GZ_SHA256: be84436786be3cd473f5be5a872ec9961d09ceb7e895c6c4e50529fff8283ee4
       PATCH_SHA256: 49c8f646b3c0a2e5c7f8dc4d53803fa7b7f469d28580500d22a372a6879b80ce
       EXPECTED_HQ: 779a298f4efcff8df60205aaf973cb224388a82b
-      ARTIFACT: ${{ runner.temp }}/focused-e2e-screenshot
+      ARTIFACT: /tmp/focused-e2e-screenshot
 
     steps:
       - name: Checkout exact helper request

@@ -12,46 +12,6 @@ import (
 	"github.com/roccho-dev/edits/packages/hq-vim/internal/smoke"
 )
 
-func TestMissingExplicitHQBindingFailsFast(t *testing.T) {
-	cfg := smoke.Config{
-		Vim:        requireVim(t),
-		Vim9LSP:    requireVim9LSP(t),
-		PluginRoot: mustPackageRoot(t),
-		Profile:    "local",
-		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
-		Headless:   true,
-		StartOnly:  true,
-		OmitHQBin:  true,
-	}
-	if err := smoke.Run(cfg); err == nil {
-		t.Fatal("expected missing explicit g:hq_bin to fail during HqStart")
-	}
-}
-
-func TestRelativeHQBinaryFailsFast(t *testing.T) {
-	root := mustPackageRoot(t)
-	relativeDir := filepath.Join(root, ".tmp", "relative-hq-test")
-	if err := os.MkdirAll(relativeDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(relativeDir)
-	relative := filepath.Join(".tmp", "relative-hq-test", exeName("hqstub"))
-	buildHQStubAt(t, filepath.Join(root, relative))
-	cfg := smoke.Config{
-		HQBin:      relative,
-		Vim:        requireVim(t),
-		Vim9LSP:    requireVim9LSP(t),
-		PluginRoot: root,
-		Profile:    "local",
-		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
-		Headless:   true,
-		StartOnly:  true,
-	}
-	if err := smoke.Run(cfg); err == nil {
-		t.Fatal("expected relative g:hq_bin to fail during HqStart")
-	}
-}
-
 func TestCanonicalHQVimConformance(t *testing.T) {
 	hqBin := os.Getenv("HQ_CANONICAL_BIN")
 	if hqBin == "" {
@@ -393,13 +353,4 @@ func readJSONLRows(t *testing.T, path string) []map[string]any {
 		rows = append(rows, row)
 	}
 	return rows
-}
-
-func buildHQStubAt(t *testing.T, out string) {
-	t.Helper()
-	cmd := exec.Command("go", "build", "-o", out, "./testfixture/hqstub")
-	cmd.Dir = mustPackageRoot(t)
-	if b, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build hq stub: %v\n%s", err, b)
-	}
 }

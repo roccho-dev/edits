@@ -1,6 +1,6 @@
 # hq Vim
 
-Minimal edits-owned Vim extension for the official external `hq` runtime.
+Minimal edits-owned Vim adapter for the official external `hq` runtime.
 
 ```text
 Vim
@@ -9,44 +9,66 @@ Vim
       -> lsp --profile <name>
 ```
 
-## Boundary
+## User surface
+
+The complete command surface is deliberately small:
+
+```vim
+:HqStart [profile]
+:HqSubmit
+:HqDoctor
+```
+
+After `:HqStart`, yegappan/lsp owns automatic native completion. Typing `@`
+queries the selected-world command language. Vim adds no manual completion
+command, matcher, history browser, route picker, retry UI, or provider UI.
+
+The selected world owns command order and meaning:
+
+```text
+default:true command = AI-agent decision, such as agent.exec
+explicit fallback      = direct command, such as direct.open
+```
+
+Changing the default agent, adding a project command, or promoting a repeated
+decision changes world/profile data. It does not change this plugin.
+
+`HqSubmit` is the only durable-effect entry point. Completion, documentation,
+selection, editing, and undo append no accepted instruction.
+
+## Ownership
 
 This package owns only:
 
-- `plugin/hq.vim`
-- `autoload/hq.vim`
-- fail-closed client dependency checks
-- version-guarded application of hq-owned standard LSP draft edits
-- real Vim 9/yegappan-lsp conformance tests
+- fail-closed binding to one explicit absolute `hq` executable;
+- Vim/yegappan LSP startup;
+- native popup undo compatibility;
+- explicit submit and safe application of hq-owned draft-consumption edits;
+- editor-facing conformance tests.
 
-The `hq` repository builds, tests, and publishes the official `hq` artifact.
-The `envs` repository selects and places the exact artifact and generates the
-profile. Edits does not build, publish, place, supervise, or execute workers and
-has no dependency on an ops artifact or receipt.
+It must not own:
 
-Profile resolution, JSONL paths, compiler acceptance, queue persistence,
-provider execution, worker lifecycle, and `result.v1` remain outside edits.
+- command vocabulary, parser meaning, or candidate rank;
+- accepted-history search or command promotion;
+- agent/direct routing, policy, approval, timeout, cancellation, or retry;
+- JSONL paths, provider bindings, worker lifecycle, or Herdr process control.
+
+Those remain HQ/world, envs/project, worker, and Herdr responsibilities.
 
 ## Exact binding
 
-`g:hq_bin` is mandatory and must be an executable absolute path. The extension
-does not search `PATH`, shell profiles, user or machine environment paths, or an
-unqualified executable name.
+`g:hq_bin` is mandatory, absolute, and executable. The extension never searches
+`PATH`, shell profiles, environment registries, or an unqualified command name.
+Vim patch `9.0.1629` or newer is required for negotiated LSP positions.
 
-The selected client integration requires Vim patch `9.0.1629` or newer. This is
-the first yegappan/lsp patch gate used for negotiated UTF-8, UTF-16, and UTF-32
-position conversion. hq-vim converts the current Vim byte location to the
-client's UTF-32 input and delegates final LSP encoding to the pinned client. It
-does not send raw `col()` or `strlen()` byte offsets as LSP positions.
-
-The minimal Vim init is:
+Minimal init:
 
 ```vim
-set runtimepath^=C:/exact/path/to/yegappan-lsp
-set runtimepath^=C:/exact/path/to/edits/packages/hq-vim
+set runtimepath^=/exact/path/to/yegappan-lsp
+set runtimepath^=/exact/path/to/edits/packages/hq-vim
 runtime plugin/lsp.vim
 runtime plugin/hq.vim
-let g:hq_bin='C:/exact/verified/path/to/hq.exe'
+let g:hq_bin='/exact/verified/path/to/hq'
 let g:hq_profile='local'
 ```
 
@@ -54,66 +76,48 @@ Then:
 
 ```vim
 :HqStart
-:HqSubmit
 ```
 
-Vim receives the profile name only. It does not receive JSONL, provider,
-worker, registry, or environment layout paths.
+Typing `@` opens the native completion popup. `Ctrl-N`/`Ctrl-P` navigate and
+`Ctrl-Y` accepts the selected LSP text edit. One native Vim undo restores the
+exact pre-selection query.
 
-Yegappan/lsp owns completion presentation and is configured with
-`autoComplete: true`. In Insert mode, `Ctrl-N`/`Ctrl-P` navigate the popup and
-`Ctrl-Y` accepts the selected item. This package defines no completion key
-mapping or manual-completion fallback.
+## Submit and recovery
 
-The pinned client inserts a selected completion in the same Vim undo block as
-the typed query. The compatibility adapter establishes one mechanical undo
-boundary when the native popup first opens, then immediately resumes the same
-client-owned automatic completion. One native undo therefore restores the
-exact pre-selection query. This adds no completion key mapping, alternate
-request path, matcher, candidate meaning, or editor-owned text edit.
+On successful `hq.submit`, hq may return one version-bound
+`hq.draftConsumption.v1` edit. hq-vim applies it only when URI, version, and
+`changedtick` still match.
 
-## Submit result
+- safe plan: consume only the accepted object;
+- stale local draft: keep the newer draft;
+- missing, malformed, or unapplicable plan: keep the draft and warn;
+- one native undo: restore consumed text; the accepted row remains durable.
 
-`HqSubmit` remains the only durable-effect entry point. After hq reports a
-successful append and supplies `hq.draftConsumption.v1`, hq-vim applies its
-single standard LSP text edit only when the submitted URI/version still match
-the current Vim buffer. It does not parse command syntax or calculate object
-boundaries.
+`failed`, `timeout`, and `cancelled` results are not mutated in place. HQ/Agent
+creates a new instruction with `reply_to` for retry, repair, direct-command
+fallback, or human escalation. Vim only renders the resulting candidates and
+submits the next explicit draft.
 
-- unchanged accepted object: consume it from the draft;
-- last object consumed: return to Vim's canonical one-line empty buffer;
-- other objects present: preserve them byte-for-byte;
-- newer local edit: keep it unchanged;
-- missing, malformed, or locally unapplicable edit: keep the draft and show a
-  warning;
-- one native Vim undo: restore consumed text only; the accepted row remains.
+## Canon TDD surface
 
-There is no submitted marker, duplicate guard, force-submit path, confirmation,
-new buffer, or editor-owned accepted state.
+Only five behavior boundaries remain in this package:
 
-## Manual smoke
+1. minimal editor commands and fail-closed exact HQ binding;
+2. canonical real Vim -> yegappan/lsp -> HQ completion and explicit submit;
+3. native popup: AI-agent first, explicit direct fallback, documentation,
+   Unicode/CRLF edit, one undo, and zero accepted rows before submit;
+4. stale or invalid consumption never destroys a draft;
+5. child Vim retains a controlling TTY when proof output is redirected.
 
-After the official `hq` artifact and yegappan/lsp have already been placed:
+HQ parser/worker/provider tests are intentionally not duplicated here.
 
-```sh
-go run ./cmd/hq-vim-smoke -hq-bin /absolute/path/to/hq -vim9-lsp /absolute/path/to/yegappan-lsp
-```
-
-Headless submit smoke:
-
-```sh
-go run ./cmd/hq-vim-smoke -headless -hq-bin /absolute/path/to/hq -vim9-lsp /absolute/path/to/yegappan-lsp
-```
-
-## Tests
+Run the low-cost suite:
 
 ```sh
 go test ./...
 ```
 
-The native popup proof starts non-headless Vim with an exact external hq
-executable and a temporary strict selected-world profile. Run it explicitly
-with:
+Run the real popup proof explicitly:
 
 ```sh
 HQ_NATIVE_HQ_FUZZY_PROOF=1 \
@@ -123,35 +127,4 @@ VIM9_LSP_PATH=/absolute/path/to/yegappan-lsp \
 go test -run '^TestNativeHQFuzzyAutomaticPopupDoesNotAccept$' -v
 ```
 
-This proof uses yegappan/lsp's automatic native popup without a manual
-completion fallback. It proves fuzzy schema-template, field-key, and
-Unicode/CRLF field-value journeys; visible detail and the complete
-documentation popup; exact multi-line text edits; one native undo to the exact
-query; and zero accepted rows before explicit submit. It adds no hq popup,
-matcher, completion mapping, or fallback. The existing CI matrix runs this
-proof on native Windows Vim and pinned Linux Vim against the same canonical hq
-source head.
-
-Local tests use a temporary external stub only for fail-closed and process
-boundary checks. CI additionally checks out the accepted `roccho-dev/hq`
-`proposals` branch, builds its official binary, and proves on native Windows Vim
-and Linux Vim `9.2.0478`:
-
-```text
-real Vim
-  -> pinned real yegappan/lsp
-  -> explicit absolute canonical hq binary
-  -> expected completion candidate
-  -> zero completion writes
-  -> :HqSubmit
-  -> exactly one accepted.instruction per explicit submit
-  -> accepted object consumed only after success
-  -> successive objects can be submitted from the same buffer
-  -> one Vim undo restores the last consumed object text only
-  -> two submits have distinct accepted identities
-```
-
-The complete installed Windows proof, exact artifact placement, activation, and
-deployment receipt remain owned by `roccho-dev/envs#34`. Safe accepted-history
-recall remains gated by `roccho-dev/hq#117`; the resulting empty-draft recall
-journey remains a closure gate of `roccho-dev/edits#70`.
+The exact installed Nix/Windows/WSLC proof remains outside this package.

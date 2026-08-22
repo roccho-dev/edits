@@ -81,7 +81,7 @@ done
 wait_for_pane_marker "$ROOT_PANE_ID" '__VIM_NIX_POPUP_EXIT_0__' "$OUT/popup-pane-recent.txt" 20 \
   || fail "native popup proof timed out"
 grep -Fxq PASS "$OUT/native-popup.log" || fail "native popup test did not end in PASS"
-for subtest in 'fuzzy_schema_template' 'field_key' 'unicode_CRLF_field_value'; do
+for subtest in 'AI_agent_is_the_first_command' 'AI_agent_prompt_field' 'explicit_direct_command_with_Unicode_CRLF'; do
   grep -E -- "--- PASS: TestNativeHQFuzzyAutomaticPopupDoesNotAccept/$subtest" "$OUT/native-popup.log" >/dev/null \
     || fail "missing popup subtest PASS: $subtest"
 done

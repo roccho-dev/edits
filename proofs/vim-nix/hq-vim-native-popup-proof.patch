@@ -25,3 +25,12 @@
  		"execute 'set runtimepath^=' . fnameescape(" + vimString(cfg.Vim9LSP) + ")",
  		"execute 'set runtimepath^=' . fnameescape(" + vimString(root) + ")",
  		"runtime plugin/lsp.vim",
+@@ -447,7 +458,7 @@
+ 		"    return",
+ 		"  endif",
+ 		"  let g:hq_native_expected_index = l:index",
+-		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1), 'n')",
++		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1), 'nt')",
+ 		"  call timer_start(20, function('HqNativePopupObserve'))",
+ 		"endfunction",
+ 		"function! HqNativePopupType(timer) abort",

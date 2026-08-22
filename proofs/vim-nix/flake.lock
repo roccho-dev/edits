@@ -36,17 +36,17 @@
     "hq": {
       "flake": false,
       "locked": {
-        "lastModified": 1784065876,
-        "narHash": "sha256-OEeEnTE7BOF+PX2qloGSKfhudvtxzWjupNy+0NSXlKI=",
+        "lastModified": 1787360105,
+        "narHash": "sha256-Jx4TEmWBBwGsvrxlq41cnO1dFjMrbqw/MVF5FkEAp8w=",
         "owner": "roccho-dev",
         "repo": "hq",
-        "rev": "3118886f34ac5615e8a7732a6297bd41900e21e1",
+        "rev": "7f65e922d52fb47bc6dbf0c3b5f99c937e27b566",
         "type": "github"
       },
       "original": {
         "owner": "roccho-dev",
         "repo": "hq",
-        "rev": "3118886f34ac5615e8a7732a6297bd41900e21e1",
+        "rev": "7f65e922d52fb47bc6dbf0c3b5f99c937e27b566",
         "type": "github"
       }
     },

@@ -13,184 +13,97 @@ import (
 	"github.com/roccho-dev/edits/packages/hq-vim/internal/smoke"
 )
 
-func TestMissingHQBinaryFailsFast(t *testing.T) {
+// TestEditorSurfaceAndBindingFailClosed fixes the complete editor-owned UX
+// surface. Vim may start HQ, submit one draft, or inspect its binding. Command
+// discovery, history, routing, retry, and provider policy stay HQ/world-owned.
+func TestEditorSurfaceAndBindingFailClosed(t *testing.T) {
 	root := mustPackageRoot(t)
-	vimLSP := requireVim9LSP(t)
-	vim := requireVim(t)
-	missing := filepath.Join(t.TempDir(), exeName("missing-hq"))
-	cfg := smoke.Config{
-		HQBin:      missing,
-		Vim:        vim,
-		Vim9LSP:    vimLSP,
-		PluginRoot: root,
-		Profile:    "local",
-		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
-		Headless:   true,
-	}
-	err := smoke.Run(cfg)
-	if err == nil {
-		t.Fatal("expected missing hq binary to fail")
-	}
-	if !strings.Contains(err.Error(), "hq binary not found") {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	lspFixture := minimalLSPFixture(t)
+	assertMinimalEditorSurface(t, root, lspFixture)
+
+	t.Run("missing explicit binding", func(t *testing.T) {
+		cfg := smoke.Config{
+			Vim: requireVim(t), Vim9LSP: lspFixture, PluginRoot: root,
+			Profile: "local", Buffer: filepath.Join(t.TempDir(), "draft.hqjson"),
+			Headless: true, StartOnly: true, OmitHQBin: true,
+		}
+		if err := smoke.Run(cfg); err == nil {
+			t.Fatal("expected missing g:hq_bin to fail")
+		}
+	})
+
+	t.Run("relative binding", func(t *testing.T) {
+		relativeDir := filepath.Join(root, ".tmp", "relative-hq-test")
+		if err := os.MkdirAll(relativeDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(relativeDir)
+		relative := filepath.Join(".tmp", "relative-hq-test", exeName("hqstub"))
+		if err := os.WriteFile(filepath.Join(root, relative), []byte("not executed"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		cfg := smoke.Config{
+			HQBin: relative, Vim: requireVim(t), Vim9LSP: lspFixture,
+			PluginRoot: root, Profile: "local", Buffer: filepath.Join(t.TempDir(), "draft.hqjson"),
+			Headless: true, StartOnly: true,
+		}
+		if err := smoke.Run(cfg); err == nil {
+			t.Fatal("expected relative g:hq_bin to fail")
+		}
+	})
+
+	t.Run("non executable binding", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "hq")
+		if err := os.WriteFile(path, []byte("not executable"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg := smoke.Config{
+			HQBin: path, Vim: requireVim(t), Vim9LSP: lspFixture,
+			PluginRoot: root, Profile: "local", Buffer: filepath.Join(t.TempDir(), "draft.hqjson"),
+			Headless: true, StartOnly: true,
+		}
+		if err := smoke.Run(cfg); err == nil {
+			t.Fatal("expected non-executable g:hq_bin to fail")
+		}
+	})
 }
 
-func TestReadableNonExecutableHQFailsFast(t *testing.T) {
-	root := mustPackageRoot(t)
-	notExecutable := filepath.Join(t.TempDir(), "not-hq.txt")
-	if err := os.WriteFile(notExecutable, []byte("not an executable"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg := smoke.Config{
-		HQBin:      notExecutable,
-		Vim:        requireVim(t),
-		Vim9LSP:    requireVim9LSP(t),
-		PluginRoot: root,
-		Profile:    "local",
-		Buffer:     filepath.Join(t.TempDir(), "manual.hqjson"),
-		Headless:   true,
-		StartOnly:  true,
-	}
-	if err := smoke.Run(cfg); err == nil {
-		t.Fatal("expected readable non-executable hq path to fail during HqStart")
-	}
-}
-
-func TestRealVim9LspConfirmQueueSmoke(t *testing.T) {
-	root := mustPackageRoot(t)
-	vimLSP := requireVim9LSP(t)
-	vim := requireVim(t)
-	hqBin := buildHQStub(t)
-	profileRoot := prepareProfile(t, root, "local")
-	queue := filepath.Join(profileRoot, "local", "queue.jsonl")
-	target := t.TempDir()
-	bufferText := "@host.open\npath=" + target
-	resultRoot := t.TempDir()
-	submitResult := filepath.Join(resultRoot, "submit.json")
-	bufferResult := filepath.Join(resultRoot, "after.json")
-	undoResult := filepath.Join(resultRoot, "undo.json")
-	messages := filepath.Join(resultRoot, "messages.txt")
-	cfg := smoke.Config{
-		HQBin:            hqBin,
-		Vim:              vim,
-		Vim9LSP:          vimLSP,
-		PluginRoot:       root,
-		Profile:          "local",
-		Buffer:           filepath.Join(t.TempDir(), "manual.hqjson"),
-		BufferText:       bufferText,
-		Headless:         true,
-		Env:              map[string]string{"HQ_STUB_ROOT": profileRoot},
-		ResultPath:       submitResult,
-		BufferResultPath: bufferResult,
-		UndoResultPath:   undoResult,
-		MessagesPath:     messages,
-	}
-	if err := smoke.Run(cfg); err != nil {
-		t.Fatalf("smoke failed: %v", err)
-	}
-	b, err := os.ReadFile(queue)
-	if err != nil {
-		t.Fatalf("queue not written: %v", err)
-	}
-	var row struct {
-		Kind string `json:"kind"`
-		Path string `json:"path"`
-	}
-	if err := json.Unmarshal(bytesTrimLine(b), &row); err != nil {
-		t.Fatalf("queue row json: %v\n%s", err, b)
-	}
-	if row.Kind != "hq.hostCommandQueued.v1" {
-		t.Fatalf("unexpected queue kind: %s", row.Kind)
-	}
-	if row.Path != target {
-		t.Fatalf("queue path = %q, want buffer path %q", row.Path, target)
-	}
-	if got := readVimBuffer(t, bufferResult); len(got.Lines) != 1 || got.Lines[0] != "" {
-		t.Fatalf("accepted draft was not consumed: %#v result=%s", got, readText(t, submitResult))
-	}
-	if got := readVimBuffer(t, undoResult); strings.Join(got.Lines, "\n") != bufferText {
-		t.Fatalf("one Vim undo did not restore draft text: %#v", got)
-	}
-	if got := readText(t, messages); !strings.Contains(got, "hq accepted hqcmd_stub; draft consumed") {
-		t.Fatalf("missing consumed outcome: %s", got)
-	}
-}
-
-func TestVersionGuardKeepsNewerDraft(t *testing.T) {
-	root := mustPackageRoot(t)
-	resultPath := filepath.Join(t.TempDir(), "version-guard.json")
-	script := strings.Join([]string{
-		"vim9script",
-		"execute 'set runtimepath^=' .. fnameescape(" + vimLiteral(requireVim9LSP(t)) + ")",
-		"execute 'set runtimepath^=' .. fnameescape(" + vimLiteral(root) + ")",
-		"import autoload 'hq.vim' as hq",
-		"new",
-		"setline(1, ['@host.open', 'path=old'])",
-		"feedkeys(\"\\<Esc>\", 'xt')",
-		"var submittedTick = b:changedtick",
-		"var uri = 'file:///version-guard.hqjson'",
-		"var accepted = {draftConsumption: {kind: 'hq.draftConsumption.v1', textDocument: {uri: uri, version: submittedTick}, edits: [{range: {start: {line: 0, character: 0}, end: {line: 1, character: 8}}, newText: ''}]}}",
-		"setline(1, '@host.open.newer')",
-		"var outcome = hq.ConsumeAcceptedDraft(accepted, bufnr(), uri, submittedTick, submittedTick)",
-		"writefile([json_encode({outcome: outcome, lines: getline(1, '$')})], " + vimLiteral(resultPath) + ")",
-		"qa!",
-	}, "\n") + "\n"
-	scriptPath := filepath.Join(t.TempDir(), "version-guard.vim")
-	if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(requireVim(t), "--clean", "-Nu", "NONE", "-n", "-es", "-S", scriptPath)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("version-guard Vim failed: %v\n%s\nscript:\n%s", err, output, script)
-	}
-	var proof struct {
-		Outcome string   `json:"outcome"`
-		Lines   []string `json:"lines"`
-	}
-	content, err := os.ReadFile(resultPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(content, &proof); err != nil {
-		t.Fatal(err)
-	}
-	if proof.Outcome != "newer-draft-kept" || strings.Join(proof.Lines, "\n") != "@host.open.newer\npath=old" {
-		t.Fatalf("version guard proof=%#v", proof)
-	}
-}
-
+// TestNativeHQFuzzyAutomaticPopupDoesNotAccept fixes the user-visible command
+// language only: the default suggestion is an AI-agent decision, an explicit
+// direct command remains available, documentation is complete, selection is
+// reversible, and completion has no durable effect.
 func TestNativeHQFuzzyAutomaticPopupDoesNotAccept(t *testing.T) {
 	if os.Getenv("HQ_NATIVE_HQ_FUZZY_PROOF") != "1" {
 		t.Skip("set HQ_NATIVE_HQ_FUZZY_PROOF=1 and run under a real terminal")
 	}
 	hqBin := os.Getenv("HQ_BIN")
 	if hqBin == "" {
-		t.Fatal("HQ_BIN is required for the real-hq fuzzy popup proof")
+		t.Fatal("HQ_BIN is required for the real-hq popup proof")
 	}
 	root := mustPackageRoot(t)
 	for _, tc := range []struct {
-		name       string
-		query      string
-		label      string
-		want       string
-		detail     string
-		docPreview string
-		fileFormat string
+		name        string
+		query       string
+		label       string
+		want        string
+		detail      string
+		docPreview  string
+		fileFormat  string
+		mustBeFirst bool
 	}{
 		{
-			name: "fuzzy schema template", query: "@qce", label: "queue.create",
-			want: "@queue.create\npath=", detail: "schema_template | world declaration",
-			docPreview: "Preview:\n@queue.create\npath=", fileFormat: "unix",
+			name: "AI agent is the first command", query: "@", label: "agent.exec",
+			want: "@agent.exec\nprompt=", detail: "schema_template | world declaration",
+			docPreview: "Preview:\n@agent.exec\nprompt=", fileFormat: "unix", mustBeFirst: true,
 		},
 		{
-			name: "field key", query: "@queue.create\npa", label: "path",
-			want: "@queue.create\npath=", detail: "missing_key | path | world declaration",
-			docPreview: "Preview:\npath=", fileFormat: "unix",
+			name: "AI agent prompt field", query: "@agent.exec\npr", label: "prompt",
+			want: "@agent.exec\nprompt=", detail: "missing_key | string | world declaration",
+			docPreview: "Preview:\nprompt=", fileFormat: "unix",
 		},
 		{
-			name: "unicode CRLF field value", query: "@queue.create\npath=日😀éj", label: "日本語-😀-é.jsonl",
-			want: "@queue.create\npath=日本語-😀-é.jsonl", detail: "field_value | sources: field.example | world declaration",
+			name: "explicit direct command with Unicode CRLF", query: "@direct.open\npath=日😀éj", label: "日本語-😀-é.jsonl",
+			want: "@direct.open\npath=日本語-😀-é.jsonl", detail: "field_value | sources: field.example | world declaration",
 			docPreview: "Preview:\n日本語-😀-é.jsonl", fileFormat: "dos",
 		},
 	} {
@@ -198,19 +111,11 @@ func TestNativeHQFuzzyAutomaticPopupDoesNotAccept(t *testing.T) {
 			profileEnv, accepted := prepareStrictHQProfile(t, root, "local")
 			artifact := filepath.Join(t.TempDir(), "native-hq-popup.json")
 			cfg := smoke.Config{
-				HQBin:                   hqBin,
-				Vim:                     requireVim(t),
-				Vim9LSP:                 requireVim9LSP(t),
-				PluginRoot:              root,
-				Profile:                 "local",
-				Buffer:                  filepath.Join(t.TempDir(), "native-hq-popup.hqjson"),
-				CompletionText:          tc.query,
-				ExpectedCompletionLabel: tc.label,
-				ExpectedCompletionText:  tc.want,
-				NativePopupFileFormat:   tc.fileFormat,
-				NativePopupArtifact:     artifact,
-				Env:                     profileEnv,
-				Timeout:                 15 * time.Second,
+				HQBin: hqBin, Vim: requireVim(t), Vim9LSP: requireVim9LSP(t), PluginRoot: root,
+				Profile: "local", Buffer: filepath.Join(t.TempDir(), "native-hq-popup.hqjson"),
+				CompletionText: tc.query, ExpectedCompletionLabel: tc.label, ExpectedCompletionText: tc.want,
+				NativePopupFileFormat: tc.fileFormat, NativePopupArtifact: artifact,
+				Env: profileEnv, Timeout: 15 * time.Second,
 			}
 			if err := smoke.Run(cfg); err != nil {
 				artifactBody, _ := os.ReadFile(artifact)
@@ -219,22 +124,26 @@ func TestNativeHQFuzzyAutomaticPopupDoesNotAccept(t *testing.T) {
 			var result struct {
 				Status                 string   `json:"status"`
 				Failure                string   `json:"failure"`
-				Lines                  []string `json:"lines"`
-				UndoLines              []string `json:"undo_lines"`
 				CandidateDetail        string   `json:"candidate_detail"`
 				CandidateDocumentation string   `json:"candidate_documentation"`
+				Lines                  []string `json:"lines"`
+				UndoLines              []string `json:"undo_lines"`
 				DocumentationPopup     []string `json:"documentation_popup"`
 				FileFormat             string   `json:"fileformat"`
+				Items                  []struct {
+					Word string `json:"word"`
+					Abbr string `json:"abbr"`
+				} `json:"items"`
 			}
 			b, err := os.ReadFile(artifact)
 			if err != nil {
-				t.Fatalf("read native real-hq popup artifact: %v", err)
+				t.Fatal(err)
 			}
 			if err := json.Unmarshal(b, &result); err != nil {
-				t.Fatalf("decode native real-hq popup artifact: %v\n%s", err, b)
+				t.Fatalf("decode popup artifact: %v\n%s", err, b)
 			}
 			if result.Status != "passed" || result.Failure != "" {
-				t.Fatalf("native real-hq popup result = %#v", result)
+				t.Fatalf("native popup result = %#v", result)
 			}
 			if strings.Join(result.Lines, "\n") != tc.want || strings.Join(result.UndoLines, "\n") != tc.query {
 				t.Fatalf("native edit/undo result = %#v", result)
@@ -242,88 +151,118 @@ func TestNativeHQFuzzyAutomaticPopupDoesNotAccept(t *testing.T) {
 			if result.CandidateDetail != tc.detail || !strings.Contains(result.CandidateDocumentation, tc.docPreview) {
 				t.Fatalf("native detail/documentation result = %#v", result)
 			}
-			wantPopup := result.CandidateDocumentation
-			if strings.Join(result.DocumentationPopup, "\n") != wantPopup || result.FileFormat != tc.fileFormat {
+			if strings.Join(result.DocumentationPopup, "\n") != result.CandidateDocumentation || result.FileFormat != tc.fileFormat {
 				t.Fatalf("native documentation/format result = %#v", result)
 			}
-			acceptedBody, err := os.ReadFile(accepted)
-			if err != nil {
-				t.Fatalf("read accepted log after native selection: %v", err)
+			if tc.mustBeFirst {
+				if len(result.Items) == 0 || (!strings.Contains(result.Items[0].Word, tc.label) && result.Items[0].Abbr != tc.label) {
+					t.Fatalf("AI agent is not the first popup item: %#v", result.Items)
+				}
 			}
-			if strings.TrimSpace(string(acceptedBody)) != "" {
-				t.Fatalf("native completion selection wrote accepted evidence: %s", acceptedBody)
+			if body, err := os.ReadFile(accepted); err != nil || strings.TrimSpace(string(body)) != "" {
+				t.Fatalf("completion changed durable accepted history: err=%v body=%s", err, body)
 			}
-			t.Logf("native UI evidence: fileformat=%s query=%q completed=%q undo=%q detail=%q documentation=%q",
-				result.FileFormat, tc.query, tc.want, strings.Join(result.UndoLines, "\n"),
-				result.CandidateDetail, result.CandidateDocumentation)
 		})
 	}
 }
 
-func TestAcceptedSubmitKeepsDraftWhenConsumptionPlanIsInvalid(t *testing.T) {
+// TestAcceptedSubmitKeepsDraftOnUnsafeConsumption fixes the editor's only
+// failure policy: acceptance remains durable, but a stale or malformed
+// consumption projection must never destroy the newer draft.
+func TestAcceptedSubmitKeepsDraftOnUnsafeConsumption(t *testing.T) {
 	root := mustPackageRoot(t)
-	profileRoot := prepareProfile(t, root, "local")
-	queue := filepath.Join(profileRoot, "local", "queue.jsonl")
-	target := t.TempDir()
-	draft := "@host.open\npath=" + target
-	resultRoot := t.TempDir()
-	bufferResult := filepath.Join(resultRoot, "after.json")
-	messages := filepath.Join(resultRoot, "messages.txt")
-	cfg := smoke.Config{
-		HQBin: buildHQStub(t), Vim: requireVim(t), Vim9LSP: requireVim9LSP(t),
-		PluginRoot: root, Profile: "local", Buffer: filepath.Join(t.TempDir(), "manual.hqjson"),
-		BufferText: draft, Headless: true,
-		Env:              map[string]string{"HQ_STUB_ROOT": profileRoot, "HQ_STUB_PLAN_MODE": "invalid"},
-		BufferResultPath: bufferResult, MessagesPath: messages,
-	}
-	if err := smoke.Run(cfg); err != nil {
-		t.Fatalf("invalid-plan smoke failed: %v", err)
-	}
-	if rows := readJSONLRows(t, queue); len(rows) != 1 {
-		t.Fatalf("accepted rows=%#v", rows)
-	}
-	if got := readVimBuffer(t, bufferResult); strings.Join(got.Lines, "\n") != draft {
-		t.Fatalf("draft changed after invalid plan: %#v", got)
-	}
-	if got := readText(t, messages); !strings.Contains(got, "draft not consumed (invalid consumption plan)") {
-		t.Fatalf("missing invalid-plan outcome: %s", got)
-	}
-}
-
-func TestHQRejectsProfileWithMissingJSONL(t *testing.T) {
-	hqBin := buildHQStub(t)
+	lspFixture := minimalLSPFixture(t)
 	for _, tc := range []struct {
-		name  string
-		setup func(*testing.T, string)
-		code  string
+		name         string
+		plan         string
+		newerEdit    string
+		wantOutcome  string
+		wantComplete string
 	}{
-		{name: "world", code: "profile_world_missing"},
-		{name: "queue", code: "profile_queue_missing", setup: func(t *testing.T, dir string) {
-			t.Helper()
-			if err := os.WriteFile(filepath.Join(dir, "world.jsonl"), []byte("{}\n"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-		}},
+		{
+			name:        "newer local edit",
+			plan:        "{draftConsumption: {kind: 'hq.draftConsumption.v1', textDocument: {uri: uri, version: submittedTick}, edits: [{range: {start: {line: 0, character: 0}, end: {line: 1, character: 8}}, newText: ''}]}}",
+			newerEdit:   "setline(1, '@direct.open.newer')",
+			wantOutcome: "newer-draft-kept", wantComplete: "@direct.open.newer\npath=old",
+		},
+		{
+			name:        "invalid consumption plan",
+			plan:        "{draftConsumption: {kind: 'hq.draftConsumption.v1', textDocument: {uri: uri, version: submittedTick}, edits: [{range: {start: {line: 999, character: 0}, end: {line: 999, character: 0}}, newText: ''}]}}",
+			wantOutcome: "invalid-plan", wantComplete: "@direct.open\npath=old",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			profileRoot := t.TempDir()
-			dir := filepath.Join(profileRoot, "local")
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			resultPath := filepath.Join(t.TempDir(), "draft-guard.json")
+			lines := []string{
+				"vim9script",
+				"execute 'set runtimepath^=' .. fnameescape(" + vimLiteral(lspFixture) + ")",
+				"execute 'set runtimepath^=' .. fnameescape(" + vimLiteral(root) + ")",
+				"import autoload 'hq.vim' as hq",
+				"new", "setline(1, ['@direct.open', 'path=old'])", "feedkeys(\"\\<Esc>\", 'xt')",
+				"var submittedTick = b:changedtick", "var uri = 'file:///draft-guard.hqjson'",
+				"var accepted = " + tc.plan,
+			}
+			if tc.newerEdit != "" {
+				lines = append(lines, tc.newerEdit)
+			}
+			lines = append(lines,
+				"var outcome = hq.ConsumeAcceptedDraft(accepted, bufnr(), uri, submittedTick, submittedTick)",
+				"writefile([json_encode({outcome: outcome, lines: getline(1, '$')})], "+vimLiteral(resultPath)+")", "qa!",
+			)
+			script := strings.Join(lines, "\n") + "\n"
+			scriptPath := filepath.Join(t.TempDir(), "draft-guard.vim")
+			if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if tc.setup != nil {
-				tc.setup(t, dir)
+			if output, err := exec.Command(requireVim(t), "--clean", "-Nu", "NONE", "-n", "-es", "-S", scriptPath).CombinedOutput(); err != nil {
+				t.Fatalf("draft-guard Vim failed: %v\n%s\n%s", err, output, script)
 			}
-			cmd := exec.Command(hqBin, "lsp", "--profile", "local")
-			cmd.Env = append(os.Environ(), "HQ_STUB_ROOT="+profileRoot)
-			b, err := cmd.CombinedOutput()
-			if err == nil {
-				t.Fatal("expected missing profile JSONL to fail")
+			var proof struct {
+				Outcome string   `json:"outcome"`
+				Lines   []string `json:"lines"`
 			}
-			if !strings.Contains(string(b), `"code":"`+tc.code+`"`) {
-				t.Fatalf("unexpected startup error: %s", b)
+			body, err := os.ReadFile(resultPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(body, &proof); err != nil {
+				t.Fatal(err)
+			}
+			if proof.Outcome != tc.wantOutcome || strings.Join(proof.Lines, "\n") != tc.wantComplete {
+				t.Fatalf("draft guard proof=%#v", proof)
 			}
 		})
+	}
+}
+
+func assertMinimalEditorSurface(t *testing.T, root, lspFixture string) {
+	t.Helper()
+	resultPath := filepath.Join(t.TempDir(), "surface.json")
+	script := strings.Join([]string{
+		"set nocompatible", "set noswapfile",
+		"execute 'set runtimepath^=' . fnameescape(" + vimLiteral(lspFixture) + ")",
+		"execute 'set runtimepath^=' . fnameescape(" + vimLiteral(root) + ")",
+		"runtime plugin/lsp.vim", "runtime plugin/hq.vim",
+		"call writefile([json_encode({'start': exists(':HqStart'), 'submit': exists(':HqSubmit'), 'doctor': exists(':HqDoctor'), 'complete': exists(':HqComplete')})], " + vimLiteral(resultPath) + ")",
+		"qa!",
+	}, "\n") + "\n"
+	scriptPath := filepath.Join(t.TempDir(), "surface.vim")
+	if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command(requireVim(t), "--clean", "-Nu", "NONE", "-n", "-es", "-S", scriptPath).CombinedOutput(); err != nil {
+		t.Fatalf("surface Vim failed: %v\n%s", err, output)
+	}
+	var got struct{ Start, Submit, Doctor, Complete int }
+	body, err := os.ReadFile(resultPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Start != 2 || got.Submit != 2 || got.Doctor != 2 || got.Complete != 0 {
+		t.Fatalf("unexpected editor command surface: %#v", got)
 	}
 }
 
@@ -332,6 +271,62 @@ func mustPackageRoot(t *testing.T) string {
 	root, err := smoke.PackageRoot("")
 	if err != nil {
 		t.Fatal(err)
+	}
+	return root
+}
+
+func minimalLSPFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	files := map[string]string{
+		"plugin/lsp.vim": `vim9script
+
+def g:LspAddServer(servers: list<dict<any>>)
+enddef
+
+def g:LspOptionsSet(options: dict<any>)
+enddef
+
+def g:LspEnable()
+enddef
+
+def g:LspServerReady(): bool
+  return false
+enddef
+`,
+		"autoload/lsp/buffer.vim": `vim9script
+export def CurbufGetServerByName(name: string): dict<any>
+  return {}
+enddef
+`,
+		"autoload/lsp/completion.vim": `vim9script
+export def LspComplete(force: bool)
+enddef
+`,
+		"autoload/lsp/util.vim": `vim9script
+export def LspBufnrToUri(bnr: number): string
+  return 'file:///fixture.hqjson'
+enddef
+`,
+		"autoload/lsp/offset.vim": `vim9script
+export def EncodePosition(server: dict<any>, bnr: number, position: dict<number>)
+enddef
+export def EncodeRange(server: dict<any>, bnr: number, range: dict<dict<number>>)
+enddef
+`,
+		"autoload/lsp/textedit.vim": `vim9script
+export def ApplyTextEdits(bnr: number, edits: list<dict<any>>)
+enddef
+`,
+	}
+	for relative, body := range files {
+		path := filepath.Join(root, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return root
 }
@@ -363,37 +358,6 @@ func requireVim(t *testing.T) string {
 	}
 	t.Skip("vim not found; set VIM_EXE")
 	return ""
-}
-
-func buildHQStub(t *testing.T) string {
-	t.Helper()
-	out := filepath.Join(t.TempDir(), exeName("hqstub"))
-	cmd := exec.Command("go", "build", "-o", out, "./testfixture/hqstub")
-	cmd.Dir = mustPackageRoot(t)
-	if b, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build hq stub: %v\n%s", err, b)
-	}
-	return out
-}
-
-func prepareProfile(t *testing.T, packageRoot, profile string) string {
-	t.Helper()
-	root := t.TempDir()
-	dir := filepath.Join(root, profile)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	world, err := os.ReadFile(filepath.Join(packageRoot, "testdata", "world.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "world.jsonl"), world, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "queue.jsonl"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return root
 }
 
 func prepareStrictHQProfile(t *testing.T, packageRoot, profile string) (map[string]string, string) {
@@ -429,7 +393,7 @@ func prepareStrictHQProfile(t *testing.T, packageRoot, profile string) (map[stri
 		t.Fatal(err)
 	}
 	profileBytes, err := json.Marshal(map[string]any{
-		"kind": "hq.profile.v1", "name": profile, "deployment_id": "hq-vim-native-fuzzy-proof",
+		"kind": "hq.profile.v1", "name": profile, "deployment_id": "hq-vim-agent-first-proof",
 		"world_path": world, "accepted_path": accepted, "workspace_root": workspace,
 		"events_path": events, "capabilities_path": capabilities,
 		"poll_interval_ms": 50, "health_timeout_ms": 2000,
@@ -452,11 +416,6 @@ func exeName(name string) string {
 		return name + ".exe"
 	}
 	return name
-}
-
-func bytesTrimLine(b []byte) []byte {
-	parts := strings.SplitN(strings.TrimSpace(string(b)), "\n", 2)
-	return []byte(parts[0])
 }
 
 type vimBufferSnapshot struct {

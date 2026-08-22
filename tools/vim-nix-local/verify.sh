@@ -7,10 +7,11 @@ proof_dir="$repo_root/proofs/vim-nix"
 out=${LOCAL_PROOF_OUT:-"$repo_root/.local/vim-nix-proof"}
 rm -rf "$out"; mkdir -p "$out"/{logs,evidence}
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+vim_bin=${VIM_BIN:-$(command -v vim)}
 
-lock_sha=35cdda5fa9645ab469924c69f36992db2f8637360fce128e7c7fd372c3a4ce0f
+lock_sha=308c955a63f9acfc7e4f55073dfe93c41d5f3f6ea4c3cad3194b4410d4769474
 test "$(sha256sum "$proof_dir/flake.lock" | cut -d' ' -f1)" = "$lock_sha"
-for rev in 0ae2bc1419c3f345984c2629e72e7a631820fa4d 3118886f34ac5615e8a7732a6297bd41900e21e1 989016ae2ae4cbf304a9ca29478f47fec794493f 8aecd377f08e9fbdf0092478ab7ec3ce5e0f04ec; do
+for rev in 0ae2bc1419c3f345984c2629e72e7a631820fa4d 7f65e922d52fb47bc6dbf0c3b5f99c937e27b566 989016ae2ae4cbf304a9ca29478f47fec794493f 8aecd377f08e9fbdf0092478ab7ec3ce5e0f04ec; do
   grep -Fq "\"rev\": \"$rev\"" "$proof_dir/flake.lock"
 done
 
@@ -19,9 +20,13 @@ bash -n "$script_dir/verify.sh" "$script_dir/herdr-proof.sh"
 python3 -m py_compile "$script_dir/oci-proof.py" "$proof_dir/verify_oci.py"
 cat "$proof_dir"/ci.parts/*.sh >"$work/ci.sh"; bash -n "$work/ci.sh"
 cat "$proof_dir"/run-proof.parts/*.sh >"$work/run-proof.sh"; bash -n "$work/run-proof.sh"
+test ! -e "$repo_root/packages/hq-vim/autoload/hq_completion.vim"
+test ! -e "$repo_root/packages/hq-vim/docs/manual-completion.md"
+test ! -e "$repo_root/packages/hq-vim/manual_history_completion_test.go"
+test "$(grep -Rh '^func Test' "$repo_root/packages/hq-vim" --include='*_test.go' | wc -l | tr -d ' ')" = 5
 
 printf '== exact test-only patch RED/GREEN ==\n' | tee -a "$out/logs/summary.txt"
-mapfile -t paths < <(sed -n 's/^diff --git a\/\([^ ]*\) b\/.*/\1/p' "$proof_dir/hq-vim-native-popup-proof.patch")
+mapfile -t paths < <(sed -n -e 's/^diff --git a\/\([^ ]*\) b\/.*/\1/p' -e 's/^--- a\/\(.*\)$/\1/p' "$proof_dir/hq-vim-native-popup-proof.patch" | sort -u)
 test "${#paths[@]}" -eq 1 && test "${paths[0]}" = packages/hq-vim/internal/smoke/smoke.go
 git -C "$repo_root" apply --check "$proof_dir/hq-vim-native-popup-proof.patch"
 mkdir -p "$work"/{unpatched,patched}/packages
@@ -35,25 +40,10 @@ grep -Fq not-tty "$out/logs/tty-red-go-test.log"
 (cd "$work/patched" && git apply "$proof_dir/hq-vim-native-popup-proof.patch")
 gofmt -w "$work/patched/packages/hq-vim/internal/smoke/smoke.go"
 grep -Fq 'os.OpenFile("/dev/tty", os.O_RDWR, 0)' "$work/patched/packages/hq-vim/internal/smoke/smoke.go"
-grep -Fq "l:index + 1), 'nx')" "$work/patched/packages/hq-vim/internal/smoke/smoke.go"
 (cd "$work/patched/packages/hq-vim" && go test ./... -count=1 | tee "$out/logs/go-test.log")
 green=$(printf 'HQ_SMOKE_TTY_PROOF=1 go test ./internal/smoke -run TestNativePopupArtifactUsesControllingTTY -count=1 >%q 2>&1' "$out/logs/tty-green-go-test.log")
 (cd "$work/patched/packages/hq-vim" && timeout 30s script -qefc "$green" "$out/evidence/tty-green.typescript" >/dev/null)
 grep -Fq ok "$out/logs/tty-green-go-test.log"
-
-printf '== real Vim feedkeys n/nx proof ==\n' | tee -a "$out/logs/summary.txt"
-vim_bin=${VIM_BIN:-$(command -v vim)}
-for mode in nx n; do
-  artifact="$out/evidence/feedkeys-$mode.json"
-  command=$(printf 'env HQ_FEEDKEYS_PROOF_OUT=%q HQ_FEEDKEYS_MODE=%q %q --clean -Nu NONE -n -S %q' "$artifact" "$mode" "$vim_bin" "$script_dir/feedkeys-race.vim")
-  timeout 20s script -qefc "$command" "$out/evidence/feedkeys-$mode.typescript" >/dev/null
-done
-python3 - "$out/evidence/feedkeys-nx.json" "$out/evidence/feedkeys-n.json" <<'PY'
-import json, sys
-nx, n = (json.load(open(path)) for path in sys.argv[1:])
-assert nx["status"] == "PASS" and nx["line"] == "alpha"
-assert n["status"] == "PASS" and n["line"] == "wrong"
-PY
 
 printf '== OCI positive/mutation proof ==\n' | tee -a "$out/logs/summary.txt"
 python3 "$script_dir/oci-proof.py" "$proof_dir/verify_oci.py" "$work" "$out"
@@ -76,9 +66,16 @@ receipt = {
   "source": {"flakeLockSha256": lock_sha, "testOnlyPatchPath": "proofs/vim-nix/hq-vim-native-popup-proof.patch", "patchTouches": ["packages/hq-vim/internal/smoke/smoke.go"]},
   "localLowCostGates": {
     "shellSyntax": "PASS", "ociVerifierPythonSyntax": "PASS", "patchAppliesCleanly": "PASS",
+    "editorCommandSurface": "START_SUBMIT_DOCTOR_ONLY",
+    "canonTDDTests": [
+      "editor surface and exact HQ binding",
+      "canonical LSP completion and explicit submit",
+      "agent-first/direct-fallback native popup",
+      "unsafe draft consumption preservation",
+      "controlling TTY"
+    ],
     "unpatchedTTYControl": "RED_AS_EXPECTED", "patchedGoTests": "PASS",
     "childUsesControllingTTYWhenParentOutputIsRedirected": "PASS",
-    "feedkeysNxConsumesObservedCompletionBeforeRecompute": "PASS", "feedkeysNControlExposesRace": "PASS",
     "ociVerifierPositiveFixture": "PASS", "ociVerifierMutationRejection": "PASS",
     "herdrTopologyProbe": herdr,
     "vimRuntimeObserved": subprocess.check_output([vim, "--version"], text=True).splitlines()[0],

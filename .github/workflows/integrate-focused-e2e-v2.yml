@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 120
     env:
       BASE: 6fbcdd0147b55975492954405e1f562074ddb9c2
-      SOURCE_COMMIT: 988bd1b1da1f22cc75454398dba632b51c0b3233
-      SOURCE_TREE: 85534a1e4566db89377bd5075f15ed916ee43920
+      SOURCE_COMMIT: f54d79dc354b21f473e98ed3fc64e9094f531a40
+      SOURCE_TREE: da48fee853e2145576d8ae0854a5dd85fe6f9c17
       EXPECTED_HQ: 779a298f4efcff8df60205aaf973cb224388a82b
       FINAL_BRANCH: ux/focused-e2e-screenshot-refactor-20260822
       ARTIFACT: /tmp/focused-e2e-screenshot-v2

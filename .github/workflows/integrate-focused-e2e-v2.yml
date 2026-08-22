@@ -84,6 +84,13 @@ jobs:
               raise SystemExit(f"expected one source-pin match, got {source_count}")
           text = text.replace(old_source, new_source, 1)
 
+          old_geometry = "command=$(printf 'cd %q && HQ_CHOICE_E2E=1"
+          new_geometry = "command=$(printf 'cd %q && stty cols 180 rows 55 && HQ_CHOICE_E2E=1"
+          geometry_count = text.count(old_geometry)
+          if geometry_count != 1:
+              raise SystemExit(f"expected one PTY-geometry match, got {geometry_count}")
+          text = text.replace(old_geometry, new_geometry, 1)
+
           path.write_text(text, encoding="utf-8")
           PY
           sha256sum "$tmp/integrate.sh" \
@@ -91,6 +98,7 @@ jobs:
           printf '%s\n' \
             'identityGate=base-is-ancestor+exact-source-tree' \
             'sourcePin=SOURCE_COMMIT' \
+            'ptyGeometry=180x55' \
             > "$ARTIFACT/helper-fixes.txt"
           chmod 700 "$tmp/integrate.sh"
           "$tmp/integrate.sh"

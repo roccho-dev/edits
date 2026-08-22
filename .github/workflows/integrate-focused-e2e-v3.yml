@@ -1,0 +1,157 @@
+name: integrate focused E2E v3
+
+on:
+  push:
+    branches:
+      - automation/focused-e2e-v2-20260822
+  pull_request:
+    branches:
+      - proof/vim-nix-herdr-oci-current-20260821
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: focused-e2e-v3-20260822
+  cancel-in-progress: true
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      BASE: 6fbcdd0147b55975492954405e1f562074ddb9c2
+      SOURCE_PARENT: 1510f097fce7eada82c6fcab02ad3969619f8f19
+      SOURCE_BRANCH: automation/focused-e2e-source-popup-sync-20260822
+      EXPECTED_HQ: 779a298f4efcff8df60205aaf973cb224388a82b
+      FINAL_BRANCH: ux/focused-e2e-screenshot-refactor-20260822
+      ARTIFACT: /tmp/focused-e2e-screenshot-v3
+      TARGET_PR: "101"
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - name: Install screenshot-only host adapters
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb xterm scrot x11-utils
+
+      - id: integrate
+        name: Resolve exact source branch and run independent E2Es
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT"
+          git fetch --no-tags origin "+refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH"
+          export SOURCE_COMMIT=$(git rev-parse "refs/remotes/origin/$SOURCE_BRANCH")
+          export SOURCE_TREE=$(git rev-parse "$SOURCE_COMMIT^{tree}")
+          test "$(git rev-parse "$SOURCE_COMMIT^")" = "$SOURCE_PARENT"
+          test "$(git merge-base "$SOURCE_COMMIT" "$BASE")" = "$BASE"
+          test "$(git diff --name-only "$SOURCE_PARENT" "$SOURCE_COMMIT" | tr -d '\n')" = \
+            'packages/hq-vim/internal/smoke/smoke.go'
+          printf 'sourceCommit=%s\nsourceTree=%s\nsourceParent=%s\n' \
+            "$SOURCE_COMMIT" "$SOURCE_TREE" "$SOURCE_PARENT" \
+            | tee "$ARTIFACT/source-readback.txt"
+
+          tmp="$RUNNER_TEMP/focused-e2e-v3-integrator"
+          mkdir -p "$tmp"
+          base64 --decode proofs/vim-nix/integrate-focused-e2e-v2.sh.gz.b64 > "$tmp/integrate.sh.gz"
+          gzip -dc "$tmp/integrate.sh.gz" > "$tmp/integrate.sh"
+          sha256sum "$tmp/integrate.sh.gz" "$tmp/integrate.sh" \
+            | tee "$ARTIFACT/integrator-sha256.before-helper-fixes.txt"
+
+          python3 - "$tmp/integrate.sh" <<'PY'
+          from pathlib import Path
+          import os
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+
+          old_identity = 'test "$(git rev-parse "$SOURCE_COMMIT^")" = "$BASE"'
+          new_identity = 'test "$(git merge-base "$SOURCE_COMMIT" "$BASE")" = "$BASE"'
+          if text.count(old_identity) != 1:
+              raise SystemExit("identity gate drift")
+          text = text.replace(old_identity, new_identity, 1)
+
+          old_source = "4e36f0261147e5d315054c1503edf2a6c9db3dee"
+          new_source = os.environ["SOURCE_COMMIT"]
+          if text.count(old_source) != 1:
+              raise SystemExit("source pin drift")
+          text = text.replace(old_source, new_source, 1)
+
+          old_geometry = "command=$(printf 'cd %q && HQ_CHOICE_E2E=1"
+          new_geometry = "command=$(printf 'cd %q && stty cols 180 rows 55 && HQ_CHOICE_E2E=1"
+          if text.count(old_geometry) != 1:
+              raise SystemExit("PTY geometry hook drift")
+          text = text.replace(old_geometry, new_geometry, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          sha256sum "$tmp/integrate.sh" | tee "$ARTIFACT/integrator-sha256.executed.txt"
+          printf '%s\n' \
+            'identityGate=base-is-ancestor+exact-source-tree' \
+            'sourcePin=materialized-source-branch' \
+            'ptyGeometry=180x55' \
+            > "$ARTIFACT/helper-fixes.txt"
+          chmod 700 "$tmp/integrate.sh"
+          "$tmp/integrate.sh"
+
+      - name: Report the exact focused failure boundary
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/focused-failure.md"
+          {
+            printf 'Focused E2E v3 failed closed in run `%s`.\n\n' "$GITHUB_RUN_ID"
+            printf 'Source readback:\n```text\n'
+            cat "$ARTIFACT/source-readback.txt" 2>/dev/null || true
+            printf '```\n\nFailure matches:\n```text\n'
+            grep -RInE -- '--- FAIL:|selected completion documentation|timeout|FAIL$|panic:|Pattern not found|Keyword completion' \
+              "$ARTIFACT" 2>/dev/null | sed -n '1,100p' || true
+            printf '```\n\nFocused log tails:\n```text\n'
+            find "$ARTIFACT" -type f \( -path '*/e2e/*.log' -o -path '*/screenshots/*.log' \) -print0 2>/dev/null \
+              | sort -z \
+              | while IFS= read -r -d '' file; do
+                  printf '\n== %s ==\n' "${file#$ARTIFACT/}"
+                  tail -80 "$file"
+                done
+            printf '```\n'
+          } > "$report"
+          python3 - "$report" <<'PY'
+          from pathlib import Path
+          import sys
+          p = Path(sys.argv[1])
+          s = p.read_text(encoding='utf-8', errors='replace')
+          p.write_text(s[:60000] + ('\n[truncated]\n' if len(s) > 60000 else ''), encoding='utf-8')
+          PY
+          gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body-file "$report"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: focused-e2e-v3-${{ steps.integrate.outputs.commit || github.run_id }}
+          path: /tmp/focused-e2e-screenshot-v3
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: warn

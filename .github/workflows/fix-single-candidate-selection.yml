@@ -1,0 +1,65 @@
+name: fix single-candidate native selection
+
+on:
+  push:
+    branches:
+      - automation/fix-single-candidate-selection-20260822
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TARGET_BRANCH: automation/focused-e2e-source-20260822
+      EXPECTED_HEAD: 988bd1b1da1f22cc75454398dba632b51c0b3233
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+
+      - name: Keep an already-selected native completion selected
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('packages/hq-vim/internal/smoke/smoke.go')
+          text = path.read_text(encoding='utf-8')
+          old = '''\t\t"  let g:hq_native_expected_index = l:index",\n\t\t"  call feedkeys(repeat(\\\"\\\\<C-N>\\\", l:index + 1), 'nt')",\n\t\t"  call timer_start(20, function('HqNativePopupObserve'))",'''
+          new = '''\t\t"  let g:hq_native_expected_index = l:index",\n\t\t"  let l:selected = get(complete_info(['selected']), 'selected', -1)",\n\t\t"  if l:selected != l:index",\n\t\t"    let l:steps = l:selected < 0 ? l:index + 1 : (l:index - l:selected + len(l:info.items)) % len(l:info.items)",\n\t\t"    if l:steps > 0",\n\t\t"      call feedkeys(repeat(\\\"\\\\<C-N>\\\", l:steps), 'nt')",\n\t\t"    endif",\n\t\t"  endif",\n\t\t"  call timer_start(20, function('HqNativePopupObserve'))",'''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'expected one native-selection block, got {count}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          gofmt -w packages/hq-vim/internal/smoke/smoke.go
+          git diff --check
+          test "$(git diff --name-only | tr -d '\n')" = 'packages/hq-vim/internal/smoke/smoke.go'
+          (
+            cd packages/hq-vim
+            go test ./... -count=1
+          )
+
+      - name: Commit and fast-forward the exact source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name roccho
+          git config user.email 40359643+roccho-dev@users.noreply.github.com
+          git add packages/hq-vim/internal/smoke/smoke.go
+          git commit -m 'test(hq-vim): preserve an already-selected native candidate'
+          new_head=$(git rev-parse HEAD)
+          new_tree=$(git rev-parse HEAD^{tree})
+          printf 'commit=%s\ntree=%s\n' "$new_head" "$new_tree"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"

@@ -1,0 +1,77 @@
+name: integrate focused E2E v2
+
+on:
+  push:
+    branches:
+      - automation/focused-e2e-v2-20260822
+  pull_request:
+    branches:
+      - proof/vim-nix-herdr-oci-current-20260821
+
+permissions:
+  contents: write
+
+concurrency:
+  group: focused-e2e-v2-20260822
+  cancel-in-progress: true
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      BASE: 6fbcdd0147b55975492954405e1f562074ddb9c2
+      PATCH_PREFIX: ${{ github.workspace }}/proofs/vim-nix/focused-e2e-screenshot-refactor.patch.gz.b64.part-
+      PATCH_GZ_SHA256: be84436786be3cd473f5be5a872ec9961d09ceb7e895c6c4e50529fff8283ee4
+      PATCH_SHA256: 49c8f646b3c0a2e5c7f8dc4d53803fa7b7f469d28580500d22a372a6879b80ce
+      EXPECTED_HQ: 779a298f4efcff8df60205aaf973cb224388a82b
+      SOURCE_BRANCH: automation/focused-e2e-source-20260822
+      FINAL_BRANCH: ux/focused-e2e-screenshot-refactor-20260822
+      ARTIFACT: /tmp/focused-e2e-screenshot-v2
+      INTEGRATOR_GZ_SHA256: 6c1827f29c3837f64131d50fb03bd2627ac0940c0fb270a64c0aad4746b1e34f
+      INTEGRATOR_SHA256: d30a05116d967ec1ad44af2f0215979485862b21d7d6f349a8dbef5a01a9ad2c
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - name: Install screenshot-only host adapters
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb xterm scrot x11-utils
+
+      - id: integrate
+        name: Run bounded two-commit source pin and all independent E2Es
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$RUNNER_TEMP/focused-e2e-v2-integrator"
+          mkdir -p "$tmp"
+          base64 --decode proofs/vim-nix/integrate-focused-e2e-v2.sh.gz.b64 > "$tmp/integrate.sh.gz"
+          test "$(sha256sum "$tmp/integrate.sh.gz" | cut -d' ' -f1)" = "$INTEGRATOR_GZ_SHA256"
+          gzip -dc "$tmp/integrate.sh.gz" > "$tmp/integrate.sh"
+          test "$(sha256sum "$tmp/integrate.sh" | cut -d' ' -f1)" = "$INTEGRATOR_SHA256"
+          chmod 700 "$tmp/integrate.sh"
+          "$tmp/integrate.sh"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: focused-e2e-v2-${{ steps.integrate.outputs.commit }}
+          path: /tmp/focused-e2e-screenshot-v2
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error

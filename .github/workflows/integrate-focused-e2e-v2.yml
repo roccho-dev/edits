@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - automation/focused-e2e-v2-20260822
+  pull_request:
+    branches:
+      - proof/vim-nix-herdr-oci-current-20260821
 
 permissions:
   contents: write

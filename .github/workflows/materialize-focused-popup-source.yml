@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      BASE: f54d79dc354b21f473e98ed3fc64e9094f531a40
-      TARGET_BRANCH: automation/focused-e2e-source-popup-20260822
+      BASE: ad856db704b85b2750cf969166fe36fd1ac1bb1a
+      TARGET_BRANCH: automation/focused-e2e-source-popup-selected-20260822
       ARTIFACT: /tmp/focused-popup-source
 
     steps:
@@ -31,7 +31,7 @@ jobs:
           go-version: "1.23.12"
 
       - id: materialize
-        name: Add only the native documentation-popup test contract
+        name: Select the first native candidate without inserting it
         shell: bash
         run: |
           set -euo pipefail
@@ -45,13 +45,13 @@ jobs:
 
           path = Path("packages/hq-vim/internal/smoke/smoke.go")
           text = path.read_text(encoding="utf-8")
-          old = '\t\t"set encoding=utf-8",\n'
-          new = old + '\t\t"set completeopt=menuone,noinsert,noselect,popup",\n'
+          old = '\t\t"set completeopt=menuone,noinsert,noselect,popup",\n'
+          new = '\t\t"set completeopt=menuone,noinsert,popup",\n'
           count = text.count(old)
           if count != 1:
-              raise SystemExit(f"expected one encoding option, got {count}")
-          if "set completeopt=menuone,noinsert,noselect,popup" in text:
-              raise SystemExit("popup option already present")
+              raise SystemExit(f"expected one noselect popup option, got {count}")
+          if new in text:
+              raise SystemExit("selected popup option already present")
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
           PY
           gofmt -w packages/hq-vim/internal/smoke/smoke.go
@@ -69,7 +69,7 @@ jobs:
           export GIT_COMMITTER_EMAIL=40359643+roccho-dev@users.noreply.github.com
           export GIT_AUTHOR_DATE=2026-08-22T00:00:00Z
           export GIT_COMMITTER_DATE=2026-08-22T00:00:00Z
-          commit=$(printf '%s\n' 'test(hq-vim): require native completion documentation popup' | git commit-tree "$tree" -p "$BASE")
+          commit=$(printf '%s\n' 'test(hq-vim): select native first candidate for documentation popup' | git commit-tree "$tree" -p "$BASE")
           printf 'base=%s\ncommit=%s\ntree=%s\n' "$BASE" "$commit" "$tree" | tee "$ARTIFACT/identity.txt"
           git diff "$BASE" "$commit" -- packages/hq-vim/internal/smoke/smoke.go > "$ARTIFACT/change.patch"
           git update-ref refs/heads/focused-popup-evidence "$commit"

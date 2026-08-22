@@ -28,8 +28,8 @@ jobs:
       SOURCE_BRANCH: automation/focused-e2e-source-20260822
       FINAL_BRANCH: ux/focused-e2e-screenshot-refactor-20260822
       ARTIFACT: /tmp/focused-e2e-screenshot-v2
-      INTEGRATOR_GZ_SHA256: 6c1827f29c3837f64131d50fb03bd2627ac0940c0fb270a64c0aad4746b1e34f
-      INTEGRATOR_SHA256: d30a05116d967ec1ad44af2f0215979485862b21d7d6f349a8dbef5a01a9ad2c
+      INTEGRATOR_GZ_SHA256: 2e9162b0afa48e1b2ad2329d12d775534504cc3046efc2ea4cc6a66777619140
+      INTEGRATOR_SHA256: 0e963c9ec6a3ffcb26b00f5d989df02441a5c24cf0d54f5fd246f6c118970ec6
 
     steps:
       - uses: actions/checkout@v4

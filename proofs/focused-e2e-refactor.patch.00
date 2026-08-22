@@ -1,0 +1,664 @@
+diff --git a/docs/operations/vim-nix-local-first.md b/docs/operations/vim-nix-local-first.md
+index aaac27e..d51d0bc 100644
+--- a/docs/operations/vim-nix-local-first.md
++++ b/docs/operations/vim-nix-local-first.md
+@@ -7,11 +7,8 @@ loop.
+ ```text
+ current source
+ → static checks
+-→ unpatched controlling-TTY RED
+-→ apply the exact test-only patch to a temporary copy
+-→ five Canon TDD boundaries
+-→ OCI verifier positive/mutation control
+-→ optional Herdr exactly-two-pane/clean-stop proof
++→ five focused Canon TDD boundaries
++→ optional Herdr topology probe
+ → local Receipt
+ → one canonical head
+ ```
+@@ -27,9 +24,9 @@ Herdr. Supplying the verified Herdr 0.8.0 binary adds an isolated
+ server/workspace proof with exactly two panes, process observation, workspace
+ close, and clean server stop.
+ 
+-The local runner never edits the tracked smoke implementation. It copies the
+-package to a temporary directory and applies the exact test-only patch there.
+-Evidence is written under `.local/vim-nix-proof` and excluded from Git.
++The controlling-TTY hand-off is part of the E2E harness itself. The old fake-Vim
++TTY debug test and test-only source patch are intentionally gone. Evidence is
++written under `.local/vim-nix-proof` and excluded from Git.
+ 
+ ## UX contract
+ 
+@@ -49,6 +46,34 @@ Vim exposes no manual history, matcher, route picker, or provider UI. Durable
+ history, repeated-decision detection, `command.promoted`, project/shared
+ registry projection, policy, and routing remain outside edits.
+ 
++
++## Focused E2E ownership
++
++```text
++TestAgentFirstChoiceE2E
++  = pre-effect human choice only
++
++TestAgentDecisionSubmitE2E
++  = agent choice -> one typed accepted instruction only
++
++TestExplicitSubmitE2E
++  = generic submit -> draft consumption/undo only
++
++vim-nix runtime lifecycle
++  = accepted -> provider lifecycle -> typed clean stop only
++```
++
++No E2E invokes another E2E. `capture-pty-e2e.sh` only observes
++`TestAgentFirstChoiceE2E/agent_first` and the independent runtime lifecycle at
++already-asserted points; it adds no product behavior.
++
++The originally agreed sequence is only claimed where implementation exists.
++Current focused E2Es cover default Agent choice, explicit direct fallback,
++no pre-submit durable write, typed Agent submit, result lifecycle, and clean
++stop. Worker policy/recovery remain HQ-owned contracts. Automatic completed-
++result rendering in Vim and `command.promoted` projection are not implemented
++by this adapter and are therefore not falsely marked E2E-green here.
++
+ ## Deferred high-cost gates
+ 
+ - exact Nix output-closure materialization;
+diff --git a/packages/hq-vim/README.md b/packages/hq-vim/README.md
+index 4ec2cc4..7882c03 100644
+--- a/packages/hq-vim/README.md
++++ b/packages/hq-vim/README.md
+@@ -100,16 +100,27 @@ submits the next explicit draft.
+ 
+ ## Canon TDD surface
+ 
+-Only five behavior boundaries remain in this package:
+-
+-1. minimal editor commands and fail-closed exact HQ binding;
+-2. canonical real Vim -> yegappan/lsp -> HQ completion and explicit submit;
+-3. native popup: AI-agent first, explicit direct fallback, documentation,
+-   Unicode/CRLF edit, one undo, and zero accepted rows before submit;
+-4. stale or invalid consumption never destroys a draft;
+-5. child Vim retains a controlling TTY when proof output is redirected.
+-
+-HQ parser/worker/provider tests are intentionally not duplicated here.
++The package keeps five focused behavior boundaries. None is an umbrella E2E:
++
++1. `TestEditorSurfaceAndBindingFailClosed` — the three-command editor surface
++   and exact absolute HQ binding;
++2. `TestAgentFirstChoiceE2E` — real Vim/yegappan/HQ native completion:
++   `agent.exec` first for an empty query, explicit `direct.open` fallback,
++   documentation/undo, and zero durable writes;
++3. `TestAgentDecisionSubmitE2E` — one explicit `HqSubmit` produces exactly one
++   typed Codex instruction. It does not execute the provider;
++4. `TestExplicitSubmitE2E` — one explicit submit appends one accepted row,
++   consumes only the accepted draft, and one Vim undo restores it;
++5. `TestAcceptedSubmitKeepsDraftOnUnsafeConsumption` — stale or invalid
++   consumption never destroys the newer draft.
++
++The separate `vim-nix runtime lifecycle` E2E owns only process/runtime behavior:
++Herdr topology, managed worker readiness, one deterministic provider run,
++`accepted -> started -> stdout -> completed`, typed stop, and zero residual
++processes. It does not re-run the editor choice or submit E2Es.
++
++HQ parser, policy, provider, retry/replay, and promotion tests remain HQ-owned and
++are intentionally not duplicated here.
+ 
+ Run the low-cost suite:
+ 
+@@ -117,14 +128,27 @@ Run the low-cost suite:
+ go test ./...
+ ```
+ 
+-Run the real popup proof explicitly:
++Run the real choice E2E explicitly:
+ 
+ ```sh
+-HQ_NATIVE_HQ_FUZZY_PROOF=1 \
++HQ_AGENT_FIRST_E2E=1 \
+ HQ_BIN=/absolute/path/to/hq \
+ VIM_EXE=/absolute/path/to/vim \
+ VIM9_LSP_PATH=/absolute/path/to/yegappan-lsp \
+-go test -run '^TestNativeHQFuzzyAutomaticPopupDoesNotAccept$' -v
++go test -run '^TestAgentFirstChoiceE2E$' -v
++```
++
++### PTY screenshots
++
++Screenshots are an observation projection of the same E2Es, never another test:
++
++```sh
++PROOF_ROOT=/exact/composed/runtime \
++  proofs/vim-nix/capture-pty-e2e.sh
+ ```
+ 
++The capture hook pauses only after the E2E has reached an asserted observable
++state, takes the image, releases the observer, and lets the original E2E finish.
++The receipt records `captureAddsBehavior:false`.
++
+ The exact installed Nix/Windows/WSLC proof remains outside this package.
+diff --git a/packages/hq-vim/canonical_conformance_test.go b/packages/hq-vim/canonical_conformance_test.go
+deleted file mode 100644
+index bb4bdc2..0000000
+--- a/packages/hq-vim/canonical_conformance_test.go
++++ /dev/null
+@@ -1,356 +0,0 @@
+-package main
+-
+-import (
+-	"encoding/json"
+-	"os"
+-	"os/exec"
+-	"path/filepath"
+-	"runtime"
+-	"strings"
+-	"testing"
+-
+-	"github.com/roccho-dev/edits/packages/hq-vim/internal/smoke"
+-)
+-
+-func TestCanonicalHQVimConformance(t *testing.T) {
+-	hqBin := os.Getenv("HQ_CANONICAL_BIN")
+-	if hqBin == "" {
+-		t.Skip("HQ_CANONICAL_BIN is not set")
+-	}
+-	if !filepath.IsAbs(hqBin) {
+-		t.Fatalf("HQ_CANONICAL_BIN must be absolute: %q", hqBin)
+-	}
+-	root := mustPackageRoot(t)
+-	profile := prepareCanonicalProfile(t)
+-	assertCanonicalProfileStarts(t, hqBin, profile.Env)
+-	completionText := `@queue`
+-	submitText := "@queue.create\npath=demo.jsonl"
+-
+-	completionCfg := smoke.Config{
+-		HQBin:                   hqBin,
+-		Vim:                     requireVim(t),
+-		Vim9LSP:                 requireVim9LSP(t),
+-		PluginRoot:              root,
+-		Profile:                 "local",
+-		Buffer:                  filepath.Join(t.TempDir(), "completion-only.hqjson"),
+-		CompletionText:          completionText,
+-		ExpectedCompletionLabel: "queue.create",
+-		Headless:                true,
+-		SkipSubmit:              true,
+-		Env:                     profile.Env,
+-	}
+-	if err := smoke.Run(completionCfg); err != nil {
+-		t.Fatalf("canonical hq Vim completion-only conformance failed: %v", err)
+-	}
+-	if rows := readJSONLRows(t, profile.AcceptedPath); len(rows) != 0 {
+-		t.Fatalf("completion-only run wrote %d durable rows", len(rows))
+-	}
+-
+-	var acceptedIDs []string
+-	for run := 1; run <= 2; run++ {
+-		resultRoot := t.TempDir()
+-		resultPath := filepath.Join(resultRoot, "submit-result.json")
+-		bufferResult := filepath.Join(resultRoot, "buffer-after.json")
+-		undoResult := filepath.Join(resultRoot, "buffer-undo.json")
+-		messages := filepath.Join(resultRoot, "messages.txt")
+-		cfg := smoke.Config{
+-			HQBin:            hqBin,
+-			Vim:              requireVim(t),
+-			Vim9LSP:          requireVim9LSP(t),
+-			PluginRoot:       root,
+-			Profile:          "local",
+-			Buffer:           filepath.Join(t.TempDir(), "submit.hqjson"),
+-			BufferText:       submitText,
+-			Headless:         true,
+-			Env:              profile.Env,
+-			ResultPath:       resultPath,
+-			BufferResultPath: bufferResult,
+-			UndoResultPath:   undoResult,
+-			MessagesPath:     messages,
+-		}
+-		if err := smoke.Run(cfg); err != nil {
+-			t.Fatalf("canonical hq Vim submit run %d failed: %v", run, err)
+-		}
+-		rows := readJSONLRows(t, profile.AcceptedPath)
+-		if len(rows) != run {
+-			t.Fatalf("accepted rows after run %d = %d, want %d", run, len(rows), run)
+-		}
+-		row := rows[run-1]
+-		if row["kind"] != "accepted.instruction" {
+-			t.Fatalf("accepted row kind = %v", row["kind"])
+-		}
+-		instruction, ok := row["instruction"].(map[string]any)
+-		if !ok {
+-			t.Fatalf("accepted row has no instruction object: %#v", row)
+-		}
+-		id, _ := instruction["id"].(string)
+-		if id == "" {
+-			t.Fatalf("accepted instruction has no id: %#v", instruction)
+-		}
+-		result := readJSONObject(t, resultPath)
+-		if result["kind"] != "hq.submitResult.v1" || result["status"] != "queued" {
+-			t.Fatalf("unexpected submit result: %#v", result)
+-		}
+-		if result["queueKind"] != "accepted.instruction" {
+-			t.Fatalf("submit queueKind = %v", result["queueKind"])
+-		}
+-		if result["queueId"] != id {
+-			t.Fatalf("submit queueId = %v, appended instruction id = %s", result["queueId"], id)
+-		}
+-		if result["deploymentId"] != "edits-ci" {
+-			t.Fatalf("submit deploymentId = %v", result["deploymentId"])
+-		}
+-		consumption, ok := result["draftConsumption"].(map[string]any)
+-		if !ok || consumption["kind"] != "hq.draftConsumption.v1" {
+-			t.Fatalf("submit draftConsumption = %#v", result["draftConsumption"])
+-		}
+-		if got := readVimBuffer(t, bufferResult); len(got.Lines) != 1 || got.Lines[0] != "" {
+-			t.Fatalf("accepted draft was not consumed: %#v", got)
+-		}
+-		if got := readVimBuffer(t, undoResult); strings.Join(got.Lines, "\n") != submitText {
+-			t.Fatalf("one Vim undo did not restore submitted text: %#v", got)
+-		}
+-		if got := readText(t, messages); !strings.Contains(got, "draft consumed") {
+-			t.Fatalf("missing consumed outcome: %s", got)
+-		}
+-		acceptedIDs = append(acceptedIDs, id)
+-	}
+-	if acceptedIDs[0] == acceptedIDs[1] {
+-		t.Fatalf("repeated explicit submits reused id %q", acceptedIDs[0])
+-	}
+-
+-	multiText := "@queue.create\npath=first.jsonl\n\n@queue.create\npath=second.jsonl"
+-	t.Run("one object is consumed without touching the next draft", func(t *testing.T) {
+-		resultRoot := t.TempDir()
+-		bufferResult := filepath.Join(resultRoot, "buffer-after.json")
+-		undoResult := filepath.Join(resultRoot, "buffer-undo.json")
+-		cfg := smoke.Config{
+-			HQBin: hqBin, Vim: requireVim(t), Vim9LSP: requireVim9LSP(t),
+-			PluginRoot: root, Profile: "local", Buffer: filepath.Join(t.TempDir(), "multi.hqjson"),
+-			BufferText: multiText, Headless: true, Env: profile.Env,
+-			BufferResultPath: bufferResult, UndoResultPath: undoResult,
+-		}
+-		if err := smoke.Run(cfg); err != nil {
+-			t.Fatalf("single multi-object submit failed: %v", err)
+-		}
+-		wantRemaining := "@queue.create\npath=second.jsonl"
+-		if got := readVimBuffer(t, bufferResult); strings.Join(got.Lines, "\n") != wantRemaining {
+-			t.Fatalf("unaccepted draft changed: %#v", got)
+-		}
+-		if got := readVimBuffer(t, undoResult); strings.Join(got.Lines, "\n") != multiText {
+-			t.Fatalf("one undo did not restore consumed object: %#v", got)
+-		}
+-		rows := readJSONLRows(t, profile.AcceptedPath)
+-		if len(rows) != 3 || acceptedPath(t, rows[2]) != "first.jsonl" {
+-			t.Fatalf("accepted rows=%#v", rows)
+-		}
+-	})
+-
+-	t.Run("successive submits consume successive objects", func(t *testing.T) {
+-		resultRoot := t.TempDir()
+-		bufferResult := filepath.Join(resultRoot, "buffer-after.json")
+-		messages := filepath.Join(resultRoot, "messages.txt")
+-		cfg := smoke.Config{
+-			HQBin: hqBin, Vim: requireVim(t), Vim9LSP: requireVim9LSP(t),
+-			PluginRoot: root, Profile: "local", Buffer: filepath.Join(t.TempDir(), "successive.hqjson"),
+-			BufferText: multiText, Headless: true, Env: profile.Env, SubmitCount: 2,
+-			BufferResultPath: bufferResult, MessagesPath: messages,
+-		}
+-		if err := smoke.Run(cfg); err != nil {
+-			t.Fatalf("successive multi-object submit failed: %v", err)
+-		}
+-		if got := readVimBuffer(t, bufferResult); len(got.Lines) != 1 || got.Lines[0] != "" {
+-			t.Fatalf("successive submits did not reach canonical empty: %#v", got)
+-		}
+-		if got := readText(t, messages); strings.Count(got, "draft consumed") != 2 {
+-			t.Fatalf("successive outcomes=%s", got)
+-		}
+-		rows := readJSONLRows(t, profile.AcceptedPath)
+-		if len(rows) != 5 || acceptedPath(t, rows[3]) != "first.jsonl" || acceptedPath(t, rows[4]) != "second.jsonl" {
+-			t.Fatalf("accepted rows=%#v", rows)
+-		}
+-	})
+-
+-	writeCanonicalArtifact(t, map[string]any{
+-		"kind":                  "edits.hqVimConformance.v1",
+-		"status":                "passed",
+-		"hqSourceSha":           os.Getenv("HQ_CANONICAL_SOURCE_SHA"),
+-		"completionLabel":       "queue.create",
+-		"completionWrites":      0,
+-		"explicitSubmitRuns":    2,
+-		"acceptedRows":          5,
+-		"acceptedIDsDistinct":   true,
+-		"submitIdentityMatches": true,
+-		"acceptedDraftConsumed": true,
+-		"multiObjectPreserved":  true,
+-		"successiveSubmitCount": 2,
+-		"pathLookupUsed":        false,
+-		"binding":               "explicit-absolute-g:hq_bin",
+-		"boundary":              "real Vim 9 -> pinned yegappan/lsp -> canonical hq lsp -> accepted.instruction",
+-	})
+-	t.Logf("canonical hq Vim conformance passed against %s", os.Getenv("HQ_CANONICAL_SOURCE_SHA"))
+-}
+-
+-func acceptedPath(t *testing.T, row map[string]any) string {
+-	t.Helper()
+-	instruction, ok := row["instruction"].(map[string]any)
+-	if !ok {
+-		t.Fatalf("accepted row has no instruction: %#v", row)
+-	}
+-	payload, ok := instruction["payload"].(map[string]any)
+-	if !ok {
+-		t.Fatalf("accepted instruction has no payload: %#v", instruction)
+-	}
+-	path, _ := payload["path"].(string)
+-	return path
+-}
+-
+-type canonicalProfile struct {
+-	AcceptedPath string
+-	Env          map[string]string
+-}
+-
+-func prepareCanonicalProfile(t *testing.T) canonicalProfile {
+-	t.Helper()
+-	root := t.TempDir()
+-	configRoot := filepath.Join(root, "config")
+-	profileDir := filepath.Join(configRoot, "roccho", "hq", "profiles")
+-	workspace := filepath.Join(root, "workspace")
+-	eventsDir := filepath.Join(workspace, ".hq", "events")
+-	for _, dir := range []string{profileDir, eventsDir} {
+-		if err := os.MkdirAll(dir, 0o755); err != nil {
+-			t.Fatal(err)
+-		}
+-	}
+-	worldPath := filepath.Join(root, "world.jsonl")
+-	acceptedPath := filepath.Join(root, "accepted.jsonl")
+-	capabilitiesPath := filepath.Join(root, "capabilities.json")
+-	world, err := os.ReadFile(filepath.Join(mustPackageRoot(t), "testdata", "world.jsonl"))
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	if err := os.WriteFile(worldPath, world, 0o600); err != nil {
+-		t.Fatal(err)
+-	}
+-	for path, content := range map[string]string{
+-		acceptedPath:     "",
+-		capabilitiesPath: "{}\n",
+-	} {
+-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+-			t.Fatal(err)
+-		}
+-	}
+-	profile := map[string]any{
+-		"kind":              "hq.profile.v1",
+-		"name":              "local",
+-		"deployment_id":     "edits-ci",
+-		"world_path":        worldPath,
+-		"accepted_path":     acceptedPath,
+-		"workspace_root":    workspace,
+-		"events_path":       filepath.Join(eventsDir, "events.jsonl"),
+-		"capabilities_path": capabilitiesPath,
+-		"poll_interval_ms":  50,
+-		"health_timeout_ms": 500,
+-	}
+-	encoded, err := json.Marshal(profile)
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	if err := os.WriteFile(filepath.Join(profileDir, "local.json"), encoded, 0o600); err != nil {
+-		t.Fatal(err)
+-	}
+-	env := map[string]string{}
+-	if runtime.GOOS == "windows" {
+-		env["APPDATA"] = configRoot
+-	} else {
+-		env["XDG_CONFIG_HOME"] = configRoot
+-	}
+-	return canonicalProfile{AcceptedPath: acceptedPath, Env: env}
+-}
+-
+-func assertCanonicalProfileStarts(t *testing.T, hqBin string, overrides map[string]string) {
+-	t.Helper()
+-	cmd := exec.Command(hqBin, "lsp", "--profile", "local")
+-	cmd.Stdin = strings.NewReader("")
+-	cmd.Env = mergeEnvironment(os.Environ(), overrides)
+-	output, err := cmd.CombinedOutput()
+-	if err != nil {
+-		t.Fatalf("canonical hq rejected generated profile before Vim: %v\n%s", err, output)
+-	}
+-}
+-
+-func mergeEnvironment(base []string, overrides map[string]string) []string {
+-	result := append([]string(nil), base...)
+-	for key, value := range overrides {
+-		replaced := false
+-		for i, entry := range result {
+-			name, _, _ := strings.Cut(entry, "=")
+-			matches := name == key
+-			if runtime.GOOS == "windows" {
+-				matches = strings.EqualFold(name, key)
+-			}
+-			if matches {
+-				result[i] = key + "=" + value
+-				replaced = true
+-			}
+-		}
+-		if !replaced {
+-			result = append(result, key+"="+value)
+-		}
+-	}
+-	return result
+-}
+-
+-func writeCanonicalArtifact(t *testing.T, proof map[string]any) {
+-	t.Helper()
+-	path := os.Getenv("HQ_CONFORMANCE_ARTIFACT")
+-	if path == "" {
+-		return
+-	}
+-	if proof["hqSourceSha"] == "" {
+-		t.Fatal("HQ_CANONICAL_SOURCE_SHA is required when writing conformance evidence")
+-	}
+-	encoded, err := json.MarshalIndent(proof, "", "  ")
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+-		t.Fatal(err)
+-	}
+-	if err := os.WriteFile(path, append(encoded, '\n'), 0o644); err != nil {
+-		t.Fatal(err)
+-	}
+-}
+-
+-func readJSONObject(t *testing.T, path string) map[string]any {
+-	t.Helper()
+-	content, err := os.ReadFile(path)
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	var value map[string]any
+-	if err := json.Unmarshal(content, &value); err != nil {
+-		t.Fatalf("decode %s: %v", path, err)
+-	}
+-	return value
+-}
+-
+-func readJSONLRows(t *testing.T, path string) []map[string]any {
+-	t.Helper()
+-	content, err := os.ReadFile(path)
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	var rows []map[string]any
+-	for _, line := range strings.Split(string(content), "\n") {
+-		if strings.TrimSpace(line) == "" {
+-			continue
+-		}
+-		var row map[string]any
+-		if err := json.Unmarshal([]byte(line), &row); err != nil {
+-			t.Fatalf("decode %s: %v", path, err)
+-		}
+-		rows = append(rows, row)
+-	}
+-	return rows
+-}
+diff --git a/packages/hq-vim/explicit_submit_e2e_test.go b/packages/hq-vim/explicit_submit_e2e_test.go
+new file mode 100644
+index 0000000..5bfc4ce
+--- /dev/null
++++ b/packages/hq-vim/explicit_submit_e2e_test.go
+@@ -0,0 +1,231 @@
++package main
++
++import (
++	"encoding/json"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"runtime"
++	"strings"
++	"testing"
++
++	"github.com/roccho-dev/edits/packages/hq-vim/internal/smoke"
++)
++
++func TestExplicitSubmitE2E(t *testing.T) {
++	hqBin := os.Getenv("HQ_CANONICAL_BIN")
++	if hqBin == "" {
++		t.Skip("HQ_CANONICAL_BIN is not set")
++	}
++	if !filepath.IsAbs(hqBin) {
++		t.Fatalf("HQ_CANONICAL_BIN must be absolute: %q", hqBin)
++	}
++	root := mustPackageRoot(t)
++	profile := prepareCanonicalProfile(t)
++	assertCanonicalProfileStarts(t, hqBin, profile.Env)
++	submitText := "@queue.create\npath=demo.jsonl"
++
++	resultRoot := t.TempDir()
++	resultPath := filepath.Join(resultRoot, "submit-result.json")
++	bufferResult := filepath.Join(resultRoot, "buffer-after.json")
++	undoResult := filepath.Join(resultRoot, "buffer-undo.json")
++	messages := filepath.Join(resultRoot, "messages.txt")
++	cfg := smoke.Config{
++		HQBin: hqBin, Vim: requireVim(t), Vim9LSP: requireVim9LSP(t),
++		PluginRoot: root, Profile: "local", Buffer: filepath.Join(t.TempDir(), "submit.hqjson"),
++		BufferText: submitText, Headless: true, Env: profile.Env,
++		ResultPath: resultPath, BufferResultPath: bufferResult,
++		UndoResultPath: undoResult, MessagesPath: messages,
++	}
++	if err := smoke.Run(cfg); err != nil {
++		t.Fatalf("explicit submit E2E failed: %v", err)
++	}
++
++	rows := readJSONLRows(t, profile.AcceptedPath)
++	if len(rows) != 1 || rows[0]["kind"] != "accepted.instruction" {
++		t.Fatalf("accepted rows=%#v", rows)
++	}
++	instruction, ok := rows[0]["instruction"].(map[string]any)
++	if !ok {
++		t.Fatalf("accepted row has no instruction object: %#v", rows[0])
++	}
++	id, _ := instruction["id"].(string)
++	if id == "" {
++		t.Fatalf("accepted instruction has no id: %#v", instruction)
++	}
++	result := readJSONObject(t, resultPath)
++	if result["kind"] != "hq.submitResult.v1" || result["status"] != "queued" || result["queueKind"] != "accepted.instruction" || result["queueId"] != id {
++		t.Fatalf("unexpected submit result: %#v", result)
++	}
++	consumption, ok := result["draftConsumption"].(map[string]any)
++	if !ok || consumption["kind"] != "hq.draftConsumption.v1" {
++		t.Fatalf("submit draftConsumption = %#v", result["draftConsumption"])
++	}
++	if got := readVimBuffer(t, bufferResult); len(got.Lines) != 1 || got.Lines[0] != "" {
++		t.Fatalf("accepted draft was not consumed: %#v", got)
++	}
++	if got := readVimBuffer(t, undoResult); strings.Join(got.Lines, "\n") != submitText {
++		t.Fatalf("one Vim undo did not restore submitted text: %#v", got)
++	}
++	if got := readText(t, messages); !strings.Contains(got, "draft consumed") {
++		t.Fatalf("missing consumed outcome: %s", got)
++	}
++
++	writeCanonicalArtifact(t, map[string]any{
++		"kind": "edits.hqVimExplicitSubmitE2E.v1", "status": "passed",
++		"hqSourceSha":  os.Getenv("HQ_CANONICAL_SOURCE_SHA"),
++		"acceptedRows": 1, "submitIdentityMatches": true,
++		"acceptedDraftConsumed": true, "undoRestoresDraft": true,
++		"binding": "explicit-absolute-g:hq_bin",
++	})
++}
++
++type canonicalProfile struct {
++	AcceptedPath string
++	Env          map[string]string
++}
++
++func prepareCanonicalProfile(t *testing.T) canonicalProfile {
++	t.Helper()
++	root := t.TempDir()
++	configRoot := filepath.Join(root, "config")
++	profileDir := filepath.Join(configRoot, "roccho", "hq", "profiles")
++	workspace := filepath.Join(root, "workspace")
++	eventsDir := filepath.Join(workspace, ".hq", "events")
++	for _, dir := range []string{profileDir, eventsDir} {
++		if err := os.MkdirAll(dir, 0o755); err != nil {
++			t.Fatal(err)
++		}
++	}
++	worldPath := filepath.Join(root, "world.jsonl")
++	acceptedPath := filepath.Join(root, "accepted.jsonl")
++	capabilitiesPath := filepath.Join(root, "capabilities.json")
++	world, err := os.ReadFile(filepath.Join(mustPackageRoot(t), "testdata", "world.jsonl"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(worldPath, world, 0o600); err != nil {
++		t.Fatal(err)
++	}
++	for path, content := range map[string]string{
++		acceptedPath:     "",
++		capabilitiesPath: "{}\n",
++	} {
++		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
++			t.Fatal(err)
++		}
++	}
++	profile := map[string]any{
++		"kind":              "hq.profile.v1",
++		"name":              "local",
++		"deployment_id":     "edits-ci",
++		"world_path":        worldPath,
++		"accepted_path":     acceptedPath,
++		"workspace_root":    workspace,
++		"events_path":       filepath.Join(eventsDir, "events.jsonl"),
++		"capabilities_path": capabilitiesPath,
++		"poll_interval_ms":  50,
++		"health_timeout_ms": 500,
++	}
++	encoded, err := json.Marshal(profile)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(filepath.Join(profileDir, "local.json"), encoded, 0o600); err != nil {
++		t.Fatal(err)
++	}
++	env := map[string]string{}
++	if runtime.GOOS == "windows" {
++		env["APPDATA"] = configRoot
++	} else {
++		env["XDG_CONFIG_HOME"] = configRoot
++	}
++	return canonicalProfile{AcceptedPath: acceptedPath, Env: env}
++}
++
++func assertCanonicalProfileStarts(t *testing.T, hqBin string, overrides map[string]string) {
++	t.Helper()
++	cmd := exec.Command(hqBin, "lsp", "--profile", "local")
++	cmd.Stdin = strings.NewReader("")
++	cmd.Env = mergeEnvironment(os.Environ(), overrides)
++	output, err := cmd.CombinedOutput()
++	if err != nil {
++		t.Fatalf("canonical hq rejected generated profile before Vim: %v\n%s", err, output)
++	}
++}
++
++

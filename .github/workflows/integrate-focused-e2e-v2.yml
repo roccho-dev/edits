@@ -26,8 +26,8 @@ jobs:
       EXPECTED_HQ: 779a298f4efcff8df60205aaf973cb224388a82b
       FINAL_BRANCH: ux/focused-e2e-screenshot-refactor-20260822
       ARTIFACT: /tmp/focused-e2e-screenshot-v2
-      INTEGRATOR_GZ_SHA256: a983e8a5f4ac3ef7d1dacf5ae78c75e2cad341a6eadc65b0c987e0bc1a506973
-      INTEGRATOR_SHA256: 3e45a6d101152ffcc2bab2da76f9befc54e98a63395d27a5633698291c9f8637
+      INTEGRATOR_GZ_SHA256: 4fe93ef4923e74254ec4e44eeb13486b7347e03774308f6dbdfe365588b20623
+      INTEGRATOR_SHA256: 8c3001fd2b7f6d61da323824ad6133259a23f84e7e1caa66fb4f82786dc6e2ba
 
     steps:
       - uses: actions/checkout@v4
@@ -57,6 +57,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$ARTIFACT"
           tmp="$RUNNER_TEMP/focused-e2e-v2-integrator"
           mkdir -p "$tmp"
           base64 --decode proofs/vim-nix/integrate-focused-e2e-v2.sh.gz.b64 > "$tmp/integrate.sh.gz"
@@ -67,9 +68,10 @@ jobs:
           "$tmp/integrate.sh"
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: focused-e2e-v2-${{ steps.integrate.outputs.commit }}
+          name: focused-e2e-v2-${{ steps.integrate.outputs.commit || github.run_id }}
           path: /tmp/focused-e2e-screenshot-v2
           compression-level: 0
           retention-days: 90
-          if-no-files-found: error
+          if-no-files-found: warn

@@ -1,0 +1,109 @@
+name: refactor PTY E2E and screenshot projection
+
+on:
+  push:
+    branches:
+      - refactor/pty-e2e-screenshot-20260822
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refactor-pty-e2e-screenshot-20260822
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE: 6fbcdd0147b55975492954405e1f562074ddb9c2
+      BRANCH: refactor/pty-e2e-screenshot-20260822
+      TRANSFORM: proofs/refactor-pty-e2e-screenshot.py
+      WORKFLOW: .github/workflows/refactor-pty-e2e-screenshot.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+
+      - name: Verify one-shot request
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          mapfile -t changed < <(git diff --name-only "$BASE" HEAD | sort)
+          test "${#changed[@]}" -eq 2
+          test "${changed[0]}" = "$WORKFLOW"
+          test "${changed[1]}" = "$TRANSFORM"
+
+      - name: Refactor and test low-cost boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$TRANSFORM"
+          gofmt -w \
+            packages/hq-vim/internal/smoke/smoke.go \
+            packages/hq-vim/hq_vim_smoke_test.go \
+            packages/hq-vim/canonical_conformance_test.go
+          bash -n \
+            tools/vim-nix-local/verify.sh \
+            tools/vim-nix-local/capture-decision-entry.sh
+          python3 -m py_compile tools/vim-nix-local/pty-shot.py
+          test ! -e packages/hq-vim/internal/smoke/tty_test.go
+          test ! -e proofs/vim-nix/hq-vim-native-popup-proof.patch
+          test "$(grep -Rh '^func Test' packages/hq-vim --include='*_test.go' | wc -l | tr -d ' ')" = 4
+          ! grep -R -n 'TestNativePopupArtifactUsesControllingTTY\|TestNativeHQFuzzyAutomaticPopupDoesNotAccept\|TestCanonicalHQVimConformance' \
+            packages/hq-vim proofs/vim-nix tools/vim-nix-local
+          (cd packages/hq-vim && go test ./... -count=1) | tee "$RUNNER_TEMP/go-test.log"
+          cat proofs/vim-nix/run-proof.parts/*.sh > "$RUNNER_TEMP/run-proof.sh"
+          bash -n "$RUNNER_TEMP/run-proof.sh"
+          git diff --check
+          git diff "$BASE" > "$RUNNER_TEMP/refactor.diff"
+
+      - id: materialize
+        name: Materialize one clean commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm "$TRANSFORM" "$WORKFLOW"
+          git add -A
+          tree=$(git write-tree)
+          export GIT_AUTHOR_NAME=roccho GIT_AUTHOR_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_COMMITTER_NAME=roccho GIT_COMMITTER_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          commit=$(printf '%s\n' 'refactor(hq-vim): keep narrow E2Es and PTY screenshot projection' | git commit-tree "$tree" -p "$BASE")
+          printf 'base=%s\ncommit=%s\ntree=%s\n' "$BASE" "$commit" "$tree" | tee "$RUNNER_TEMP/identity.txt"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+
+      - name: Write receipt
+        shell: bash
+        run: |
+          jq -n \
+            --arg base "$BASE" \
+            --arg request "$GITHUB_SHA" \
+            --arg commit '${{ steps.materialize.outputs.commit }}' \
+            --arg tree '${{ steps.materialize.outputs.tree }}' \
+            '{schema:"edits.pty-e2e-refactor/1",status:"PASS",base:$base,requestCommit:$request,resultCommit:$commit,resultTree:$tree,goTests:"PASS",retainedTests:4,debugTTYTestRemoved:true,testOnlyPatchRemoved:true,screenshotProjectionOnly:true}' \
+            > "$RUNNER_TEMP/receipt.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edits-pty-e2e-refactor-${{ steps.materialize.outputs.commit }}
+          path: |
+            ${{ runner.temp }}/identity.txt
+            ${{ runner.temp }}/receipt.json
+            ${{ runner.temp }}/go-test.log
+            ${{ runner.temp }}/refactor.diff
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Replace helper history with clean result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin '${{ steps.materialize.outputs.commit }}':refs/heads/"$BRANCH" \
+            --force-with-lease=refs/heads/"$BRANCH":"$GITHUB_SHA"

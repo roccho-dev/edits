@@ -1,22 +1,5 @@
 {
   "nodes": {
-    "edits-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1784010395,
-        "narHash": "sha256-xQe+YDRwJHTe+Oex13h9usM/a3XfppfS8/l0AUHnSn8=",
-        "owner": "roccho-dev",
-        "repo": "edits",
-        "rev": "d83bf4c4860e02f37d6b41cc54fe8c881af4c779",
-        "type": "github"
-      },
-      "original": {
-        "owner": "roccho-dev",
-        "repo": "edits",
-        "rev": "d83bf4c4860e02f37d6b41cc54fe8c881af4c779",
-        "type": "github"
-      }
-    },
     "go-nixpkgs": {
       "locked": {
         "lastModified": 1754549714,
@@ -36,17 +19,17 @@
     "hq": {
       "flake": false,
       "locked": {
-        "lastModified": 1787360105,
-        "narHash": "sha256-Jx4TEmWBBwGsvrxlq41cnO1dFjMrbqw/MVF5FkEAp8w=",
+        "lastModified": 1787365479,
+        "narHash": "sha256-mPSW7L1nyu1j9j/ts+HUcn7CTFT69DnKCy+oNo1H7N0=",
         "owner": "roccho-dev",
         "repo": "hq",
-        "rev": "7f65e922d52fb47bc6dbf0c3b5f99c937e27b566",
+        "rev": "779a298f4efcff8df60205aaf973cb224388a82b",
         "type": "github"
       },
       "original": {
         "owner": "roccho-dev",
         "repo": "hq",
-        "rev": "7f65e922d52fb47bc6dbf0c3b5f99c937e27b566",
+        "rev": "779a298f4efcff8df60205aaf973cb224388a82b",
         "type": "github"
       }
     },
@@ -68,7 +51,6 @@
     },
     "root": {
       "inputs": {
-        "edits-src": "edits-src",
         "go-nixpkgs": "go-nixpkgs",
         "hq": "hq",
         "nixpkgs": "nixpkgs",

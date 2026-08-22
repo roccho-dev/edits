@@ -93,23 +93,41 @@ On successful `hq.submit`, hq may return one version-bound
 - missing, malformed, or unapplicable plan: keep the draft and warn;
 - one native undo: restore consumed text; the accepted row remains durable.
 
-`failed`, `timeout`, and `cancelled` results are not mutated in place. HQ/Agent
-creates a new instruction with `reply_to` for retry, repair, direct-command
-fallback, or human escalation. Vim only renders the resulting candidates and
-submits the next explicit draft.
+A terminal result is never mutated in place. When recovery is explicitly
+authored, the HQ contract requires a new instruction with `reply_to`; this Vim
+adapter only renders a resulting draft and submits it explicitly. Automatic
+recovery UI is not implemented here.
 
-## Canon TDD surface
+## Focused behavior E2Es
 
-Only five behavior boundaries remain in this package:
+Eight editor-owned boundaries remain. None calls or wraps another E2E:
 
-1. minimal editor commands and fail-closed exact HQ binding;
-2. canonical real Vim -> yegappan/lsp -> HQ completion and explicit submit;
-3. native popup: AI-agent first, explicit direct fallback, documentation,
-   Unicode/CRLF edit, one undo, and zero accepted rows before submit;
-4. stale or invalid consumption never destroys a draft;
-5. child Vim retains a controlling TTY when proof output is redirected.
+1. `TestEditorSurfaceAndBindingFailClosed` — only `HqStart`, `HqSubmit`, and
+   `HqDoctor`; explicit absolute HQ binding fails closed;
+2. `TestAgentDefaultChoiceE2E` — empty native completion puts the declared
+   Agent command first, keeps the direct fallback visible, shows complete
+   documentation, supports one undo, and writes zero accepted rows;
+3. `TestAgentPromptFieldChoiceE2E` — after Agent selection, the real LSP
+   completes the required `prompt` field and writes zero accepted rows;
+4. `TestDirectFallbackChoiceE2E` — after an explicit direct command, the real
+   LSP completes its required path field and still writes zero accepted rows;
+5. `TestUnicodeDirectFieldValueE2E` — Japanese, emoji, a combining mark, and
+   CRLF survive the real LSP edit and one exact undo;
+6. `TestAgentDecisionSubmitE2E` — one explicit `HqSubmit` appends exactly one
+   typed Codex instruction, without executing the provider;
+7. `TestDirectCommandSubmitE2E` — one explicit direct submit appends exactly
+   one typed host instruction, consumes only that draft, and one undo restores
+   it;
+8. `TestAcceptedSubmitKeepsDraftOnUnsafeConsumption` — stale or malformed
+   consumption never destroys a newer draft.
 
-HQ parser/worker/provider tests are intentionally not duplicated here.
+The separate `vim-nix runtime lifecycle` E2E starts with one exact accepted
+fixture and owns only Herdr topology, managed worker readiness, deterministic
+provider execution, `accepted -> started -> stdout -> completed`, typed stop,
+and zero residual processes. It does not run an editor choice or submit E2E.
+
+HQ parser, policy, retry/replay, provider adapters, and command promotion remain
+HQ/envs/project-owned and are not duplicated here.
 
 Run the low-cost suite:
 
@@ -117,14 +135,33 @@ Run the low-cost suite:
 go test ./...
 ```
 
-Run the real popup proof explicitly:
+Run each exact-runtime E2E independently:
 
 ```sh
-HQ_NATIVE_HQ_FUZZY_PROOF=1 \
-HQ_BIN=/absolute/path/to/hq \
-VIM_EXE=/absolute/path/to/vim \
-VIM9_LSP_PATH=/absolute/path/to/yegappan-lsp \
-go test -run '^TestNativeHQFuzzyAutomaticPopupDoesNotAccept$' -v
+export HQ_BIN=/absolute/path/to/hq
+export VIM_EXE=/absolute/path/to/vim
+export VIM9_LSP_PATH=/absolute/path/to/yegappan-lsp
+
+HQ_CHOICE_E2E=1 go test -run '^TestAgentDefaultChoiceE2E$' -v
+HQ_CHOICE_E2E=1 go test -run '^TestAgentPromptFieldChoiceE2E$' -v
+HQ_CHOICE_E2E=1 go test -run '^TestDirectFallbackChoiceE2E$' -v
+HQ_CHOICE_E2E=1 go test -run '^TestUnicodeDirectFieldValueE2E$' -v
+go test -run '^TestAgentDecisionSubmitE2E$' -v
+go test -run '^TestDirectCommandSubmitE2E$' -v
 ```
+
+### PTY screenshots
+
+Screenshots are a read-only projection of the same focused E2Es:
+
+```sh
+PROOF_ROOT=/exact/composed/runtime \
+  proofs/vim-nix/capture-pty-e2e.sh
+```
+
+The capture hook waits until the tested state is already asserted, takes the
+image, releases the test, and records `captureAddsBehavior:false`. It captures
+Agent default choice, direct fallback choice, and the independent runtime
+lifecycle. It contains no fixed hold and no umbrella E2E.
 
 The exact installed Nix/Windows/WSLC proof remains outside this package.

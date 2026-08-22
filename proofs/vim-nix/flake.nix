@@ -9,15 +9,11 @@
       flake = false;
     };
     hq = {
-      url = "github:roccho-dev/hq/3118886f34ac5615e8a7732a6297bd41900e21e1";
+      url = "github:roccho-dev/hq/779a298f4efcff8df60205aaf973cb224388a82b";
       flake = false;
     };
     yegappan-lsp = {
       url = "github:yegappan/lsp/989016ae2ae4cbf304a9ca29478f47fec794493f";
-      flake = false;
-    };
-    edits-src = {
-      url = "github:roccho-dev/edits/d83bf4c4860e02f37d6b41cc54fe8c881af4c779";
       flake = false;
     };
   };

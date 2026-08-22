@@ -22,8 +22,6 @@ jobs:
     timeout-minutes: 120
     env:
       ARTIFACT: ${{ runner.temp }}/vim-nix-herdr-oci-proof
-      IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
-      OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
     steps:
       - id: request
         name: Resolve exact bounded request
@@ -126,7 +124,8 @@ jobs:
           candidate="$GITHUB_WORKSPACE/candidate"
           cat "$candidate"/proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/vim-nix-proof-ci.sh"
           chmod 0700 "$RUNNER_TEMP/vim-nix-proof-ci.sh"
-          GITHUB_WORKSPACE="$candidate" "$RUNNER_TEMP/vim-nix-proof-ci.sh"
+          GITHUB_SHA="${{ steps.request.outputs.commit }}" \
+            GITHUB_WORKSPACE="$candidate" "$RUNNER_TEMP/vim-nix-proof-ci.sh"
 
       - name: Upload downloadable OCI and WSLC proof pack
         if: success()

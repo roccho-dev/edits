@@ -18,6 +18,9 @@
         ln -s ${hq-vim} "$out/share/hq-vim"
         ln -s ${yegappan-lsp-runtime} "$out/share/yegappan-lsp"
         ln -s ${herdr-proof-config} "$out/share/proof/herdr.toml"
+        ln -s ${source-manifest} "$out/share/proof/source.json"
+        install -Dm644 ${edits-src + "/proofs/vim-nix/fixtures/runtime-world.jsonl"} "$out/share/proof/runtime-world.jsonl"
+        install -Dm644 ${edits-src + "/proofs/vim-nix/fixtures/runtime-accepted.jsonl"} "$out/share/proof/runtime-accepted.jsonl"
       '';
 
       proofRunner = pkgs.writeShellApplication {
@@ -55,7 +58,7 @@
 
       dockerImage = pkgs.dockerTools.buildLayeredImage {
         name = "roccho/vim-nix-herdr-hq-proof";
-        tag = "d83bf4c";
+        tag = editsTag;
         contents = [ imageRoot pkgs.dockerTools.fakeNss ];
         extraCommands = ''
           mkdir -p work/evidence work/runtime tmp root

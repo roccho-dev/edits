@@ -5,6 +5,7 @@ on:
     branches:
       - proof/vim-nix-herdr-oci-current-20260821
     paths:
+      - "packages/hq-vim/**"
       - "proofs/vim-nix/**"
       - ".github/workflows/proof-vim-nix-oci.yml"
   workflow_dispatch:
@@ -24,8 +25,6 @@ jobs:
     env:
       CLOSURE_ARTIFACT: ${{ runner.temp }}/vim-nix-exact-runtime-closure
       ARTIFACT: ${{ runner.temp }}/vim-nix-herdr-oci-proof
-      IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
-      OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
     steps:
       - name: Checkout exact canonical proof head
         uses: actions/checkout@v4

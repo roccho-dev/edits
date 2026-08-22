@@ -68,101 +68,182 @@ func TestEditorSurfaceAndBindingFailClosed(t *testing.T) {
 	})
 }
 
-// TestNativeHQFuzzyAutomaticPopupDoesNotAccept fixes the user-visible command
-// language only: the default suggestion is an AI-agent decision, an explicit
-// direct command remains available, documentation is complete, selection is
-// reversible, and completion has no durable effect.
-func TestNativeHQFuzzyAutomaticPopupDoesNotAccept(t *testing.T) {
-	if os.Getenv("HQ_NATIVE_HQ_FUZZY_PROOF") != "1" {
-		t.Skip("set HQ_NATIVE_HQ_FUZZY_PROOF=1 and run under a real terminal")
+type choiceE2ECase struct {
+	query      string
+	label      string
+	want       string
+	detail     string
+	docPreview string
+	fileFormat string
+	first      bool
+	contains   string
+}
+
+// TestAgentDefaultChoiceE2E fixes one pre-effect UX decision: an empty command
+// query puts the selected world's default AI-agent command first, while the
+// explicit direct fallback remains visible. Completion writes no durable row.
+func TestAgentDefaultChoiceE2E(t *testing.T) {
+	runChoiceE2E(t, choiceE2ECase{
+		query: "@", label: "agent.exec", want: "@agent.exec\nprompt=",
+		detail:     "schema_template | world declaration",
+		docPreview: "Preview:\n@agent.exec\nprompt=",
+		fileFormat: "unix", first: true, contains: "direct.open",
+	})
+}
+
+// TestAgentPromptFieldChoiceE2E fixes the next independent editor step after
+// choosing the Agent command: the real LSP completes its required prompt field,
+// and completion still has no durable effect.
+func TestAgentPromptFieldChoiceE2E(t *testing.T) {
+	runChoiceE2E(t, choiceE2ECase{
+		query: "@agent.exec\npr", label: "prompt", want: "@agent.exec\nprompt=",
+		detail:     "missing_key | string | world declaration",
+		docPreview: "Preview:\nprompt=",
+		fileFormat: "unix",
+	})
+}
+
+// TestDirectFallbackChoiceE2E fixes the separate business fallback step:
+// after an explicit direct command, the real LSP completes its required path
+// field. The Agent default is bypassed and completion writes no durable row.
+func TestDirectFallbackChoiceE2E(t *testing.T) {
+	runChoiceE2E(t, choiceE2ECase{
+		query: "@direct.open\npa", label: "path", want: "@direct.open\npath=",
+		detail:     "missing_key | path | world declaration",
+		docPreview: "Preview:\npath=",
+		fileFormat: "unix",
+	})
+}
+
+// TestUnicodeDirectFieldValueE2E fixes only the negotiated text-edit boundary:
+// Japanese, emoji, a combining mark, and CRLF are applied by the real native
+// popup, and one native undo restores the exact original query.
+func TestUnicodeDirectFieldValueE2E(t *testing.T) {
+	runChoiceE2E(t, choiceE2ECase{
+		query: "@direct.open\npath=日😀éj", label: "日本語-😀-é.jsonl",
+		want:       "@direct.open\npath=日本語-😀-é.jsonl",
+		detail:     "field_value | sources: field.example | world declaration",
+		docPreview: "Preview:\n日本語-😀-é.jsonl",
+		fileFormat: "dos",
+	})
+}
+
+func runChoiceE2E(t *testing.T, tc choiceE2ECase) {
+	t.Helper()
+	if os.Getenv("HQ_CHOICE_E2E") != "1" {
+		t.Skip("set HQ_CHOICE_E2E=1 and run under a real terminal")
 	}
 	hqBin := os.Getenv("HQ_BIN")
 	if hqBin == "" {
-		t.Fatal("HQ_BIN is required for the real-hq popup proof")
+		t.Fatal("HQ_BIN is required for the real-hq choice E2E")
 	}
 	root := mustPackageRoot(t)
-	for _, tc := range []struct {
-		name        string
-		query       string
-		label       string
-		want        string
-		detail      string
-		docPreview  string
-		fileFormat  string
-		mustBeFirst bool
-	}{
-		{
-			name: "AI agent is the first command", query: "@", label: "agent.exec",
-			want: "@agent.exec\nprompt=", detail: "schema_template | world declaration",
-			docPreview: "Preview:\n@agent.exec\nprompt=", fileFormat: "unix", mustBeFirst: true,
-		},
-		{
-			name: "AI agent prompt field", query: "@agent.exec\npr", label: "prompt",
-			want: "@agent.exec\nprompt=", detail: "missing_key | string | world declaration",
-			docPreview: "Preview:\nprompt=", fileFormat: "unix",
-		},
-		{
-			name: "explicit direct command with Unicode CRLF", query: "@direct.open\npath=日😀éj", label: "日本語-😀-é.jsonl",
-			want: "@direct.open\npath=日本語-😀-é.jsonl", detail: "field_value | sources: field.example | world declaration",
-			docPreview: "Preview:\n日本語-😀-é.jsonl", fileFormat: "dos",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			profileEnv, accepted := prepareStrictHQProfile(t, root, "local")
-			artifact := filepath.Join(t.TempDir(), "native-hq-popup.json")
-			cfg := smoke.Config{
-				HQBin: hqBin, Vim: requireVim(t), Vim9LSP: requireVim9LSP(t), PluginRoot: root,
-				Profile: "local", Buffer: filepath.Join(t.TempDir(), "native-hq-popup.hqjson"),
-				CompletionText: tc.query, ExpectedCompletionLabel: tc.label, ExpectedCompletionText: tc.want,
-				NativePopupFileFormat: tc.fileFormat, NativePopupArtifact: artifact,
-				Env: profileEnv, Timeout: 15 * time.Second,
+	profileEnv, accepted := prepareStrictHQProfile(t, root, "local")
+	artifact := filepath.Join(t.TempDir(), "native-hq-popup.json")
+	cfg := smoke.Config{
+		HQBin: hqBin, Vim: requireVim(t), Vim9LSP: requireVim9LSP(t), PluginRoot: root,
+		Profile: "local", Buffer: filepath.Join(t.TempDir(), "native-hq-popup.hqjson"),
+		CompletionText: tc.query, ExpectedCompletionLabel: tc.label, ExpectedCompletionText: tc.want,
+		NativePopupFileFormat: tc.fileFormat, NativePopupArtifact: artifact,
+		Env: profileEnv, Timeout: 15 * time.Second,
+		CaptureReadyPath: os.Getenv("HQ_PTY_CAPTURE_READY"),
+		CaptureDonePath:  os.Getenv("HQ_PTY_CAPTURE_DONE"),
+	}
+	if err := smoke.Run(cfg); err != nil {
+		artifactBody, _ := os.ReadFile(artifact)
+		t.Fatalf("native real-hq choice E2E failed: %v\nartifact: %s", err, artifactBody)
+	}
+	var result struct {
+		Status                 string   `json:"status"`
+		Failure                string   `json:"failure"`
+		CandidateDetail        string   `json:"candidate_detail"`
+		CandidateDocumentation string   `json:"candidate_documentation"`
+		Lines                  []string `json:"lines"`
+		UndoLines              []string `json:"undo_lines"`
+		DocumentationPopup     []string `json:"documentation_popup"`
+		FileFormat             string   `json:"fileformat"`
+		Items                  []struct {
+			Word string `json:"word"`
+			Abbr string `json:"abbr"`
+		} `json:"items"`
+	}
+	body, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatalf("decode popup artifact: %v\n%s", err, body)
+	}
+	if result.Status != "passed" || result.Failure != "" {
+		t.Fatalf("native popup result = %#v", result)
+	}
+	if strings.Join(result.Lines, "\n") != tc.want || strings.Join(result.UndoLines, "\n") != tc.query {
+		t.Fatalf("native edit/undo result = %#v", result)
+	}
+	if result.CandidateDetail != tc.detail || !strings.Contains(result.CandidateDocumentation, tc.docPreview) {
+		t.Fatalf("native detail/documentation result = %#v", result)
+	}
+	if strings.Join(result.DocumentationPopup, "\n") != result.CandidateDocumentation || result.FileFormat != tc.fileFormat {
+		t.Fatalf("native documentation/format result = %#v", result)
+	}
+	if tc.first {
+		if len(result.Items) == 0 || (!strings.Contains(result.Items[0].Word, tc.label) && result.Items[0].Abbr != tc.label) {
+			t.Fatalf("expected candidate is not first: %#v", result.Items)
+		}
+	}
+	if tc.contains != "" {
+		found := false
+		for _, item := range result.Items {
+			if strings.Contains(item.Word, tc.contains) || item.Abbr == tc.contains {
+				found = true
+				break
 			}
-			if err := smoke.Run(cfg); err != nil {
-				artifactBody, _ := os.ReadFile(artifact)
-				t.Fatalf("native real-hq popup smoke failed: %v\nartifact: %s", err, artifactBody)
-			}
-			var result struct {
-				Status                 string   `json:"status"`
-				Failure                string   `json:"failure"`
-				CandidateDetail        string   `json:"candidate_detail"`
-				CandidateDocumentation string   `json:"candidate_documentation"`
-				Lines                  []string `json:"lines"`
-				UndoLines              []string `json:"undo_lines"`
-				DocumentationPopup     []string `json:"documentation_popup"`
-				FileFormat             string   `json:"fileformat"`
-				Items                  []struct {
-					Word string `json:"word"`
-					Abbr string `json:"abbr"`
-				} `json:"items"`
-			}
-			b, err := os.ReadFile(artifact)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := json.Unmarshal(b, &result); err != nil {
-				t.Fatalf("decode popup artifact: %v\n%s", err, b)
-			}
-			if result.Status != "passed" || result.Failure != "" {
-				t.Fatalf("native popup result = %#v", result)
-			}
-			if strings.Join(result.Lines, "\n") != tc.want || strings.Join(result.UndoLines, "\n") != tc.query {
-				t.Fatalf("native edit/undo result = %#v", result)
-			}
-			if result.CandidateDetail != tc.detail || !strings.Contains(result.CandidateDocumentation, tc.docPreview) {
-				t.Fatalf("native detail/documentation result = %#v", result)
-			}
-			if strings.Join(result.DocumentationPopup, "\n") != result.CandidateDocumentation || result.FileFormat != tc.fileFormat {
-				t.Fatalf("native documentation/format result = %#v", result)
-			}
-			if tc.mustBeFirst {
-				if len(result.Items) == 0 || (!strings.Contains(result.Items[0].Word, tc.label) && result.Items[0].Abbr != tc.label) {
-					t.Fatalf("AI agent is not the first popup item: %#v", result.Items)
-				}
-			}
-			if body, err := os.ReadFile(accepted); err != nil || strings.TrimSpace(string(body)) != "" {
-				t.Fatalf("completion changed durable accepted history: err=%v body=%s", err, body)
-			}
-		})
+		}
+		if !found {
+			t.Fatalf("fallback candidate %q is not visible: %#v", tc.contains, result.Items)
+		}
+	}
+	if acceptedBody, err := os.ReadFile(accepted); err != nil || strings.TrimSpace(string(acceptedBody)) != "" {
+		t.Fatalf("completion changed durable accepted history: err=%v body=%s", err, acceptedBody)
+	}
+}
+
+// TestAgentDecisionSubmitE2E fixes the next distinct UX boundary after choice:
+// one explicit HqSubmit queues exactly one typed task for the default agent. It
+// does not execute the provider or duplicate worker/policy E2Es.
+func TestAgentDecisionSubmitE2E(t *testing.T) {
+	hqBin := os.Getenv("HQ_BIN")
+	if hqBin == "" {
+		t.Skip("HQ_BIN is required")
+	}
+	root := mustPackageRoot(t)
+	profileEnv, accepted := prepareStrictHQProfile(t, root, "local")
+	resultPath := filepath.Join(t.TempDir(), "agent-submit.json")
+	prompt := "inspect-change"
+	cfg := smoke.Config{
+		HQBin: hqBin, Vim: requireVim(t), Vim9LSP: requireVim9LSP(t), PluginRoot: root,
+		Profile: "local", Buffer: filepath.Join(t.TempDir(), "agent-submit.hqjson"),
+		BufferText: "@agent.exec\nprompt=" + prompt, Headless: true, Env: profileEnv,
+		ResultPath: resultPath,
+	}
+	if err := smoke.Run(cfg); err != nil {
+		t.Fatalf("agent decision submit E2E failed: %v", err)
+	}
+	rows := readJSONLRows(t, accepted)
+	if len(rows) != 1 || rows[0]["kind"] != "accepted.instruction" {
+		t.Fatalf("accepted rows=%#v", rows)
+	}
+	instruction, ok := rows[0]["instruction"].(map[string]any)
+	if !ok || instruction["target"] != "codex" || instruction["op"] != "run" {
+		t.Fatalf("agent instruction=%#v", instruction)
+	}
+	payload, ok := instruction["payload"].(map[string]any)
+	if !ok || payload["action"] != "exec" || payload["prompt"] != prompt {
+		t.Fatalf("agent payload=%#v", payload)
+	}
+	result := readJSONObject(t, resultPath)
+	if result["kind"] != "hq.submitResult.v1" || result["status"] != "queued" || result["queueId"] != instruction["id"] {
+		t.Fatalf("agent submit result=%#v", result)
 	}
 }
 

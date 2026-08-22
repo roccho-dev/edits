@@ -154,11 +154,13 @@ cd vim-nix-local-first
 bash run
 ```
 
-The local proof fixes five Canon TDD boundaries only: minimal editor surface
-and exact HQ binding, canonical LSP/submit behavior, agent-first/direct-fallback
-native popup behavior, safe draft preservation, and controlling-TTY behavior.
-It also retains the OCI mutation control and optional
-Herdr exactly-two-pane/clean-stop probe.
+The local proof keeps eight focused behavior boundaries: the minimal editor
+surface, agent-default choice, Agent prompt-field completion, explicit direct
+choice, Unicode/CRLF edit and undo, agent submit, direct submit, and fail-closed draft preservation. Each E2E
+owns one seam; no umbrella E2E invokes another. The separate screenshot harness
+observes the permanent agent-choice and runtime-lifecycle E2Es without changing
+their assertions. OCI mutation control and the optional Herdr topology probe
+remain independent distribution checks.
 
 The carry is a development surface, not the final exact Nix/HQ/yegappan/worker/
 Docker/OCI distribution claim.

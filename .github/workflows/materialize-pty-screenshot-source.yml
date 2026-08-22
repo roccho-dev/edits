@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - proof/pty-screenshot-materialize-20260822
+  pull_request:
+    branches:
+      - proof/vim-nix-herdr-oci-current-20260821
 
 permissions:
   contents: read

@@ -26,8 +26,8 @@ jobs:
       EXPECTED_HQ: 779a298f4efcff8df60205aaf973cb224388a82b
       FINAL_BRANCH: ux/focused-e2e-screenshot-refactor-20260822
       ARTIFACT: /tmp/focused-e2e-screenshot-v2
-      INTEGRATOR_GZ_SHA256: 5645834125f95ce83c0b1e037a6f68a98ab12e5ae61112ca72b84ab606bedd19
-      INTEGRATOR_SHA256: 21648495059e226d58ec5e5ea77da3dfc73cf884a8673354499af50ecafb4f68
+      INTEGRATOR_GZ_SHA256: a983e8a5f4ac3ef7d1dacf5ae78c75e2cad341a6eadc65b0c987e0bc1a506973
+      INTEGRATOR_SHA256: 3e45a6d101152ffcc2bab2da76f9befc54e98a63395d27a5633698291c9f8637
 
     steps:
       - uses: actions/checkout@v4

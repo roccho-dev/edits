@@ -1,0 +1,105 @@
+name: materialize focused popup synchronous reread
+
+on:
+  push:
+    branches:
+      - automation/focused-e2e-popup-source-20260822
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      BASE: 1510f097fce7eada82c6fcab02ad3969619f8f19
+      TARGET_BRANCH: automation/focused-e2e-source-popup-sync-20260822
+      ARTIFACT: /tmp/focused-popup-sync-source
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+
+      - id: materialize
+        name: Re-read the native selected candidate in the same callback
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/focused-popup-sync-source"
+          rm -rf "$work" "$ARTIFACT"
+          mkdir -p "$ARTIFACT"
+          git worktree add --detach "$work" "$BASE"
+          cd "$work"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("packages/hq-vim/internal/smoke/smoke.go")
+          text = path.read_text(encoding="utf-8")
+          old = '''    "    if l:steps > 0",
+              "      call feedkeys(repeat(\\"\\\\<C-N>\\", l:steps), 'nx')",
+              "    endif",
+              "    return",
+              "  endif",
+          '''
+          new = '''    "    if l:steps > 0",
+              "      call feedkeys(repeat(\\"\\\\<C-N>\\", l:steps), 'nx')",
+              "      let l:info = complete_info(['selected', 'items'])",
+              "      let l:selected = get(l:info, 'selected', -1)",
+              "    endif",
+              "    if l:selected != a:state.expected",
+              "      return",
+              "    endif",
+              "  endif",
+          '''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"expected one delayed observer block, got {count}")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+          gofmt -w packages/hq-vim/internal/smoke/smoke.go
+          (
+            cd packages/hq-vim
+            go test ./... -count=1 | tee "$ARTIFACT/go-test.log"
+          )
+          git diff --check
+          test "$(git diff --name-only | tr -d '\n')" = "packages/hq-vim/internal/smoke/smoke.go"
+          git add packages/hq-vim/internal/smoke/smoke.go
+          tree=$(git write-tree)
+          export GIT_AUTHOR_NAME=roccho
+          export GIT_AUTHOR_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_COMMITTER_NAME=roccho
+          export GIT_COMMITTER_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_AUTHOR_DATE=2026-08-22T00:00:00Z
+          export GIT_COMMITTER_DATE=2026-08-22T00:00:00Z
+          commit=$(printf '%s\n' 'test(hq-vim): re-read synchronous native completion selection' | git commit-tree "$tree" -p "$BASE")
+          printf 'base=%s\ncommit=%s\ntree=%s\n' "$BASE" "$commit" "$tree" | tee "$ARTIFACT/identity.txt"
+          git diff "$BASE" "$commit" -- packages/hq-vim/internal/smoke/smoke.go > "$ARTIFACT/change.patch"
+          git update-ref refs/heads/focused-popup-sync-evidence "$commit"
+          git bundle create "$ARTIFACT/source.git.bundle" refs/heads/focused-popup-sync-evidence
+          git bundle verify "$ARTIFACT/source.git.bundle" > "$ARTIFACT/bundle-verify.txt"
+          git update-ref -d refs/heads/focused-popup-sync-evidence
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+
+          set +e
+          git push origin "$commit:refs/heads/$TARGET_BRANCH" > "$ARTIFACT/push.log" 2>&1
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$ARTIFACT/push-status.txt"
+          (cd "$ARTIFACT" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS)
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: focused-popup-sync-${{ steps.materialize.outputs.commit || github.run_id }}
+          path: /tmp/focused-popup-sync-source
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: warn

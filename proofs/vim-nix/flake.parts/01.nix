@@ -8,6 +8,7 @@
         mkdir -p "$out/bin" "$out/share/proof"
         ln -s ${herdr}/bin/herdr "$out/bin/herdr"
         ln -s ${vim}/bin/vim "$out/bin/vim"
+        ln -s ${vim}/share/vim "$out/share/vim"
         ln -s ${hq-binaries}/bin/hq "$out/bin/hq"
         ln -s ${hq-binaries}/bin/hq-worker "$out/bin/hq-worker"
         ln -s ${hq-binaries}/bin/hq-worker-proof-provider "$out/bin/hq-worker-proof-provider"

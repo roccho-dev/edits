@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 40
     env:
       TARGET_BRANCH: automation/focused-e2e-screenshot-refactor-20260822
-      TARGET_HEAD: b3ac0ea96c2b827dd09bfc43c1f201e09340ec49
+      TARGET_HEAD: f318036ff217557f2c7af37b29197f6624ae72fa
       TARGET_WORKFLOW: integrate-focused-e2e-screenshot.yml
       TARGET_PR: "100"
       GH_TOKEN: ${{ github.token }}

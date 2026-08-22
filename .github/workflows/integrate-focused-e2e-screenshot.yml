@@ -110,7 +110,7 @@ jobs:
           cat proofs/vim-nix/run-proof.parts/*.sh > "$RUNNER_TEMP/run-proof.sh"
           cat proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/ci-proof.sh"
           bash -n "$RUNNER_TEMP/run-proof.sh" "$RUNNER_TEMP/ci-proof.sh"
-          python3 -m py_compile tools/vim-nix-local/pack.py
+          PYTHONPYCACHEPREFIX="$RUNNER_TEMP/pycache" python3 -m py_compile tools/vim-nix-local/pack.py
 
           git rm "${PATCH_PART_PREFIX}"* .github/workflows/integrate-focused-e2e-screenshot.yml
           git add -A

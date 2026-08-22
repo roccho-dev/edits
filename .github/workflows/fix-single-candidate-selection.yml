@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - automation/fix-single-candidate-selection-20260822
+  pull_request:
+    branches:
+      - automation/focused-e2e-source-20260822
 
 permissions:
   contents: write

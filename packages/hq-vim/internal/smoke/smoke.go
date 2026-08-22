@@ -491,7 +491,7 @@ func nativePopupProofLines(cfg Config) []string {
 		"  if l:selected != l:index",
 		"    let l:steps = l:selected < 0 ? l:index + 1 : (l:index - l:selected + len(l:info.items)) % len(l:info.items)",
 		"    if l:steps > 0",
-		"      call feedkeys(repeat(\"\\<C-N>\", l:steps), 'nt')",
+		"      call feedkeys(repeat(\"\\<C-N>\", l:steps), 'nx')",
 		"    endif",
 		"  endif",
 		"  call timer_start(20, function('HqNativePopupObserve'))",

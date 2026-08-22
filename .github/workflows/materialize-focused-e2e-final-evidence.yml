@@ -1,0 +1,116 @@
+name: materialize focused E2E final evidence
+
+on:
+  push:
+    branches:
+      - automation/watch-focused-e2e-20260822
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_WORKFLOW: integrate-focused-e2e-v3.yml
+      SOURCE_BRANCH: automation/focused-e2e-v2-20260822
+      FINAL_BRANCH: ux/focused-e2e-screenshot-refactor-20260822
+      EVIDENCE_BRANCH: proof/focused-e2e-final-evidence-20260822
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Read back the successful focused E2E artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/focused-final-evidence"
+          download="$root/download"
+          evidence="$root/evidence"
+          rm -rf "$root"
+          mkdir -p "$download" "$evidence"
+
+          runs=$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow "$SOURCE_WORKFLOW" \
+            --branch "$SOURCE_BRANCH" \
+            --status success \
+            --limit 30 \
+            --json databaseId,headSha,status,conclusion,event,url,createdAt)
+          run_id=$(printf '%s' "$runs" | jq -er 'sort_by(.databaseId) | last.databaseId')
+          run_url=$(printf '%s' "$runs" | jq -er 'sort_by(.databaseId) | last.url')
+          run_head=$(printf '%s' "$runs" | jq -er 'sort_by(.databaseId) | last.headSha')
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --dir "$download"
+
+          receipt=$(find "$download" -type f -name receipt.json | head -1)
+          test -n "$receipt"
+          jq -e '.status == "PASS" and .editorBehaviorE2Es == 8 and .runtimeLifecycleE2Es == 1 and .screenshotCount == 3 and .screenshotMechanism == "observation-only" and .e2eComposition == false and .normalOfflineSameStorePath == true' "$receipt" >/dev/null
+
+          mapfile -t screenshots < <(find "$download" -type f -name '*.png' | sort)
+          test "${#screenshots[@]}" -eq 3
+          mkdir -p "$evidence/screenshots"
+          for shot in "${screenshots[@]}"; do
+            cp "$shot" "$evidence/screenshots/$(basename "$shot")"
+          done
+          cp "$receipt" "$evidence/receipt.json"
+
+          final_sha=$(git ls-remote origin "refs/heads/$FINAL_BRANCH" | awk '{print $1}')
+          test -n "$final_sha"
+          git fetch --no-tags origin "+refs/heads/$FINAL_BRANCH:refs/remotes/origin/$FINAL_BRANCH"
+          final_tree=$(git rev-parse "$final_sha^{tree}")
+
+          artifact_name=$(find "$download" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | head -1)
+          test -n "$artifact_name"
+          (
+            cd "$download"
+            zip -X -q -r "$root/focused-e2e-final-evidence.zip" .
+          )
+          artifact_sha=$(sha256sum "$root/focused-e2e-final-evidence.zip" | cut -d' ' -f1)
+          artifact_bytes=$(stat -c %s "$root/focused-e2e-final-evidence.zip")
+          test "$artifact_bytes" -lt 70000000
+          base64 -w0 "$root/focused-e2e-final-evidence.zip" > "$evidence/focused-e2e-final-evidence.zip.b64.txt"
+          printf '%s  %s\n' "$artifact_sha" focused-e2e-final-evidence.zip > "$evidence/focused-e2e-final-evidence.zip.sha256"
+
+          jq -n \
+            --arg schema 'edits.focused-e2e-final-evidence/1' \
+            --arg runId "$run_id" \
+            --arg runUrl "$run_url" \
+            --arg runHead "$run_head" \
+            --arg artifactName "$artifact_name" \
+            --arg artifactSha256 "$artifact_sha" \
+            --argjson artifactBytes "$artifact_bytes" \
+            --arg finalBranch "$FINAL_BRANCH" \
+            --arg finalCommit "$final_sha" \
+            --arg finalTree "$final_tree" \
+            '{schema:$schema,status:"PASS",runId:$runId,runUrl:$runUrl,runHead:$runHead,artifactName:$artifactName,artifactSha256:$artifactSha256,artifactBytes:$artifactBytes,finalBranch:$finalBranch,finalCommit:$finalCommit,finalTree:$finalTree,screenshotCount:3,screenshotMechanism:"observation-only",e2eComposition:false}' \
+            > "$evidence/manifest.json"
+          (
+            cd "$evidence"
+            find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+            sha256sum --check SHA256SUMS
+          )
+
+          if git ls-remote --exit-code --heads origin "$EVIDENCE_BRANCH" >/dev/null 2>&1; then
+            echo "evidence branch already exists; refusing replacement" >&2
+            exit 1
+          fi
+          work="$RUNNER_TEMP/focused-final-evidence-worktree"
+          git worktree add --detach "$work" "$final_sha"
+          mkdir -p "$work/proofs/focused-e2e-final"
+          cp -a "$evidence"/. "$work/proofs/focused-e2e-final/"
+          cd "$work"
+          git add proofs/focused-e2e-final
+          tree=$(git write-tree)
+          export GIT_AUTHOR_NAME=roccho
+          export GIT_AUTHOR_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_COMMITTER_NAME=roccho
+          export GIT_COMMITTER_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_AUTHOR_DATE=2026-08-22T00:00:00Z
+          export GIT_COMMITTER_DATE=2026-08-22T00:00:00Z
+          evidence_commit=$(printf '%s\n' 'proof: retain focused E2E receipts and PTY screenshots' | git commit-tree "$tree" -p "$final_sha")
+          git push origin "$evidence_commit:refs/heads/$EVIDENCE_BRANCH"

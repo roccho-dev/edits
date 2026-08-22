@@ -266,6 +266,7 @@ func writeVimScript(root string, cfg Config) (string, error) {
 		"set nocompatible",
 		"set noswapfile",
 		"set encoding=utf-8",
+		"set completeopt=menuone,noinsert,noselect,popup",
 		"execute 'set runtimepath^=' . fnameescape(" + vimString(cfg.Vim9LSP) + ")",
 		"execute 'set runtimepath^=' . fnameescape(" + vimString(root) + ")",
 		"runtime plugin/lsp.vim",

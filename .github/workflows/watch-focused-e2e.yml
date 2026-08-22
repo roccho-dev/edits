@@ -1,4 +1,4 @@
-name: inspect focused E2E runs
+name: inspect focused E2E artifact
 
 on:
   push:
@@ -15,24 +15,52 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      TARGET_BRANCH: automation/focused-e2e-screenshot-refactor-20260822
-      TARGET_HEAD: f318036ff217557f2c7af37b29197f6624ae72fa
-      TARGET_WORKFLOW: integrate-focused-e2e-screenshot.yml
-      TARGET_PR: "100"
+      TARGET_RUN: "32566880025"
+      TARGET_PR: "101"
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Report all exact-head runs
+      - name: Download the exact failed-run artifact and report its focused boundary
         shell: bash
         run: |
           set -euo pipefail
-          runs=$(gh run list --repo "$GITHUB_REPOSITORY" \
-            --workflow "$TARGET_WORKFLOW" \
-            --branch "$TARGET_BRANCH" \
-            --limit 30 \
-            --json databaseId,status,conclusion,headSha,event,url,createdAt)
-          rows=$(printf '%s' "$runs" | jq -c --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.databaseId)')
-          count=$(printf '%s' "$rows" | jq length)
-          table=$(printf '%s' "$rows" | jq -r '.[] | "- run `\(.databaseId)`: event=`\(.event)`, status=`\(.status)`, conclusion=`\(.conclusion // "")`, \(.url)"')
-          gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body \
-            "Exact-head focused E2E run inventory for \`$TARGET_HEAD\` (count \`$count\`):\n\n$table"
-          test "$count" -gt 0
+          root="$RUNNER_TEMP/focused-artifact"
+          mkdir -p "$root"
+          metadata=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN/artifacts")
+          artifact_id=$(printf '%s' "$metadata" | jq -er '.artifacts | sort_by(.id) | last.id')
+          artifact_name=$(printf '%s' "$metadata" | jq -er '.artifacts | sort_by(.id) | last.name')
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > "$root/artifact.zip"
+          unzip -q "$root/artifact.zip" -d "$root/unpacked"
+
+          find "$root/unpacked" -type f -printf '%P\n' | sort > "$root/files.txt"
+          grep -RInE -- '--- FAIL:|selected completion documentation|timeout|FAIL$|panic:' \
+            "$root/unpacked" > "$root/failures.txt" || true
+
+          {
+            printf 'Focused E2E artifact readback for run `%s`\n\n' "$TARGET_RUN"
+            printf -- '- artifact: `%s` (`%s`)\n' "$artifact_name" "$artifact_id"
+            printf -- '- files: `%s`\n\n' "$(wc -l < "$root/files.txt")"
+            printf 'Failure matches:\n```text\n'
+            sed -n '1,80p' "$root/failures.txt"
+            printf '```\n\nRelevant E2E tails:\n```text\n'
+            while IFS= read -r file; do
+              case "$file" in
+                e2e/*.log|screenshots/*.log|screenshots/runtime-evidence/*.log)
+                  printf '\n== %s ==\n' "$file"
+                  tail -50 "$root/unpacked/$file"
+                  ;;
+              esac
+            done < "$root/files.txt"
+            printf '```\n'
+          } > "$root/comment.md"
+
+          python3 - "$root/comment.md" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          text = path.read_text(encoding='utf-8', errors='replace')
+          limit = 60000
+          if len(text) > limit:
+              text = text[:limit] + '\n\n[truncated]\n'
+          path.write_text(text, encoding='utf-8')
+          PY
+          gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body-file "$root/comment.md"

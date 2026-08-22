@@ -72,8 +72,10 @@ jobs:
           commit=$(printf '%s\n' 'test(hq-vim): require native completion documentation popup' | git commit-tree "$tree" -p "$BASE")
           printf 'base=%s\ncommit=%s\ntree=%s\n' "$BASE" "$commit" "$tree" | tee "$ARTIFACT/identity.txt"
           git diff "$BASE" "$commit" -- packages/hq-vim/internal/smoke/smoke.go > "$ARTIFACT/change.patch"
-          git bundle create "$ARTIFACT/source.git.bundle" "$commit"
+          git update-ref refs/heads/focused-popup-evidence "$commit"
+          git bundle create "$ARTIFACT/source.git.bundle" refs/heads/focused-popup-evidence
           git bundle verify "$ARTIFACT/source.git.bundle" > "$ARTIFACT/bundle-verify.txt"
+          git update-ref -d refs/heads/focused-popup-evidence
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "tree=$tree" >> "$GITHUB_OUTPUT"
 

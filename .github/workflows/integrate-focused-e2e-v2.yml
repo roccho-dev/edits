@@ -22,7 +22,7 @@ jobs:
     env:
       BASE: 6fbcdd0147b55975492954405e1f562074ddb9c2
       SOURCE_COMMIT: ad856db704b85b2750cf969166fe36fd1ac1bb1a
-      SOURCE_TREE: 0fd2622285588c9c85f03b53de0917b5d341d4f4
+      SOURCE_TREE: 0fd2622294d868823d1f715ff6a7e99ca2d9e615
       EXPECTED_HQ: 779a298f4efcff8df60205aaf973cb224388a82b
       FINAL_BRANCH: ux/focused-e2e-screenshot-refactor-20260822
       ARTIFACT: /tmp/focused-e2e-screenshot-v2

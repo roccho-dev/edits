@@ -1,4 +1,4 @@
-name: watch focused E2E integration
+name: watch focused E2E helper repair
 
 on:
   push:
@@ -13,19 +13,19 @@ permissions:
 jobs:
   watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 20
     env:
-      TARGET_BRANCH: automation/focused-e2e-screenshot-refactor-20260822
-      TARGET_HEAD: 257dcfaf538f304bb3cf73662acf2ba02401c776
-      TARGET_WORKFLOW: integrate-focused-e2e-screenshot.yml
+      TARGET_BRANCH: automation/repair-focused-e2e-20260822
+      TARGET_HEAD: 30a7f3273ceea4994f902d33afa21b7f36ec1b9a
+      TARGET_WORKFLOW: repair-focused-e2e.yml
       TARGET_PR: "100"
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Read back target integration conclusion
+      - name: Read back helper repair conclusion
         shell: bash
         run: |
           set -euo pipefail
-          for _ in $(seq 1 240); do
+          for _ in $(seq 1 120); do
             runs=$(gh run list --repo "$GITHUB_REPOSITORY" \
               --workflow "$TARGET_WORKFLOW" \
               --branch "$TARGET_BRANCH" \
@@ -33,21 +33,17 @@ jobs:
               --json databaseId,status,conclusion,headSha,event,url,createdAt)
             row=$(printf '%s' "$runs" | jq -c --arg head "$TARGET_HEAD" \
               '[.[] | select(.headSha == $head)] | sort_by(.databaseId) | last // empty')
-            if test -n "$row"; then
-              status=$(printf '%s' "$row" | jq -r .status)
-              if test "$status" = completed; then
-                id=$(printf '%s' "$row" | jq -r .databaseId)
-                conclusion=$(printf '%s' "$row" | jq -r .conclusion)
-                url=$(printf '%s' "$row" | jq -r .url)
-                event=$(printf '%s' "$row" | jq -r .event)
-                gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body \
-                  "Focused E2E integration readback: run \`$id\`, event \`$event\`, conclusion \`$conclusion\`, head \`$TARGET_HEAD\`. $url"
-                test "$conclusion" = success
-                exit 0
-              fi
+            if test -n "$row" && test "$(printf '%s' "$row" | jq -r .status)" = completed; then
+              id=$(printf '%s' "$row" | jq -r .databaseId)
+              conclusion=$(printf '%s' "$row" | jq -r .conclusion)
+              url=$(printf '%s' "$row" | jq -r .url)
+              gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body \
+                "Focused E2E helper repair readback: run \`$id\`, conclusion \`$conclusion\`, head \`$TARGET_HEAD\`. $url"
+              test "$conclusion" = success
+              exit 0
             fi
             sleep 10
           done
           gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body \
-            "Focused E2E integration readback timed out for head \`$TARGET_HEAD\`; no success is claimed."
+            "Focused E2E helper repair readback timed out for head \`$TARGET_HEAD\`; no success is claimed."
           exit 1

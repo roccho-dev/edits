@@ -61,24 +61,37 @@ jobs:
           base64 --decode proofs/vim-nix/integrate-focused-e2e-v2.sh.gz.b64 > "$tmp/integrate.sh.gz"
           gzip -dc "$tmp/integrate.sh.gz" > "$tmp/integrate.sh"
           sha256sum "$tmp/integrate.sh.gz" "$tmp/integrate.sh" \
-            | tee "$ARTIFACT/integrator-sha256.before-identity-gate.txt"
+            | tee "$ARTIFACT/integrator-sha256.before-helper-fixes.txt"
           python3 - "$tmp/integrate.sh" <<'PY'
           from pathlib import Path
+          import os
           import sys
 
           path = Path(sys.argv[1])
           text = path.read_text(encoding="utf-8")
-          old = 'test "$(git rev-parse "$SOURCE_COMMIT^")" = "$BASE"'
-          new = 'test "$(git merge-base "$SOURCE_COMMIT" "$BASE")" = "$BASE"'
-          count = text.count(old)
-          if count != 1:
-              raise SystemExit(f"expected one identity-gate match, got {count}")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          old_identity = 'test "$(git rev-parse "$SOURCE_COMMIT^")" = "$BASE"'
+          new_identity = 'test "$(git merge-base "$SOURCE_COMMIT" "$BASE")" = "$BASE"'
+          identity_count = text.count(old_identity)
+          if identity_count != 1:
+              raise SystemExit(f"expected one identity-gate match, got {identity_count}")
+          text = text.replace(old_identity, new_identity, 1)
+
+          old_source = "4e36f0261147e5d315054c1503edf2a6c9db3dee"
+          new_source = os.environ["SOURCE_COMMIT"]
+          source_count = text.count(old_source)
+          if source_count != 1:
+              raise SystemExit(f"expected one source-pin match, got {source_count}")
+          text = text.replace(old_source, new_source, 1)
+
+          path.write_text(text, encoding="utf-8")
           PY
           sha256sum "$tmp/integrate.sh" \
             | tee "$ARTIFACT/integrator-sha256.executed.txt"
-          printf '%s\n' 'identityGate=base-is-ancestor+exact-source-tree' \
-            > "$ARTIFACT/identity-gate.txt"
+          printf '%s\n' \
+            'identityGate=base-is-ancestor+exact-source-tree' \
+            'sourcePin=SOURCE_COMMIT' \
+            > "$ARTIFACT/helper-fixes.txt"
           chmod 700 "$tmp/integrate.sh"
           "$tmp/integrate.sh"
 

@@ -1,0 +1,53 @@
+name: watch focused E2E integration
+
+on:
+  push:
+    branches:
+      - automation/watch-focused-e2e-20260822
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      TARGET_BRANCH: automation/focused-e2e-screenshot-refactor-20260822
+      TARGET_HEAD: 257dcfaf538f304bb3cf73662acf2ba02401c776
+      TARGET_WORKFLOW: integrate-focused-e2e-screenshot.yml
+      TARGET_PR: "100"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Read back target integration conclusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 240); do
+            runs=$(gh run list --repo "$GITHUB_REPOSITORY" \
+              --workflow "$TARGET_WORKFLOW" \
+              --branch "$TARGET_BRANCH" \
+              --limit 20 \
+              --json databaseId,status,conclusion,headSha,event,url,createdAt)
+            row=$(printf '%s' "$runs" | jq -c --arg head "$TARGET_HEAD" \
+              '[.[] | select(.headSha == $head)] | sort_by(.databaseId) | last // empty')
+            if test -n "$row"; then
+              status=$(printf '%s' "$row" | jq -r .status)
+              if test "$status" = completed; then
+                id=$(printf '%s' "$row" | jq -r .databaseId)
+                conclusion=$(printf '%s' "$row" | jq -r .conclusion)
+                url=$(printf '%s' "$row" | jq -r .url)
+                event=$(printf '%s' "$row" | jq -r .event)
+                gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body \
+                  "Focused E2E integration readback: run \`$id\`, event \`$event\`, conclusion \`$conclusion\`, head \`$TARGET_HEAD\`. $url"
+                test "$conclusion" = success
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body \
+            "Focused E2E integration readback timed out for head \`$TARGET_HEAD\`; no success is claimed."
+          exit 1

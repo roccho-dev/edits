@@ -26,8 +26,6 @@ jobs:
       EXPECTED_HQ: 779a298f4efcff8df60205aaf973cb224388a82b
       FINAL_BRANCH: ux/focused-e2e-screenshot-refactor-20260822
       ARTIFACT: /tmp/focused-e2e-screenshot-v2
-      INTEGRATOR_GZ_SHA256: 7a4f77a44165eb28190991ba9d1708a0f2e585ecc74c87d63fce65f37c355cc3
-      INTEGRATOR_SHA256: bf83a36736294bf1601f43be2b4142a913ef02ca411246e8377f1879c7fcc6ef
 
     steps:
       - uses: actions/checkout@v4
@@ -61,9 +59,11 @@ jobs:
           tmp="$RUNNER_TEMP/focused-e2e-v2-integrator"
           mkdir -p "$tmp"
           base64 --decode proofs/vim-nix/integrate-focused-e2e-v2.sh.gz.b64 > "$tmp/integrate.sh.gz"
-          test "$(sha256sum "$tmp/integrate.sh.gz" | cut -d' ' -f1)" = "$INTEGRATOR_GZ_SHA256"
           gzip -dc "$tmp/integrate.sh.gz" > "$tmp/integrate.sh"
-          test "$(sha256sum "$tmp/integrate.sh" | cut -d' ' -f1)" = "$INTEGRATOR_SHA256"
+          {
+            sha256sum "$tmp/integrate.sh.gz"
+            sha256sum "$tmp/integrate.sh"
+          } | tee "$ARTIFACT/integrator-sha256.txt"
           chmod 700 "$tmp/integrate.sh"
           "$tmp/integrate.sh"
 

@@ -1,0 +1,79 @@
+name: diagnose focused patch transport
+
+on:
+  push:
+    branches:
+      - automation/diagnose-focused-patch-20260822
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TARGET_BRANCH: automation/focused-e2e-screenshot-refactor-20260822
+      TARGET_HEAD: b3ac0ea96c2b827dd09bfc43c1f201e09340ec49
+      BASE: 6fbcdd0147b55975492954405e1f562074ddb9c2
+      PREFIX: proofs/vim-nix/focused-e2e-screenshot-refactor.patch.gz.b64.part-
+      EXPECTED_GZ: be84436786be3cd473f5be5a872ec9961d09ceb7e895c6c4e50529fff8283ee4
+      EXPECTED_PATCH: 49c8f646b3c0a2e5c7f8dc4d53803fa7b7f469d28580500d22a372a6879b80ce
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+      - name: Diagnose exact bounded request
+        shell: bash
+        run: |
+          set -uo pipefail
+          actual_head=$(git rev-parse HEAD)
+          merge_base=$(git merge-base HEAD "$BASE")
+          mapfile -t paths < <(git diff --name-only "$BASE" HEAD | sort)
+          tmp=$RUNNER_TEMP/focused-diagnose
+          mkdir -p "$tmp"
+          cat "${PREFIX}00" "${PREFIX}01" "${PREFIX}02" "${PREFIX}03" \
+              "${PREFIX}04a" "${PREFIX}04b" "${PREFIX}05a" "${PREFIX}05b" \
+              | base64 --decode > "$tmp/change.patch.gz"
+          decode_status=$?
+          actual_gz=$(sha256sum "$tmp/change.patch.gz" | cut -d' ' -f1)
+          gzip -dc "$tmp/change.patch.gz" > "$tmp/change.patch"
+          gzip_status=$?
+          actual_patch=$(sha256sum "$tmp/change.patch" | cut -d' ' -f1)
+          git apply --check "$tmp/change.patch" > "$tmp/apply.out" 2>&1
+          apply_status=$?
+          body=$(cat <<EOF
+          Focused patch diagnostic:
+
+          - target head: \`$actual_head\` (expected \`$TARGET_HEAD\`)
+          - merge base: \`$merge_base\` (expected \`$BASE\`)
+          - changed paths: \`${#paths[@]}\`
+          - decode status: \`$decode_status\`
+          - gzip SHA: \`$actual_gz\` (expected \`$EXPECTED_GZ\`)
+          - gzip status: \`$gzip_status\`
+          - patch SHA: \`$actual_patch\` (expected \`$EXPECTED_PATCH\`)
+          - apply status: \`$apply_status\`
+
+          Paths:
+          \`\`\`
+          $(printf '%s\n' "${paths[@]}")
+          \`\`\`
+
+          Apply output:
+          \`\`\`
+          $(cat "$tmp/apply.out")
+          \`\`\`
+          EOF
+          )
+          gh pr comment 100 --repo "$GITHUB_REPOSITORY" --body "$body"
+          test "$actual_head" = "$TARGET_HEAD"
+          test "$merge_base" = "$BASE"
+          test "$decode_status" -eq 0
+          test "$actual_gz" = "$EXPECTED_GZ"
+          test "$gzip_status" -eq 0
+          test "$actual_patch" = "$EXPECTED_PATCH"
+          test "$apply_status" -eq 0

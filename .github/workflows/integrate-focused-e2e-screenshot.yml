@@ -4,13 +4,16 @@ on:
   push:
     branches:
       - automation/focused-e2e-screenshot-refactor-20260822
+  pull_request:
+    branches:
+      - proof/vim-nix-herdr-oci-current-20260821
 
 permissions:
   contents: write
 
 concurrency:
   group: focused-e2e-screenshot-refactor-20260822
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   integrate:

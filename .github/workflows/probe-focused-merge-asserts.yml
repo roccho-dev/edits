@@ -1,0 +1,40 @@
+name: probe focused merge asserts
+
+on:
+  pull_request:
+    branches: [proposals]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.head_ref == 'automation/merge-focused-e2e-20260823'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      BASE: 05f10d7105682f2346f8f741fa609af3faf33ee1
+      SOURCE: 1510f097fce7eada82c6fcab02ad3969619f8f19
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: proposals, fetch-depth: 0}
+      - name: Probe assertions
+        shell: bash
+        run: |
+          set -u
+          git config user.name roccho
+          git config user.email 40359643+roccho-dev@users.noreply.github.com
+          git fetch origin "$SOURCE"
+          git merge --squash --no-commit "$SOURCE"; rc=$?
+          echo "merge_rc=$rc"
+          echo 'conflicts-before:'; git diff --name-only --diff-filter=U | sort
+          git checkout --ours -- .github/workflows/bounded-vim-nix-oci-proof.yml .github/workflows/proof-vim-nix-oci.yml proofs/vim-nix/run.trigger; echo "ours_rc=$?"
+          git checkout --theirs -- docs/operations/vim-nix-local-first.md proofs/vim-nix/WSLC-TEST.md proofs/vim-nix/ci.parts/00.sh proofs/vim-nix/ci.parts/01.sh proofs/vim-nix/flake.lock proofs/vim-nix/flake.nix proofs/vim-nix/flake.parts/00.nix proofs/vim-nix/flake.parts/01.nix proofs/vim-nix/run-proof.parts/00.sh proofs/vim-nix/run-proof.parts/01.sh proofs/vim-nix/run-proof.parts/02.sh proofs/vim-nix/run-proof.parts/03.sh tools/vim-nix-local/pack.py tools/vim-nix-local/verify.sh tools/vim-nix-local/vim-nix; echo "theirs_rc=$?"
+          git add -A; echo "add_rc=$?"
+          echo 'conflicts-after:'; git diff --name-only --diff-filter=U | sort
+          echo 'workflow-diff:'; git diff --cached --name-only | grep -F '.github/workflows/' || true
+          echo 'trigger-diff:'; git diff --cached --name-only | grep -Fx 'proofs/vim-nix/run.trigger' || true
+          echo 'image-diff:'; git diff --cached --name-only | grep -E '\.(png|jpe?g|webp)$' || true
+          echo 'whitespace:'; git diff --cached --check -- . ':(exclude)proofs/vim-nix/yegappan-lsp-unicode.patch'; echo "whitespace_rc=$?"
+          echo 'tests:'; grep -Rh '^func Test' packages/hq-vim --include='*_test.go' | sed -E 's/^func (Test[^ (]+).*/\1/' | sort
+          echo 'status:'; git status --short

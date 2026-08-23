@@ -1,0 +1,57 @@
+name: run focused owned boundaries v25
+
+on:
+  push:
+    branches:
+      - automation/focused-owned-boundaries-20260823
+    paths:
+      - proofs/run-focused-owned-boundaries-v25.trigger
+
+permissions:
+  contents: write
+
+concurrency:
+  group: focused-owned-boundaries-v25
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: automation/focused-owned-boundaries-20260823
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Preserve exact v25 helper then checkout v24 seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp proofs/focused-owned-boundaries-v25.sh "$RUNNER_TEMP/focused-owned-boundaries-v25.sh"
+          chmod 700 "$RUNNER_TEMP/focused-owned-boundaries-v25.sh"
+          git checkout --detach 788245e5a19b40f6392511c28297227ccb2e8f30
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+          cache: false
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+      - name: Run exact final focused proof
+        shell: bash
+        env:
+          EVIDENCE: /tmp/focused-e2e-owned-boundaries-v25
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/focused-owned-boundaries-v25.sh"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: focused-owned-boundaries-v25-${{ github.run_id }}
+          path: /tmp/focused-e2e-owned-boundaries-v25
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error

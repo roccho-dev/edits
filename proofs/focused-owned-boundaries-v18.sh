@@ -18,8 +18,8 @@ python3 - <<'PY'
 from pathlib import Path
 p = Path('packages/hq-vim/internal/smoke/smoke.go')
 s = p.read_text(encoding='utf-8')
-old = "call feedkeys(repeat(\\\"\\\\<C-N>\\\", l:steps), 'int')"
-new = "call feedkeys(repeat(\\\"\\\\<C-N>\\\", l:steps), 'nt')"
+old = r'''call feedkeys(repeat("\<C-N>", l:steps), 'int')'''
+new = r'''call feedkeys(repeat("\<C-N>", l:steps), 'nt')'''
 if s.count(old) != 1:
     raise SystemExit(f'non-doc popup selection feedkeys matches={s.count(old)}')
 p.write_text(s.replace(old, new, 1), encoding='utf-8')

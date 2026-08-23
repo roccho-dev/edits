@@ -1,0 +1,37 @@
+name: materialize focused seed 6d12
+
+on:
+  pull_request:
+    branches: [proposals]
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    if: github.head_ref == 'automation/merge-focused-e2e-20260823'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 6d12ee46ba86175578933fe146189e2884f6a336
+          fetch-depth: 0
+
+      - name: Archive exact direct-child source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 6d12ee46ba86175578933fe146189e2884f6a336
+          mkdir -p "$RUNNER_TEMP/seed"
+          git archive --format=tar.gz --prefix=edits-6d12/ HEAD > "$RUNNER_TEMP/seed/edits-6d12.tar.gz"
+          printf 'commit=%s\ntree=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" > "$RUNNER_TEMP/seed/identity.txt"
+          sha256sum "$RUNNER_TEMP/seed/edits-6d12.tar.gz" > "$RUNNER_TEMP/seed/SHA256SUMS"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: focused-seed-6d12
+          path: ${{ runner.temp }}/seed
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error

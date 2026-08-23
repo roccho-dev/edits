@@ -3,6 +3,8 @@ name: integrate focused E2E two commit
 on:
   push:
     branches: [automation/merge-focused-e2e-20260823]
+  pull_request:
+    branches: [proposals]
 
 permissions:
   contents: write
@@ -13,6 +15,7 @@ concurrency:
 
 jobs:
   integrate:
+    if: github.event_name == 'push' || github.head_ref == 'automation/merge-focused-e2e-20260823'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -103,10 +106,11 @@ jobs:
           printf 'A commit=%s tree=%s\n' "$commit" "$tree"
 
           if git ls-remote --exit-code --heads origin "$SOURCE_BRANCH" >/dev/null 2>&1; then
-            echo 'source branch already exists; refusing replacement' >&2
-            exit 1
+            existing=$(git ls-remote --heads origin "$SOURCE_BRANCH" | awk '{print $1}')
+            test "$existing" = "$commit"
+          else
+            git push origin "$commit:refs/heads/$SOURCE_BRANCH"
           fi
-          git push origin "$commit:refs/heads/$SOURCE_BRANCH"
 
       - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
         with:
@@ -220,5 +224,9 @@ jobs:
           FINAL_COMMIT: ${{ steps.proof.outputs.commit }}
         run: |
           set -euo pipefail
-          ! git ls-remote --exit-code --heads origin "$FINAL_BRANCH" >/dev/null 2>&1
-          git push origin "$FINAL_COMMIT:refs/heads/$FINAL_BRANCH"
+          if git ls-remote --exit-code --heads origin "$FINAL_BRANCH" >/dev/null 2>&1; then
+            existing=$(git ls-remote --heads origin "$FINAL_BRANCH" | awk '{print $1}')
+            test "$existing" = "$FINAL_COMMIT"
+          else
+            git push origin "$FINAL_COMMIT:refs/heads/$FINAL_BRANCH"
+          fi

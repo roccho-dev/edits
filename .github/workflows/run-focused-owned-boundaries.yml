@@ -1,0 +1,54 @@
+name: run focused owned boundaries
+
+on:
+  push:
+    branches:
+      - automation/focused-owned-boundaries-20260823
+
+permissions:
+  contents: write
+
+concurrency:
+  group: run-focused-owned-boundaries-20260823
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.12'
+          cache: false
+
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - name: Run exact focused owned-boundaries proof
+        shell: bash
+        env:
+          EVIDENCE: /tmp/focused-e2e-owned-boundaries-v9
+        run: |
+          set -euo pipefail
+          cp proofs/focused-owned-boundaries.sh "$RUNNER_TEMP/focused-owned-boundaries.sh"
+          chmod 700 "$RUNNER_TEMP/focused-owned-boundaries.sh"
+          git checkout --detach 3c53a8378112c4e017ae3ad3ca5bf5c49a664fce
+          "$RUNNER_TEMP/focused-owned-boundaries.sh"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: focused-owned-boundaries-${{ github.run_id }}
+          path: /tmp/focused-e2e-owned-boundaries-v9
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: warn

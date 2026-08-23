@@ -1,0 +1,32 @@
+name: poll focused owned boundaries v13
+
+on:
+  push:
+    branches:
+      - automation/focused-owned-boundaries-20260823
+    paths:
+      - proofs/poll-focused-owned-boundaries-v13.trigger
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report latest v13 run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          row=$(gh run list --repo "$GITHUB_REPOSITORY" --branch automation/focused-owned-boundaries-20260823 --limit 80 --json databaseId,name,status,conclusion,headSha,createdAt,url --jq '[.[] | select(.name == "run focused owned boundaries v13")][0]')
+          test -n "$row" && test "$row" != null
+          id=$(jq -r .databaseId <<<"$row")
+          status=$(jq -r .status <<<"$row")
+          conclusion=$(jq -r '.conclusion // ""' <<<"$row")
+          head=$(jq -r .headSha <<<"$row")
+          url=$(jq -r .url <<<"$row")
+          gh pr comment 111 --repo "$GITHUB_REPOSITORY" --body "Focused owned-boundaries v13 live readback: run \`$id\`, status \`$status\`, conclusion \`${conclusion:-pending}\`, helper head \`$head\`. $url"

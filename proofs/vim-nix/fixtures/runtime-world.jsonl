@@ -1,0 +1,3 @@
+{"kind":"hq.world.v1","world_id":"vim-nix-proof"}
+{"kind":"hq.local-tool.v1","tool_id":"proof-sh","tool_version":"1","binding_ref":"local-tool.proof-sh","binding_contract_version":"2","actions":[{"action_id":"echo","argv":[{"literal":"echo"},{"literal":"hq-vim-e2e-ok"}],"stdin":{"mode":"none","max_bytes":0},"limits":{"timeout_ms":5000,"stdout_bytes":4096,"stderr_bytes":4096},"output":{"format":"text"},"lifecycle":"one-shot","risk":"low","approval":"explicit"}]}
+{"kind":"hq.command.v1","command_id":"proof.echo","command_version":"1","name":"proof.echo","description":"Emit a harmless deterministic proof token","instruction":{"version":"instruction.v1","op":"run","target":"local-tool","payload":{"tool_id":"proof-sh","tool_version":"1","action_id":"echo","input":{}}}}

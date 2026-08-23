@@ -1,0 +1,35 @@
+name: read back focused owned boundaries v18
+
+on:
+  push:
+    branches:
+      - automation/focused-owned-boundaries-20260823
+    paths:
+      - proofs/readback-focused-owned-boundaries-v18.trigger
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read back v18 run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          row=$(gh run list --repo "$GITHUB_REPOSITORY" --branch automation/focused-owned-boundaries-v18-20260824 --limit 10 --json databaseId,status,conclusion,headSha,workflowName,createdAt --jq '[.[] | select(.workflowName == "run focused owned boundaries v18")][0] // empty')
+          if test -z "$row"; then
+            gh pr comment 111 --body 'Focused owned-boundaries v18 readback: no workflow run found for helper branch `automation/focused-owned-boundaries-v18-20260824`.'
+            exit 0
+          fi
+          id=$(jq -r '.databaseId' <<<"$row")
+          status=$(jq -r '.status' <<<"$row")
+          conclusion=$(jq -r '.conclusion // "pending"' <<<"$row")
+          sha=$(jq -r '.headSha' <<<"$row")
+          gh pr comment 111 --body "Focused owned-boundaries v18 readback: run \`$id\`, status \`$status\`, conclusion \`$conclusion\`, helper head \`$sha\`. $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$id"

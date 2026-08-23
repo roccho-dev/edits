@@ -11,7 +11,7 @@ esac
 PROOF="$(readlink -f "$PROOF_ROOT")"
 OUT="${PROOF_OUTPUT_DIR:-/work/evidence}"
 RUNTIME="${PROOF_RUNTIME_DIR:-/work/runtime}"
-SESSION="vim-nix-proof-d83bf4c-${PROOF_RUN_SUFFIX:-$$}"
+SESSION="hq-vim-${PROOF_RUN_SUFFIX:-$$}"
 PROFILE_ROOT="$RUNTIME/home/.config/roccho/hq/profiles"
 PROFILE="$PROFILE_ROOT/local.json"
 WORKSPACE_ROOT="$RUNTIME/workspace"
@@ -23,6 +23,9 @@ HERDR="$PROOF/bin/herdr"
 HQ="$PROOF/bin/hq"
 HQ_WORKER="$PROOF/bin/hq-worker"
 VIM="$PROOF/bin/vim"
+SOURCE_MANIFEST="$PROOF/share/proof/source.json"
+RUNTIME_WORLD_FIXTURE="$PROOF/share/proof/runtime-world.jsonl"
+RUNTIME_ACCEPTED_FIXTURE="$PROOF/share/proof/runtime-accepted.jsonl"
 
 export HOME="$RUNTIME/home"
 export XDG_CONFIG_HOME="$RUNTIME/home/.config"
@@ -123,11 +126,15 @@ wait_for_pane_marker() {
   return 1
 }
 
+test -s "$SOURCE_MANIFEST" || fail "missing exact source manifest"
+test -s "$RUNTIME_WORLD_FIXTURE" || fail "missing runtime world fixture"
+test -s "$RUNTIME_ACCEPTED_FIXTURE" || fail "missing runtime accepted fixture"
 printf '%s\n' "$PROOF" > "$OUT/proof-store-path.txt"
+cp "$SOURCE_MANIFEST" "$OUT/source.json"
 {
   "$HERDR" --version
   "$VIM" --version | sed -n '1,6p'
-  "$HQ" --version || true
+  "$HQ" --help 2>&1 | sed -n '1,20p' || true
   "$HQ_WORKER" --help 2>&1 | sed -n '1,20p' || true
 } > "$OUT/versions.txt"
 
@@ -151,12 +158,4 @@ find "$PROOF/bin" -maxdepth 1 -type f -o -type l | sort | while read -r path; do
 done > "$OUT/binary-SHA256SUMS"
 printf 'sha256:%s\n' "$proof_sha" > "$OUT/proof-sh.digest.txt"
 
-# Headless canonical conformance on the exact final minimal output.
-CONFORMANCE="$RUNTIME/conformance"
-mkdir -p "$CONFORMANCE/home" "$CONFORMANCE/xdg-config" "$CONFORMANCE/xdg-state" "$CONFORMANCE/xdg-cache"
-(
-  cd "$PROOF/share/hq-vim"
-  HOME="$CONFORMANCE/home" \
-  XDG_CONFIG_HOME="$CONFORMANCE/xdg-config" \
-  XDG_STATE_HOME="$CONFORMANCE/xdg-state" \
-  XDG_CACHE_HOME="$CONFORMANCE/xdg-cache" \
+# Editor completion/submit E2Es run independently; this proof owns only runtime lifecycle.

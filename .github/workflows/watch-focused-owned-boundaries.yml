@@ -1,0 +1,48 @@
+name: watch focused owned boundaries
+
+on:
+  push:
+    branches:
+      - automation/focused-owned-boundaries-20260823
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      TARGET_WORKFLOW: run-focused-owned-boundaries.yml
+      TARGET_BRANCH: automation/focused-owned-boundaries-20260823
+      TARGET_PR: "111"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Wait for exact proof conclusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 540); do
+            runs=$(gh run list --repo "$GITHUB_REPOSITORY" \
+              --workflow "$TARGET_WORKFLOW" \
+              --branch "$TARGET_BRANCH" \
+              --limit 20 \
+              --json databaseId,status,conclusion,headSha,event,url,createdAt)
+            row=$(printf '%s' "$runs" | jq -c '[.[] | select(.event == "push")] | sort_by(.databaseId) | last // empty')
+            if test -n "$row" && test "$(printf '%s' "$row" | jq -r .status)" = completed; then
+              id=$(printf '%s' "$row" | jq -r .databaseId)
+              conclusion=$(printf '%s' "$row" | jq -r .conclusion)
+              head=$(printf '%s' "$row" | jq -r .headSha)
+              url=$(printf '%s' "$row" | jq -r .url)
+              gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body \
+                "Focused owned-boundaries proof readback: run \`$id\`, conclusion \`$conclusion\`, helper head \`$head\`. $url"
+              test "$conclusion" = success
+              exit 0
+            fi
+            sleep 10
+          done
+          gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body \
+            "Focused owned-boundaries proof readback timed out; no Green is claimed."
+          exit 1

@@ -42,7 +42,7 @@ repack the archive.
 ```powershell
 wslc image load --input .\vim-nix-herdr-hq.docker.tar
 wslc image list
-wslc image inspect roccho/vim-nix-herdr-hq-proof:d83bf4c
+wslc image inspect roccho/vim-nix-herdr-hq-proof:<edits-short-sha>
 ```
 
 The selected image must be `linux/amd64` and must retain the exact tag above.
@@ -53,20 +53,21 @@ The simplest readback streams the proof transcript to the terminal:
 
 ```powershell
 wslc run --rm --name vim-nix-proof-wslc `
-  roccho/vim-nix-herdr-hq-proof:d83bf4c all |
+  roccho/vim-nix-herdr-hq-proof:<edits-short-sha> all |
   Tee-Object -FilePath .\wslc-proof.transcript.txt
 ```
 
 The final exact line must be:
 
 ```text
-VIM_NIX_HERDR_OCI_RUNTIME_PROOF_PASS
+VIM_NIX_RUNTIME_E2E_PASS
 ```
 
-This line is emitted only after canonical conformance, all three native Vim
-popup journeys in a fresh Herdr PTY, exact two-pane topology, managed worker
-health, one real Vim-to-HQ submit, the exact four-event result chain, typed
-worker stop, workspace/server close, and residual-process readback.
+This line is emitted only after exact two-pane topology, managed worker
+readiness, one immutable accepted fixture, the exact four-event result chain,
+typed worker stop, workspace/server close, and residual-process readback.
+Editor choice and submit E2Es run independently and are not nested in this
+runtime proof.
 
 ## 5. Optional evidence directory mount
 
@@ -79,7 +80,7 @@ $Evidence = (Resolve-Path .\wslc-evidence).Path
 
 wslc run --rm --name vim-nix-proof-wslc `
   --volume "${Evidence}:/work/evidence" `
-  roccho/vim-nix-herdr-hq-proof:d83bf4c all |
+  roccho/vim-nix-herdr-hq-proof:<edits-short-sha> all |
   Tee-Object -FilePath .\wslc-proof.transcript.txt
 
 Get-Content .\wslc-evidence\receipt.json

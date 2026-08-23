@@ -1,0 +1,39 @@
+name: materialize focused v19 status
+
+on:
+  push:
+    branches:
+      - automation/focused-owned-boundaries-20260823
+    paths:
+      - proofs/materialize-focused-v19-status.trigger
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: automation/focused-owned-boundaries-20260823
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Materialize status branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          row=$(gh run list --repo "$GITHUB_REPOSITORY" --branch automation/focused-owned-boundaries-20260823 --limit 50 --json databaseId,status,conclusion,headSha,workflowName,createdAt --jq '[.[] | select(.workflowName == "run focused owned boundaries v19")][0] // empty')
+          test -n "$row"
+          mkdir -p proofs
+          jq -n --argjson run "$row" '{schema:"edits.focused-v19-status/1",run:$run}' > proofs/v19-status.json
+          git add proofs/v19-status.json
+          tree=$(git write-tree)
+          base=$(git rev-parse HEAD)
+          export GIT_AUTHOR_NAME=roccho GIT_AUTHOR_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_COMMITTER_NAME=roccho GIT_COMMITTER_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          commit=$(printf '%s\n' 'proof: materialize focused v19 run status' | git commit-tree "$tree" -p "$base")
+          git push origin "$commit:refs/heads/status/focused-v19-readback-20260824-a" --force

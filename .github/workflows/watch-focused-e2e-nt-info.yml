@@ -1,0 +1,42 @@
+name: watch focused E2E nt-info
+
+on:
+  push:
+    branches:
+      - automation/watch-focused-e2e-nt-info-20260823
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TARGET_WORKFLOW: verify-focused-e2e-fix-nt-info.yml
+      TARGET_BRANCH: automation/verify-focused-e2e-fix-nt-info-20260823
+      TARGET_PR: '110'
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Report exact target run conclusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 180); do
+            runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 10 --json databaseId,status,conclusion,headSha,event,url,createdAt)
+            row=$(printf '%s' "$runs" | jq -c '[.[] | select(.event == "push")] | sort_by(.databaseId) | first // empty')
+            if test -n "$row" && test "$(printf '%s' "$row" | jq -r .status)" = completed; then
+              id=$(printf '%s' "$row" | jq -r .databaseId)
+              conclusion=$(printf '%s' "$row" | jq -r .conclusion)
+              head=$(printf '%s' "$row" | jq -r .headSha)
+              url=$(printf '%s' "$row" | jq -r .url)
+              gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body "Exact nt-info Gate readback: run \`$id\`, head \`$head\`, conclusion \`$conclusion\`. $url"
+              test "$conclusion" = success
+              exit 0
+            fi
+            sleep 10
+          done
+          gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body 'Exact nt-info Gate readback timed out; no success is claimed.'
+          exit 1

@@ -1,0 +1,36 @@
+name: watch final focused merge
+
+on:
+  push:
+    branches: [automation/watch-focused-e2e-20260822]
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: integrate-focused-e2e-final.yml
+      TARGET_BRANCH: automation/merge-focused-e2e-20260823
+      TARGET_HEAD: fffc5063a979aaefcd41907505d3f9c945b0e7cd
+    steps:
+      - shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 240); do
+            runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 20 --json databaseId,status,conclusion,headSha,url)
+            row=$(printf '%s' "$runs" | jq -c --arg h "$TARGET_HEAD" '[.[]|select(.headSha==$h)]|sort_by(.databaseId)|last//empty')
+            if test -n "$row" && test "$(printf '%s' "$row"|jq -r .status)" = completed; then
+              id=$(printf '%s' "$row"|jq -r .databaseId); c=$(printf '%s' "$row"|jq -r .conclusion); u=$(printf '%s' "$row"|jq -r .url)
+              gh pr comment 106 --repo "$GITHUB_REPOSITORY" --body "Final focused merge readback: run \`$id\`, conclusion \`$c\`, head \`$TARGET_HEAD\`. $u"
+              test "$c" = success
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1

@@ -1,0 +1,35 @@
+name: lint v6 workflow
+
+on:
+  push:
+    branches: [automation/probe-push-actions-20260823]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: automation/verify-focused-v6-20260823
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.12'
+      - shell: bash
+        run: |
+          set +e
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -color=false .github/workflows/verify-focused-source-v6-push.yml > /tmp/actionlint.txt 2>&1
+          rc=$?
+          set -e
+          {
+            printf 'V6 actionlint result: rc=`%s`\n\n```text\n' "$rc"
+            cat /tmp/actionlint.txt
+            echo '```'
+          } > /tmp/comment.md
+          gh pr comment 108 --repo "$GITHUB_REPOSITORY" --body-file /tmp/comment.md

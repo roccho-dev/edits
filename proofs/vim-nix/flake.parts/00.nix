@@ -10,22 +10,29 @@
       flake = false;
     };
     hq = {
-      url = "github:roccho-dev/hq/3118886f34ac5615e8a7732a6297bd41900e21e1";
+      url = "github:roccho-dev/hq/779a298f4efcff8df60205aaf973cb224388a82b";
       flake = false;
     };
     yegappan-lsp = {
       url = "github:yegappan/lsp/989016ae2ae4cbf304a9ca29478f47fec794493f";
       flake = false;
     };
-    edits-src = {
-      url = "github:roccho-dev/edits/d83bf4c4860e02f37d6b41cc54fe8c881af4c779";
-      flake = false;
-    };
   };
 
-  outputs = inputs@{ self, nixpkgs, go-nixpkgs, vim-src, hq, yegappan-lsp, edits-src, ... }:
+  outputs = inputs@{ self, nixpkgs, go-nixpkgs, vim-src, hq, yegappan-lsp, ... }:
     let
       system = "x86_64-linux";
+      edits-src = self.outPath;
+      editsRevision = if self ? rev then self.rev else if self ? dirtyRev then self.dirtyRev else "dirty";
+      editsTag = if builtins.stringLength editsRevision >= 12 then builtins.substring 0 12 editsRevision else "dirty";
+      hqRevision = if hq ? rev then hq.rev else "unknown";
+      source-manifest = builtins.toFile "vim-nix-source.json" (builtins.toJSON {
+        schema = "edits.vim-nix-source/1";
+        editsRevision = editsRevision;
+        hqRevision = hqRevision;
+        yegappanLspRevision = if yegappan-lsp ? rev then yegappan-lsp.rev else "unknown";
+        vimRevision = if vim-src ? rev then vim-src.rev else "unknown";
+      });
       pkgs = import nixpkgs { inherit system; };
       goPkgs = import go-nixpkgs { inherit system; };
       go123 = assert goPkgs.go_1_23.version == "1.23.12"; goPkgs.go_1_23;
@@ -48,7 +55,7 @@
 
       hq-binaries = pkgs.stdenvNoCC.mkDerivation {
         pname = "hq";
-        version = "3118886f34ac5615e8a7732a6297bd41900e21e1";
+        version = hqRevision;
         src = hq;
         nativeBuildInputs = [ go123 ];
         buildPhase = ''
@@ -83,16 +90,21 @@
         cp -R ${edits-src + "/packages/hq-vim/testdata"} "$out/testdata"
       '';
 
+      yegappan-lsp-patched = pkgs.applyPatches {
+        name = "yegappan-lsp-989016ae-unicode";
+        src = yegappan-lsp;
+        patches = [ (root + "/yegappan-lsp-unicode.patch") ];
+      };
+
       yegappan-lsp-runtime = pkgs.runCommand "yegappan-lsp" { } ''
-        cp -R ${yegappan-lsp} "$out"
+        cp -R ${yegappan-lsp-patched} "$out"
         chmod -R u+w "$out"
       '';
 
       hq-vim-proof-runner = pkgs.stdenvNoCC.mkDerivation {
         pname = "hq-vim-proof-runner";
-        version = "d83bf4c4860e02f37d6b41cc54fe8c881af4c779";
+        version = editsRevision;
         src = edits-src;
-        patches = [ (root + "/hq-vim-native-popup-proof.patch") ];
         nativeBuildInputs = [ go123 ];
         buildPhase = ''
           runHook preBuild

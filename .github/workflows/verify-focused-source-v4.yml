@@ -1,0 +1,207 @@
+name: verify focused source v4
+
+on:
+  pull_request:
+    branches: [proposals]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: focused-source-v4-20260823
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.head_ref == 'automation/merge-focused-e2e-20260823'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      BASE: 05f10d7105682f2346f8f741fa609af3faf33ee1
+      SEED_BRANCH: ux/focused-e2e-merge-source-20260823
+      SOURCE_BRANCH: ux/focused-e2e-merge-source-v4-20260823
+      FINAL_BRANCH: ux/focused-e2e-merge-final-v4-20260823
+      OUT: /tmp/focused-merge-v4
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SEED_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.12'
+
+      - id: source
+        name: Materialize one corrected focused source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          seed=$(git rev-parse HEAD)
+          test "$(git rev-parse HEAD^)" = "$BASE"
+          test -z "$(git diff --name-only "$BASE" HEAD | grep -F '.github/workflows/' || true)"
+          test -z "$(git diff --name-only "$BASE" HEAD | grep -Fx proofs/vim-nix/run.trigger || true)"
+          test -z "$(git diff --name-only "$BASE" HEAD | grep -E '\.(png|jpe?g|webp)$' || true)"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('packages/hq-vim/internal/smoke/smoke.go')
+          s = p.read_text(encoding='utf-8')
+          old_doc = '"  let l:doc = type(l:data) == v:t_dict ? get(l:data, \'documentation\', \'\') : \'\'",'
+          new_doc = '"  let l:doc = type(l:data) == v:t_dict ? get(l:data, \'documentation\', get(l:item, \'info\', \'\')) : get(l:item, \'info\', \'\')",'
+          old_keys = '"      call feedkeys(repeat(\\"\\\\<C-N>\\", l:steps), \'nx\')",'
+          new_keys = '"      call feedkeys(repeat(\\"\\\\<C-N>\\", l:steps), \'nt\')",'
+          if s.count(old_doc) != 1:
+              raise SystemExit(f'documentation source matches={s.count(old_doc)}')
+          if s.count(old_keys) != 1:
+              raise SystemExit(f'key scheduling matches={s.count(old_keys)}')
+          s = s.replace(old_doc, new_doc, 1).replace(old_keys, new_keys, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+          gofmt -w packages/hq-vim/internal/smoke/smoke.go
+          test "$(git diff --name-only "$seed" | tr -d '\n')" = packages/hq-vim/internal/smoke/smoke.go
+          (cd packages/hq-vim && go test ./... -count=1) | tee "$OUT/source-go-test.log"
+          git add packages/hq-vim/internal/smoke/smoke.go
+          git diff --cached --check
+          tree=$(git write-tree)
+          export GIT_AUTHOR_NAME=roccho GIT_AUTHOR_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_COMMITTER_NAME=roccho GIT_COMMITTER_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_AUTHOR_DATE=2026-08-23T00:00:00Z GIT_COMMITTER_DATE=2026-08-23T00:00:00Z
+          commit=$(printf '%s\n' 'refactor(hq-vim): keep focused E2Es and native popup semantics' | git commit-tree "$tree" -p "$BASE")
+          test "$(git rev-parse "$commit^")" = "$BASE"
+          printf 'seed=%s\nsource=%s\ntree=%s\n' "$seed" "$commit" "$tree" | tee "$OUT/source-identity.txt"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --heads origin "$SOURCE_BRANCH" >/dev/null 2>&1; then
+            existing=$(git ls-remote --heads origin "$SOURCE_BRANCH" | awk '{print $1}')
+            test "$existing" = "$commit"
+          else
+            git push origin "$commit:refs/heads/$SOURCE_BRANCH"
+          fi
+
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - id: proof
+        name: Pin the exact source commit in a proof child
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
+          SOURCE_TREE: ${{ steps.source.outputs.tree }}
+        run: |
+          set -euo pipefail
+          git checkout --detach "$SOURCE_COMMIT"
+          test "$(git rev-parse HEAD^{tree})" = "$SOURCE_TREE"
+          python3 - "$SOURCE_COMMIT" <<'PY'
+          from pathlib import Path
+          import sys
+          commit = sys.argv[1]
+          flake = Path('proofs/vim-nix/flake.nix')
+          text = flake.read_text(encoding='utf-8')
+          needle = '  inputs = {\n'
+          insert = '  inputs = {\n    editsSource = {\n      url = "github:roccho-dev/edits/' + commit + '";\n      flake = false;\n    };\n'
+          if text.count(needle) != 1:
+              raise SystemExit('unexpected flake inputs shape')
+          flake.write_text(text.replace(needle, insert, 1), encoding='utf-8')
+
+          part = Path('proofs/vim-nix/flake.parts/00.nix')
+          text = part.read_text(encoding='utf-8')
+          old_src = '      edits-src = self.outPath;'
+          new_src = '      edits-src = inputs.editsSource.outPath;'
+          old_rev = '      editsRevision = if self ? rev then self.rev else if self ? dirtyRev then self.dirtyRev else "dirty";'
+          new_rev = '      editsRevision = if inputs.editsSource ? rev then inputs.editsSource.rev else "unknown";'
+          if text.count(old_src) != 1 or text.count(old_rev) != 1:
+              raise SystemExit('unexpected source identity shape')
+          part.write_text(text.replace(old_src, new_src, 1).replace(old_rev, new_rev, 1), encoding='utf-8')
+          PY
+          pushd proofs/vim-nix >/dev/null
+          nix flake lock --update-input editsSource
+          popd >/dev/null
+          test "$(jq -r '.nodes.editsSource.locked.rev' proofs/vim-nix/flake.lock)" = "$SOURCE_COMMIT"
+          git add proofs/vim-nix/flake.nix proofs/vim-nix/flake.parts/00.nix proofs/vim-nix/flake.lock
+          git diff --cached --check -- . ':(exclude)proofs/vim-nix/yegappan-lsp-unicode.patch'
+          tree=$(git write-tree)
+          export GIT_AUTHOR_NAME=roccho GIT_AUTHOR_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_COMMITTER_NAME=roccho GIT_COMMITTER_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_AUTHOR_DATE=2026-08-23T00:00:01Z GIT_COMMITTER_DATE=2026-08-23T00:00:01Z
+          commit=$(printf '%s\n' 'proof(vim-nix): pin exact focused E2E source' | git commit-tree "$tree" -p "$SOURCE_COMMIT")
+          git checkout --detach "$commit"
+          test "$(git rev-parse HEAD^)" = "$SOURCE_COMMIT"
+          printf 'proof=%s\ntree=%s\n' "$commit" "$tree" | tee "$OUT/proof-identity.txt"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+
+      - id: product
+        name: Build normal and offline from the proof child
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          pushd proofs/vim-nix >/dev/null
+          before=$(sha256sum flake.lock | cut -d' ' -f1)
+          product=$(nix build --no-link --print-out-paths .#default)
+          offline=$(nix build --offline --no-write-lock-file --no-link --print-out-paths .#default)
+          after=$(sha256sum flake.lock | cut -d' ' -f1)
+          popd >/dev/null
+          test "$product" = "$offline"
+          test "$before" = "$after"
+          jq -e --arg source "$SOURCE_COMMIT" '.editsRevision == $source' "$product/share/proof/source.json" >/dev/null
+          printf 'product=%s\nlock=%s\n' "$product" "$before" | tee "$OUT/product-identity.txt"
+          echo "path=$product" >> "$GITHUB_OUTPUT"
+
+      - name: Run eight independent exact-product editor E2Es
+        shell: bash
+        env:
+          PROOF: ${{ steps.product.outputs.path }}
+        run: |
+          set -euo pipefail
+          export HQ_BIN="$PROOF/bin/hq" VIM_EXE="$PROOF/bin/vim" VIM9_LSP_PATH="$PROOF/share/yegappan-lsp" VIMRUNTIME="$PROOF/share/vim/vim92" LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color
+          for t in TestAgentDefaultChoiceE2E TestAgentPromptFieldChoiceE2E TestDirectFallbackChoiceE2E TestUnicodeDirectFieldValueE2E; do
+            cmd=$(printf 'cd %q && stty cols 180 rows 55 && HQ_CHOICE_E2E=1 HQ_BIN=%q VIM_EXE=%q VIM9_LSP_PATH=%q VIMRUNTIME=%q LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color %q -test.v -test.count=1 -test.run %q' "$PROOF/share/hq-vim" "$HQ_BIN" "$VIM_EXE" "$VIM9_LSP_PATH" "$VIMRUNTIME" "$PROOF/bin/hq-vim.test" "^${t}$")
+            timeout 90s script -qefc "$cmd" "$OUT/$t.typescript" | tee "$OUT/$t.log"
+          done
+          for t in TestEditorSurfaceAndBindingFailClosed TestAgentDecisionSubmitE2E TestDirectCommandSubmitE2E TestAcceptedSubmitKeepsDraftOnUnsafeConsumption; do
+            (cd "$PROOF/share/hq-vim" && "$PROOF/bin/hq-vim.test" -test.v -test.count=1 -test.run "^${t}$") | tee "$OUT/$t.log"
+          done
+
+      - name: Run independent Herdr worker lifecycle E2E
+        shell: bash
+        env:
+          PROOF_ROOT: ${{ steps.product.outputs.path }}
+        run: |
+          set -euo pipefail
+          cat proofs/vim-nix/run-proof.parts/*.sh > "$RUNNER_TEMP/runtime-proof.sh"
+          chmod 700 "$RUNNER_TEMP/runtime-proof.sh"
+          PROOF_OUTPUT_DIR="$OUT/runtime-evidence" PROOF_RUNTIME_DIR="$RUNNER_TEMP/runtime" PROOF_RUN_SUFFIX=merge-v4 "$RUNNER_TEMP/runtime-proof.sh" | tee "$OUT/runtime.log"
+          jq -e '.status == "PASS" and .gates.resultKinds == ["accepted","started","stdout","completed"] and .gates.residualProcessCount == 0' "$OUT/runtime-evidence/receipt.json" >/dev/null
+
+      - name: Push the verified proof child
+        shell: bash
+        env:
+          FINAL_COMMIT: ${{ steps.proof.outputs.commit }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin "$FINAL_BRANCH" >/dev/null 2>&1; then
+            existing=$(git ls-remote --heads origin "$FINAL_BRANCH" | awk '{print $1}')
+            test "$existing" = "$FINAL_COMMIT"
+          else
+            git push origin "$FINAL_COMMIT:refs/heads/$FINAL_BRANCH"
+          fi
+          printf 'status=PASS\nfinal=%s\n' "$FINAL_COMMIT" > "$OUT/final.txt"
+          (cd "$OUT" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: focused-merge-v4-${{ steps.proof.outputs.commit || github.run_id }}
+          path: /tmp/focused-merge-v4
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: warn

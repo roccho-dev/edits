@@ -1,0 +1,43 @@
+name: inspect v6 parse failure
+
+on:
+  push:
+    branches: [automation/probe-push-actions-20260823]
+
+permissions:
+  actions: read
+  checks: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: "32621935657"
+      CHECK_SUITE_ID: "88402206718"
+    steps:
+      - shell: bash
+        run: |
+          set -euo pipefail
+          root=$RUNNER_TEMP/v6-parse
+          mkdir -p "$root"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > "$root/run.json"
+          gh api "repos/$GITHUB_REPOSITORY/check-suites/$CHECK_SUITE_ID/check-runs" > "$root/check-runs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs" > "$root/jobs.json"
+          {
+            echo 'V6 parse/readback:'
+            echo
+            echo '```json'
+            jq '{run:{name,path,status,conclusion,event,head_sha},jobs:(input.jobs // []),checks:(input.check_runs // [])}' "$root/run.json" "$root/jobs.json" "$root/check-runs.json"
+            echo '```'
+          } > "$root/comment.md"
+          python3 - "$root/comment.md" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1])
+          s=p.read_text(errors='replace')
+          p.write_text(s[:60000])
+          PY
+          gh pr comment 108 --repo "$GITHUB_REPOSITORY" --body-file "$root/comment.md"

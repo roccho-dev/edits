@@ -21,9 +21,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: d8428a49529faa3394d202b25a42719acb627181
+          ref: automation/focused-owned-boundaries-20260823
           fetch-depth: 0
           persist-credentials: true
+      - name: Preserve exact helper then checkout v15 seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp proofs/focused-owned-boundaries-v16.sh "$RUNNER_TEMP/focused-owned-boundaries-v16.sh"
+          chmod 700 "$RUNNER_TEMP/focused-owned-boundaries-v16.sh"
+          git checkout --detach d8428a49529faa3394d202b25a42719acb627181
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23.12"
@@ -39,8 +46,6 @@ jobs:
           EVIDENCE: /tmp/focused-e2e-owned-boundaries-v16
         run: |
           set -euo pipefail
-          git show automation/focused-owned-boundaries-20260823:proofs/focused-owned-boundaries-v16.sh > "$RUNNER_TEMP/focused-owned-boundaries-v16.sh"
-          chmod 700 "$RUNNER_TEMP/focused-owned-boundaries-v16.sh"
           "$RUNNER_TEMP/focused-owned-boundaries-v16.sh"
       - uses: actions/upload-artifact@v4
         if: always()

@@ -1,0 +1,11 @@
+{
+  "schema": "edits.focused-v18-status/1",
+  "run": {
+    "conclusion": "failure",
+    "createdAt": "2026-08-23T21:19:30Z",
+    "databaseId": 32667166017,
+    "headSha": "c235c50db7f6fd2bc6d3927c7ad3f08328522202",
+    "status": "completed",
+    "workflowName": "run focused owned boundaries v18"
+  }
+}

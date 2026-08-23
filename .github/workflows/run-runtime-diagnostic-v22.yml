@@ -1,0 +1,52 @@
+name: run runtime diagnostic v22
+
+on:
+  push:
+    branches:
+      - automation/focused-owned-boundaries-20260823
+    paths:
+      - proofs/run-runtime-diagnostic-v22.trigger
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-diagnostic-v22
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: automation/focused-owned-boundaries-20260823
+          fetch-depth: 0
+      - name: Preserve diagnostic helper then checkout exact v21 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp proofs/runtime-diagnostic-v22.sh "$RUNNER_TEMP/runtime-diagnostic-v22.sh"
+          chmod 700 "$RUNNER_TEMP/runtime-diagnostic-v22.sh"
+          git checkout --detach 7e7f02782315c4574affe31c7c945fdfa9e99157
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+      - name: Capture runtime failure boundary
+        shell: bash
+        env:
+          EVIDENCE: /tmp/vim-nix-runtime-diagnostic-v22
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/runtime-diagnostic-v22.sh"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runtime-diagnostic-v22-${{ github.run_id }}
+          path: /tmp/vim-nix-runtime-diagnostic-v22
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error

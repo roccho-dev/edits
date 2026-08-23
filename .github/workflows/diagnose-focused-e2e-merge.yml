@@ -1,0 +1,40 @@
+name: diagnose focused E2E merge
+
+on:
+  push:
+    branches:
+      - automation/merge-focused-e2e-20260823
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: proposals
+          fetch-depth: 0
+      - name: Diagnose squash conflicts only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin automation/focused-e2e-source-20260822
+          set +e
+          git merge --squash --no-commit origin/automation/focused-e2e-source-20260822
+          rc=$?
+          set -e
+          echo "merge_rc=$rc"
+          echo '--- conflicts ---'
+          git diff --name-only --diff-filter=U
+          echo '--- status ---'
+          git status --short
+          echo '--- conflict hunks ---'
+          for f in $(git diff --name-only --diff-filter=U); do
+            echo "### $f"
+            git checkout --conflict=diff3 -- "$f" || true
+            sed -n '/<<<<<<< /,/>>>>>>> /p' "$f" | head -200 || true
+          done
+          exit "$rc"

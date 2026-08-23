@@ -7,6 +7,11 @@ printf '\n== Prepare artifact root ==\n'
 rm -rf "$ARTIFACT"
 mkdir -p "$ARTIFACT"/{product,evidence-docker,evidence-oci,source,negative}
 printf '%s\n' "$GITHUB_SHA" > "$ARTIFACT/workflow-commit.txt"
+short_sha=${GITHUB_SHA:0:12}
+IMAGE_REF="roccho/vim-nix-herdr-hq-proof:$short_sha"
+OCI_IMAGE_REF="roccho/vim-nix-herdr-hq-proof:oci-$short_sha"
+printf '%s\n' "$IMAGE_REF" > "$ARTIFACT/product/image-ref.txt"
+printf '%s\n' "$OCI_IMAGE_REF" > "$ARTIFACT/product/oci-image-ref.txt"
 
 printf '\n== Build exact minimal product and prove offline same-path replay ==\n'
 pushd proofs/vim-nix >/dev/null
@@ -47,7 +52,35 @@ find "$proof/bin" -maxdepth 1 \( -type f -o -type l \) -print0 | sort -z | while
 done > "$ARTIFACT/product/binaries-and-sha256.txt"
 popd >/dev/null
 
-printf '\n== Build Docker-compatible archive and pinned Skopeo ==\n'
+printf '
+== Execute eight independent editor behavior boundaries ==
+'
+editor_env=(
+  "HQ_BIN=$proof/bin/hq"
+  "VIM_EXE=$proof/bin/vim"
+  "VIM9_LSP_PATH=$proof/share/yegappan-lsp"
+  "LANG=C.UTF-8"
+  "LC_ALL=C.UTF-8"
+  "TERM=xterm-256color"
+)
+for test_name in TestAgentDefaultChoiceE2E TestAgentPromptFieldChoiceE2E TestDirectFallbackChoiceE2E TestUnicodeDirectFieldValueE2E; do
+  command=$(printf 'cd %q && HQ_CHOICE_E2E=1 HQ_BIN=%q VIM_EXE=%q VIM9_LSP_PATH=%q LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color %q -test.v -test.count=1 -test.run %q'     "$proof/share/hq-vim" "$proof/bin/hq" "$proof/bin/vim" "$proof/share/yegappan-lsp"     "$proof/bin/hq-vim.test" "^${test_name}$")
+  timeout 90s script -qefc "$command" "$ARTIFACT/product/${test_name}.typescript"     > "$ARTIFACT/product/${test_name}.log" 2>&1
+  grep -F -- "--- PASS: $test_name" "$ARTIFACT/product/${test_name}.log" >/dev/null
+ done
+(
+  cd "$proof/share/hq-vim"
+  env "${editor_env[@]}" "$proof/bin/hq-vim.test" -test.v -test.count=1     -test.run '^(TestEditorSurfaceAndBindingFailClosed|TestAgentDecisionSubmitE2E|TestDirectCommandSubmitE2E|TestAcceptedSubmitKeepsDraftOnUnsafeConsumption)$'     > "$ARTIFACT/product/editor-headless-e2e.log" 2>&1
+)
+for test_name in TestEditorSurfaceAndBindingFailClosed TestAgentDecisionSubmitE2E TestDirectCommandSubmitE2E TestAcceptedSubmitKeepsDraftOnUnsafeConsumption; do
+  grep -F -- "--- PASS: $test_name" "$ARTIFACT/product/editor-headless-e2e.log" >/dev/null
+ done
+printf 'PASS
+' > "$ARTIFACT/product/focused-editor-e2e.txt"
+
+printf '
+== Build Docker-compatible archive and pinned Skopeo ==
+'
 pushd proofs/vim-nix >/dev/null
 image=$(nix build --no-link --print-out-paths .#image)
 skopeo=$(nix build --no-link --print-out-paths .#skopeo)
@@ -73,7 +106,7 @@ test "$(jq -r '.[0].Os + "/" + .[0].Architecture' "$ARTIFACT/docker-image-inspec
 docker run --rm --name vim-nix-proof-docker \
   --volume "$ARTIFACT/evidence-docker:/work/evidence" \
   "$IMAGE_REF" all | tee "$ARTIFACT/docker-runtime.transcript.txt"
-grep -Fxq 'VIM_NIX_HERDR_OCI_RUNTIME_PROOF_PASS' "$ARTIFACT/docker-runtime.transcript.txt"
+grep -Fxq 'VIM_NIX_RUNTIME_E2E_PASS' "$ARTIFACT/docker-runtime.transcript.txt"
 jq -e '.status == "PASS"' "$ARTIFACT/evidence-docker/receipt.json" >/dev/null
 (cd "$ARTIFACT/evidence-docker" && sha256sum --check SHA256SUMS)
 

@@ -1,0 +1,120 @@
+name: integrate focused E2E final
+
+on:
+  push:
+    branches: [automation/merge-focused-e2e-20260823]
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      BASE: 05f10d7105682f2346f8f741fa609af3faf33ee1
+      SOURCE: 1510f097fce7eada82c6fcab02ad3969619f8f19
+      SOURCE_TREE: bae59afcba45c18aac6cf56ae67819445f8de8a8
+      FINAL_BRANCH: ux/focused-e2e-merge-final-20260823
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: proposals
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.12'
+      - id: materialize
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE"
+          git fetch origin "$SOURCE"
+          test "$(git rev-parse "$SOURCE^{tree}")" = "$SOURCE_TREE"
+          git config user.name roccho
+          git config user.email 40359643+roccho-dev@users.noreply.github.com
+          set +e
+          git merge --squash --no-commit "$SOURCE"
+          rc=$?
+          set -e
+          test "$rc" -eq 1
+          git checkout --ours -- .github/workflows/bounded-vim-nix-oci-proof.yml .github/workflows/proof-vim-nix-oci.yml proofs/vim-nix/run.trigger
+          git checkout --theirs -- docs/operations/vim-nix-local-first.md proofs/vim-nix/WSLC-TEST.md proofs/vim-nix/ci.parts/00.sh proofs/vim-nix/ci.parts/01.sh proofs/vim-nix/flake.lock proofs/vim-nix/flake.nix proofs/vim-nix/flake.parts/00.nix proofs/vim-nix/flake.parts/01.nix proofs/vim-nix/run-proof.parts/00.sh proofs/vim-nix/run-proof.parts/01.sh proofs/vim-nix/run-proof.parts/02.sh proofs/vim-nix/run-proof.parts/03.sh tools/vim-nix-local/pack.py tools/vim-nix-local/verify.sh tools/vim-nix-local/vim-nix
+          git rm -f packages/hq-vim/internal/smoke/tty_test.go proofs/vim-nix/hq-vim-native-popup-proof.patch tools/vim-nix-local/feedkeys-race.vim
+          git add -A
+          test -z "$(git diff --name-only --diff-filter=U)"
+          test -z "$(git diff --cached --name-only | grep -F '.github/workflows/' || true)"
+          test -z "$(git diff --cached --name-only | grep -Fx proofs/vim-nix/run.trigger || true)"
+          test -z "$(git diff --cached --name-only | grep -E '\.(png|jpe?g|webp)$' || true)"
+          git diff --cached --check -- . ':(exclude)proofs/vim-nix/yegappan-lsp-unicode.patch'
+          gofmt -w packages/hq-vim/*.go packages/hq-vim/internal/smoke/*.go
+          git add -A
+          mapfile -t tests < <(grep -Rh '^func Test' packages/hq-vim --include='*_test.go' | sed -E 's/^func (Test[^ (]+).*/\1/' | sort)
+          expected=(TestAcceptedSubmitKeepsDraftOnUnsafeConsumption TestAgentDecisionSubmitE2E TestAgentDefaultChoiceE2E TestAgentPromptFieldChoiceE2E TestDirectCommandSubmitE2E TestDirectFallbackChoiceE2E TestEditorSurfaceAndBindingFailClosed TestUnicodeDirectFieldValueE2E)
+          test "${tests[*]}" = "${expected[*]}"
+          (cd packages/hq-vim && go test ./... -count=1)
+          bash -n proofs/vim-nix/capture-pty-e2e.sh tools/vim-nix-local/verify.sh tools/vim-nix-local/vim-nix
+          cat proofs/vim-nix/run-proof.parts/*.sh > "$RUNNER_TEMP/runtime-proof.sh"
+          cat proofs/vim-nix/ci.parts/*.sh > "$RUNNER_TEMP/ci-proof.sh"
+          bash -n "$RUNNER_TEMP/runtime-proof.sh" "$RUNNER_TEMP/ci-proof.sh"
+          PYTHONPYCACHEPREFIX="$RUNNER_TEMP/pycache" python3 -m py_compile tools/vim-nix-local/pack.py
+          tree=$(git write-tree)
+          export GIT_AUTHOR_NAME=roccho GIT_AUTHOR_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_COMMITTER_NAME=roccho GIT_COMMITTER_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          commit=$(printf '%s\n' 'refactor(hq-vim): keep focused E2Es and PTY capture' | git commit-tree "$tree" -p "$BASE")
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+          git checkout --detach "$commit"
+          test "$(git rev-parse HEAD^)" = "$BASE"
+          test -z "$(git status --porcelain=v1)"
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+      - id: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          pushd proofs/vim-nix >/dev/null
+          before=$(sha256sum flake.lock | cut -d' ' -f1)
+          product=$(nix build --no-link --print-out-paths .#default)
+          offline=$(nix build --offline --no-write-lock-file --no-link --print-out-paths .#default)
+          after=$(sha256sum flake.lock | cut -d' ' -f1)
+          popd >/dev/null
+          test "$product" = "$offline"
+          test "$before" = "$after"
+          echo "path=$product" >> "$GITHUB_OUTPUT"
+      - name: Eight independent exact-product editor E2Es
+        shell: bash
+        env:
+          PROOF: ${{ steps.product.outputs.path }}
+        run: |
+          set -euo pipefail
+          export HQ_BIN="$PROOF/bin/hq" VIM_EXE="$PROOF/bin/vim" VIM9_LSP_PATH="$PROOF/share/yegappan-lsp" VIMRUNTIME="$PROOF/share/vim/vim92" LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color
+          for t in TestAgentDefaultChoiceE2E TestAgentPromptFieldChoiceE2E TestDirectFallbackChoiceE2E TestUnicodeDirectFieldValueE2E; do
+            cmd=$(printf 'cd %q && stty cols 180 rows 55 && HQ_CHOICE_E2E=1 HQ_BIN=%q VIM_EXE=%q VIM9_LSP_PATH=%q VIMRUNTIME=%q LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color %q -test.v -test.count=1 -test.run %q' "$PROOF/share/hq-vim" "$HQ_BIN" "$VIM_EXE" "$VIM9_LSP_PATH" "$VIMRUNTIME" "$PROOF/bin/hq-vim.test" "^${t}$")
+            timeout 90s script -qefc "$cmd" "$RUNNER_TEMP/$t.typescript" >/dev/null
+          done
+          for t in TestEditorSurfaceAndBindingFailClosed TestAgentDecisionSubmitE2E TestDirectCommandSubmitE2E TestAcceptedSubmitKeepsDraftOnUnsafeConsumption; do
+            (cd "$PROOF/share/hq-vim" && "$PROOF/bin/hq-vim.test" -test.v -test.count=1 -test.run "^${t}$")
+          done
+      - name: Independent Herdr worker lifecycle E2E
+        shell: bash
+        env:
+          PROOF_ROOT: ${{ steps.product.outputs.path }}
+        run: |
+          set -euo pipefail
+          cat proofs/vim-nix/run-proof.parts/*.sh > "$RUNNER_TEMP/runtime-proof.sh"
+          chmod 700 "$RUNNER_TEMP/runtime-proof.sh"
+          PROOF_OUTPUT_DIR="$RUNNER_TEMP/evidence" PROOF_RUNTIME_DIR="$RUNNER_TEMP/runtime" PROOF_RUN_SUFFIX=merge "$RUNNER_TEMP/runtime-proof.sh"
+          jq -e '.status == "PASS" and .gates.resultKinds == ["accepted","started","stdout","completed"] and .gates.residualProcessCount == 0' "$RUNNER_TEMP/evidence/receipt.json" >/dev/null
+      - name: Push verified one-child integration
+        shell: bash
+        env:
+          CLEAN_COMMIT: ${{ steps.materialize.outputs.commit }}
+        run: |
+          set -euo pipefail
+          ! git ls-remote --exit-code --heads origin "$FINAL_BRANCH" >/dev/null 2>&1
+          git push origin "$CLEAN_COMMIT:refs/heads/$FINAL_BRANCH"

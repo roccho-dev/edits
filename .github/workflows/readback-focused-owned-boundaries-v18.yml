@@ -23,9 +23,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          row=$(gh run list --repo "$GITHUB_REPOSITORY" --branch automation/focused-owned-boundaries-v18-20260824 --limit 10 --json databaseId,status,conclusion,headSha,workflowName,createdAt --jq '[.[] | select(.workflowName == "run focused owned boundaries v18")][0] // empty')
+          row=$(gh run list --repo "$GITHUB_REPOSITORY" --branch automation/focused-owned-boundaries-20260823 --limit 20 --json databaseId,status,conclusion,headSha,workflowName,createdAt --jq '[.[] | select(.workflowName == "run focused owned boundaries v18")][0] // empty')
           if test -z "$row"; then
-            gh pr comment 111 --body 'Focused owned-boundaries v18 readback: no workflow run found for helper branch `automation/focused-owned-boundaries-v18-20260824`.'
+            gh pr comment 111 --body 'Focused owned-boundaries v18 readback: no workflow run found on proven helper branch.'
             exit 0
           fi
           id=$(jq -r '.databaseId' <<<"$row")

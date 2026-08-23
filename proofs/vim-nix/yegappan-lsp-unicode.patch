@@ -1,0 +1,28 @@
+--- a/autoload/lsp/completion.vim
++++ b/autoload/lsp/completion.vim
+@@ -638,8 +638,9 @@
+   var lspOpts = opt.lspOptions
+ 
+   # Get the keyword prefix before the current cursor column.
++  var bytecol = col('.')
+   var chcol = charcol('.')
+-  var starttext = chcol == 1 ? '' : getline('.')[ : chcol - 2]
++  var starttext = bytecol == 1 ? '' : getline('.')->strpart(0, bytecol - 1)
+   var [prefix, start_idx, end_idx] = starttext->matchstrpos('\k*$')
+   if lspOpts.completionMatcherValue == opt.COMPLETIONMATCHER_ICASE
+     prefix = prefix->tolower()
+@@ -840,10 +841,11 @@
+ 
+   # Trigger kind is 1 for keyword and 2 for trigger char initiated completion.
+   var line: string = getline('.')
+-  var cur_col = charcol('.')
+-  if line[cur_col - 2] !~ '\k'
++  var before = line->strpart(0, col('.') - 1)
++  var previous = before->empty() ? '' : before->strcharpart(before->strchars() - 1, 1)
++  if previous !~ '\k'
+     var trigChars = lspserver.completionTriggerChars
+-    var trigidx = trigChars->index(line[cur_col - 2])
++    var trigidx = trigChars->index(previous)
+     if trigidx == -1
+       triggerKind = -1
+     else

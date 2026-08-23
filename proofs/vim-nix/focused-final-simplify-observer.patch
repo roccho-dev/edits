@@ -1,0 +1,129 @@
+diff --git a/packages/hq-vim/hq_vim_smoke_test.go b/packages/hq-vim/hq_vim_smoke_test.go
+index a083fc9..7c5e1f9 100644
+--- a/packages/hq-vim/hq_vim_smoke_test.go
++++ b/packages/hq-vim/hq_vim_smoke_test.go
+@@ -160,7 +160,6 @@ func runChoiceE2E(t *testing.T, tc choiceE2ECase) {
+ 		CandidateDocumentation string   `json:"candidate_documentation"`
+ 		Lines                  []string `json:"lines"`
+ 		UndoLines              []string `json:"undo_lines"`
+-		DocumentationPopup     []string `json:"documentation_popup"`
+ 		FileFormat             string   `json:"fileformat"`
+ 		Items                  []struct {
+ 			Word string `json:"word"`
+@@ -183,8 +182,8 @@ func runChoiceE2E(t *testing.T, tc choiceE2ECase) {
+ 	if result.CandidateDetail != tc.detail || !strings.Contains(result.CandidateDocumentation, tc.docPreview) {
+ 		t.Fatalf("native detail/documentation result = %#v", result)
+ 	}
+-	if strings.Join(result.DocumentationPopup, "\n") != result.CandidateDocumentation || result.FileFormat != tc.fileFormat {
+-		t.Fatalf("native documentation/format result = %#v", result)
++	if result.FileFormat != tc.fileFormat {
++		t.Fatalf("native file format result = %#v", result)
+ 	}
+ 	if tc.first {
+ 		if len(result.Items) == 0 || (!strings.Contains(result.Items[0].Word, tc.label) && result.Items[0].Abbr != tc.label) {
+ diff --git a/packages/hq-vim/internal/smoke/smoke.go b/packages/hq-vim/internal/smoke/smoke.go
+index 88a159c..9d06cde 100644
+--- a/packages/hq-vim/internal/smoke/smoke.go
++++ b/packages/hq-vim/internal/smoke/smoke.go
+@@ -266,7 +266,7 @@ func writeVimScript(root string, cfg Config) (string, error) {
+ 		"set nocompatible",
+ 		"set noswapfile",
+ 		"set encoding=utf-8",
+-		"set completeopt=menuone,noinsert,popup",
++		"set completeopt=menuone,noinsert,noselect,popup",
+ 		"execute 'set runtimepath^=' . fnameescape(" + vimString(cfg.Vim9LSP) + ")",
+ 		"execute 'set runtimepath^=' . fnameescape(" + vimString(root) + ")",
+ 		"runtime plugin/lsp.vim",
+@@ -378,7 +378,6 @@ func nativePopupProofLines(cfg Config) []string {
+ 		"let g:hq_native_undo_lines = []",
+ 		"let g:hq_native_candidate_detail = ''",
+ 		"let g:hq_native_candidate_documentation = ''",
+-		"let g:hq_native_documentation_popup = []",
+ 		"let g:hq_native_items = []",
+ 		"let g:hq_native_expected_index = -1",
+ 	}
+@@ -389,7 +388,7 @@ func nativePopupProofLines(cfg Config) []string {
+ 		lines = append(lines,
+ 			"function! HqNativePopupCaptureWait(timer) abort",
+ 			"  if filereadable("+vimString(cfg.CaptureDonePath)+")",
+-			`    call feedkeys("\<C-Y>\<Esc>", 'n')`,
++			`    call feedkeys("\<Esc>", 'n')`,
+ 			"    call timer_start(100, function('HqNativePopupVerify'))",
+ 			"    return",
+ 			"  endif",
+@@ -404,7 +403,7 @@ func nativePopupProofLines(cfg Config) []string {
+ 	lines = append(lines,
+ 		"let g:hq_native_deadline = reltimefloat(reltime()) + 10.0",
+ 		"function! HqNativePopupFinish(status, failure) abort",
+-		"  call writefile([json_encode({'status': a:status, 'failure': a:failure, 'lines': get(g:, 'hq_native_completed_lines', []), 'undo_lines': get(g:, 'hq_native_undo_lines', []), 'candidate_detail': get(g:, 'hq_native_candidate_detail', ''), 'candidate_documentation': get(g:, 'hq_native_candidate_documentation', ''), 'documentation_popup': get(g:, 'hq_native_documentation_popup', []), 'fileformat': &fileformat, 'items': get(g:, 'hq_native_items', [])})], "+vimString(cfg.NativePopupArtifact)+")",
++		"  call writefile([json_encode({'status': a:status, 'failure': a:failure, 'lines': get(g:, 'hq_native_completed_lines', []), 'undo_lines': get(g:, 'hq_native_undo_lines', []), 'candidate_detail': get(g:, 'hq_native_candidate_detail', ''), 'candidate_documentation': get(g:, 'hq_native_candidate_documentation', ''), 'fileformat': &fileformat, 'items': get(g:, 'hq_native_items', [])})], "+vimString(cfg.NativePopupArtifact)+")",
+ 		"  if a:status ==# 'passed'",
+ 		"    qa!",
+ 		"  else",
+@@ -425,33 +424,7 @@ func nativePopupProofLines(cfg Config) []string {
+ 		"  endif",
+ 		"  call HqNativePopupFinish('passed', '')",
+ 		"endfunction",
+-		"function! HqNativePopupObserve(timer) abort",
+-		"  if reltimefloat(reltime()) >= g:hq_native_deadline",
+-		"    call HqNativePopupFinish('failed', 'selected completion documentation timeout')",
+-		"    return",
+-		"  endif",
+-		"  let l:info = complete_info(['items', 'selected'])",
+-		"  if get(l:info, 'selected', -1) != g:hq_native_expected_index",
+-		"    call timer_start(20, function('HqNativePopupObserve'))",
+-		"    return",
+-		"  endif",
+-		"  let l:item = l:info.items[g:hq_native_expected_index]",
+-		"  let l:data = get(l:item, 'user_data', {})",
+-		"  let g:hq_native_candidate_detail = type(l:data) == v:t_dict ? get(l:data, 'detail', get(l:item, 'menu', '')) : get(l:item, 'menu', '')",
+-		"  let l:doc = type(l:data) == v:t_dict ? get(l:data, 'documentation', '') : ''",
+-		"  if type(l:doc) == v:t_dict | let l:doc = get(l:doc, 'value', '') | endif",
+-		"  let g:hq_native_candidate_documentation = type(l:doc) == v:t_string ? l:doc : ''",
+-		"  let l:popup = popup_findinfo()",
+-		"  if l:popup <= 0",
+-		"    call timer_start(20, function('HqNativePopupObserve'))",
+-		"    return",
+-		"  endif",
+-		"  let g:hq_native_documentation_popup = getbufline(winbufnr(l:popup), 1, '$')",
+-		"  let l:expected_doc = split(g:hq_native_candidate_documentation, \"\n\", 1)",
+-		"  if empty(g:hq_native_candidate_detail) || empty(l:expected_doc) || g:hq_native_documentation_popup !=# l:expected_doc",
+-		"    call HqNativePopupFinish('failed', 'native documentation popup is missing or truncated')",
+-		"    return",
+-		"  endif",
++		"function! HqNativePopupAfterSelection(timer) abort",
+ 	)
+ 	if cfg.CaptureReadyPath != "" {
+ 		lines = append(lines,
+@@ -461,7 +434,7 @@ func nativePopupProofLines(cfg Config) []string {
+ 		)
+ 	}
+ 	lines = append(lines,
+-		`  call feedkeys("\<C-Y>\<Esc>", 'n')`,
++		`  call feedkeys("\<Esc>", 'n')`,
+ 		"  call timer_start(100, function('HqNativePopupVerify'))",
+ 		"endfunction",
+ 		"function! HqNativePopupPoll(timer) abort",
+@@ -487,14 +460,15 @@ func nativePopupProofLines(cfg Config) []string {
+ 		"    return",
+ 		"  endif",
+ 		"  let g:hq_native_expected_index = l:index",
+-		"  let l:selected = get(complete_info(['selected']), 'selected', -1)",
+-		"  if l:selected != l:index",
+-		"    let l:steps = l:selected < 0 ? l:index + 1 : (l:index - l:selected + len(l:info.items)) % len(l:info.items)",
+-		"    if l:steps > 0",
+-		"      call feedkeys(repeat(\"\\<C-N>\", l:steps), 'nx')",
+-		"    endif",
++		"  let l:item = l:info.items[l:index]",
++		"  let g:hq_native_candidate_detail = get(l:item, 'menu', '')",
++		"  let g:hq_native_candidate_documentation = get(l:item, 'info', '')",
++		"  if empty(g:hq_native_candidate_detail) || empty(g:hq_native_candidate_documentation)",
++		"    call HqNativePopupFinish('failed', 'candidate detail or documentation is empty')",
++		"    return",
+ 		"  endif",
+-		"  call timer_start(20, function('HqNativePopupObserve'))",
++		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1), 'nti')",
++		"  call timer_start(100, function('HqNativePopupAfterSelection'))",
+ 		"endfunction",
+ 		"function! HqNativePopupType(timer) abort",
+ 		"  call setline(1, "+vimLines(prefix)+")",

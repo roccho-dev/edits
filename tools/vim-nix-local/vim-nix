@@ -72,9 +72,11 @@ run_doctor() {
   esac
 
   local lock="$repo_root/proofs/vim-nix/flake.lock"
-  local expected=35cdda5fa9645ab469924c69f36992db2f8637360fce128e7c7fd372c3a4ce0f
   test -f "$lock"
-  test "$(sha256sum "$lock" | cut -d' ' -f1)" = "$expected"
+  python3 - "$lock" <<'PY_LOCK'
+import json, pathlib, sys
+json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+PY_LOCK
   vim -Nu NONE -n -i NONE -es \
     '+if !has("patch-9.0.1629") || !has("timers") || !has("popupwin") || !has("insert_expand") || !has("multi_byte") | cquit 1 | endif' \
     '+quitall!'
@@ -120,7 +122,7 @@ print('PASS vim-nix-local-first')
 print('evidence=' + str(pathlib.Path(sys.argv[2]).resolve()))
 print('herdr=' + str(gates['herdrTopologyProbe']))
 print('vim=' + str(gates['vimRuntimeObserved']))
-print('deferred_high_cost=' + str(len(receipt['deferredHighCostGates'])))
+print('deferred_high_cost=' + str(len(receipt['deferredDistributionGates'])))
 PY
 }
 

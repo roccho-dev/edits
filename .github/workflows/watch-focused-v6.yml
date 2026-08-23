@@ -1,0 +1,26 @@
+name: watch focused v6
+
+on:
+  push:
+    branches: [automation/probe-push-actions-20260823]
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: automation/verify-focused-v6-20260823
+      TARGET_WORKFLOW: verify-focused-source-v6-push.yml
+    steps:
+      - shell: bash
+        run: |
+          set -euo pipefail
+          runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 20 --json databaseId,status,conclusion,headSha,event,url,createdAt)
+          body=$(printf '%s' "$runs" | jq -r 'if length == 0 then "No v6 push run found." else .[] | "- run `\(.databaseId)`: `\(.status)` / `\(.conclusion // "")`, head `\(.headSha)`, event `\(.event)`, \(.url)" end')
+          gh pr comment 108 --repo "$GITHUB_REPOSITORY" --body "Focused v6 run inventory:\n\n$body"

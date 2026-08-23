@@ -3,6 +3,8 @@ name: repair focused final v2 transport pin
 on:
   push:
     branches: [automation/merge-focused-e2e-20260823]
+  pull_request:
+    branches: [proposals]
 
 permissions:
   contents: write
@@ -13,6 +15,7 @@ concurrency:
 
 jobs:
   repair:
+    if: github.event_name == 'push' || github.head_ref == 'automation/merge-focused-e2e-20260823'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -33,14 +36,18 @@ jobs:
 
           path = Path(sys.argv[1])
           text = path.read_text(encoding='utf-8')
-          old_env = '      PATCH_SHA256: 225860b0140be105e61243147abb8b47de2a8d85df04125b7c858b21b07e62c8\n'
-          new_env = '      PATCH_BLOB: 3ba2bde7e4d9609425be5aac41925a4ad9b80d91\n'
-          old_check = '          test "$(sha256sum "$PATCH" | cut -d\' \' -f1)" = "$PATCH_SHA256"\n'
-          new_check = '          test "$(git rev-parse "HEAD:$PATCH")" = "$PATCH_BLOB"\n'
+          old_env = "      PATCH_SHA256: 225860b0140be105e61243147abb8b47de2a8d85df04125b7c858b21b07e62c8\n"
+          new_env = "      PATCH_BLOB: 3ba2bde7e4d9609425be5aac41925a4ad9b80d91\n"
+          old_check = """          test "$(sha256sum "$PATCH" | cut -d' ' -f1)" = "$PATCH_SHA256"
+          """
+          new_check = """          test "$(git rev-parse "HEAD:$PATCH")" = "$PATCH_BLOB"
+          """
 
           if old_env in text and old_check in text:
-              text = text.replace(old_env, new_env, 1).replace(old_check, new_check, 1)
-              path.write_text(text, encoding='utf-8')
+              path.write_text(
+                  text.replace(old_env, new_env, 1).replace(old_check, new_check, 1),
+                  encoding='utf-8',
+              )
           elif new_env in text and new_check in text:
               raise SystemExit(0)
           else:

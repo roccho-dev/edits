@@ -1,0 +1,4 @@
+run=2026-08-23T15:32:00+09:00
+base=05f10d7105682f2346f8f741fa609af3faf33ee1
+seed=3c53a8378112c4e017ae3ad3ca5bf5c49a664fce
+screenshots=false

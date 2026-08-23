@@ -14,12 +14,13 @@ jobs:
     timeout-minutes: 60
     env:
       BASE: 05f10d7105682f2346f8f741fa609af3faf33ee1
-      SOURCE_BRANCH: ux/focused-e2e-merge-source-20260823
+      SOURCE_SEED_BRANCH: ux/focused-e2e-merge-source-20260823
+      SOURCE_BRANCH: ux/focused-e2e-merge-source-v2-20260823
       FINAL_BRANCH: ux/focused-e2e-merge-final-20260823
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.SOURCE_BRANCH }}
+          ref: ${{ env.SOURCE_SEED_BRANCH }}
           fetch-depth: 0
           persist-credentials: true
 
@@ -28,12 +29,11 @@ jobs:
           go-version: '1.23.12'
 
       - id: source
-        name: Verify focused source A
+        name: Materialize explicit-selection focused source A
         shell: bash
         run: |
           set -euo pipefail
-          source_commit=$(git rev-parse HEAD)
-          source_tree=$(git rev-parse HEAD^{tree})
+          seed=$(git rev-parse HEAD)
           test "$(git rev-parse HEAD^)" = "$BASE"
           test -z "$(git diff --name-only "$BASE" HEAD | grep -F '.github/workflows/' || true)"
           test -z "$(git diff --name-only "$BASE" HEAD | grep -Fx proofs/vim-nix/run.trigger || true)"
@@ -44,10 +44,36 @@ jobs:
           mapfile -t tests < <(grep -Rh '^func Test' packages/hq-vim --include='*_test.go' | sed -E 's/^func (Test[^ (]+).*/\1/' | sort)
           expected=(TestAcceptedSubmitKeepsDraftOnUnsafeConsumption TestAgentDecisionSubmitE2E TestAgentDefaultChoiceE2E TestAgentPromptFieldChoiceE2E TestDirectCommandSubmitE2E TestDirectFallbackChoiceE2E TestEditorSurfaceAndBindingFailClosed TestUnicodeDirectFieldValueE2E)
           test "${tests[*]}" = "${expected[*]}"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('packages/hq-vim/internal/smoke/smoke.go')
+          s = p.read_text(encoding='utf-8')
+          old = '"set completeopt=menuone,noinsert,popup",'
+          new = '"set completeopt=menuone,noinsert,noselect,popup",'
+          if s.count(old) != 1:
+              raise SystemExit(f'expected one completeopt line, got {s.count(old)}')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+          gofmt -w packages/hq-vim/internal/smoke/smoke.go
+          test "$(git diff --name-only "$seed" | tr -d '\n')" = packages/hq-vim/internal/smoke/smoke.go
           (cd packages/hq-vim && go test ./... -count=1)
-          echo "commit=$source_commit" >> "$GITHUB_OUTPUT"
-          echo "tree=$source_tree" >> "$GITHUB_OUTPUT"
-          printf 'A commit=%s tree=%s\n' "$source_commit" "$source_tree"
+          git add packages/hq-vim/internal/smoke/smoke.go
+          git diff --cached --check
+          tree=$(git write-tree)
+          export GIT_AUTHOR_NAME=roccho GIT_AUTHOR_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_COMMITTER_NAME=roccho GIT_COMMITTER_EMAIL=40359643+roccho-dev@users.noreply.github.com
+          export GIT_AUTHOR_DATE=2026-08-23T00:00:00Z GIT_COMMITTER_DATE=2026-08-23T00:00:00Z
+          commit=$(printf '%s\n' 'refactor(hq-vim): keep focused E2Es and explicit popup selection' | git commit-tree "$tree" -p "$BASE")
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+          printf 'A commit=%s tree=%s\n' "$commit" "$tree"
+          if git ls-remote --exit-code --heads origin "$SOURCE_BRANCH" >/dev/null 2>&1; then
+            existing=$(git ls-remote --heads origin "$SOURCE_BRANCH" | awk '{print $1}')
+            test "$existing" = "$commit"
+          else
+            git push origin "$commit:refs/heads/$SOURCE_BRANCH"
+          fi
 
       - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
         with:
@@ -60,8 +86,11 @@ jobs:
         shell: bash
         env:
           SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
+          SOURCE_TREE_A: ${{ steps.source.outputs.tree }}
         run: |
           set -euo pipefail
+          git checkout --detach "$SOURCE_COMMIT"
+          test "$(git rev-parse HEAD^{tree})" = "$SOURCE_TREE_A"
           python3 - "$SOURCE_COMMIT" <<'PY'
           from pathlib import Path
           import sys
@@ -125,10 +154,12 @@ jobs:
           set -euo pipefail
           export HQ_BIN="$PROOF/bin/hq" VIM_EXE="$PROOF/bin/vim" VIM9_LSP_PATH="$PROOF/share/yegappan-lsp" VIMRUNTIME="$PROOF/share/vim/vim92" LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color
           for t in TestAgentDefaultChoiceE2E TestAgentPromptFieldChoiceE2E TestDirectFallbackChoiceE2E TestUnicodeDirectFieldValueE2E; do
+            echo "E2E $t"
             cmd=$(printf 'cd %q && stty cols 180 rows 55 && HQ_CHOICE_E2E=1 HQ_BIN=%q VIM_EXE=%q VIM9_LSP_PATH=%q VIMRUNTIME=%q LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color %q -test.v -test.count=1 -test.run %q' "$PROOF/share/hq-vim" "$HQ_BIN" "$VIM_EXE" "$VIM9_LSP_PATH" "$VIMRUNTIME" "$PROOF/bin/hq-vim.test" "^${t}$")
-            timeout 90s script -qefc "$cmd" "$RUNNER_TEMP/$t.typescript" >/dev/null
+            timeout 90s script -qefc "$cmd" "$RUNNER_TEMP/$t.typescript"
           done
           for t in TestEditorSurfaceAndBindingFailClosed TestAgentDecisionSubmitE2E TestDirectCommandSubmitE2E TestAcceptedSubmitKeepsDraftOnUnsafeConsumption; do
+            echo "E2E $t"
             (cd "$PROOF/share/hq-vim" && "$PROOF/bin/hq-vim.test" -test.v -test.count=1 -test.run "^${t}$")
           done
 

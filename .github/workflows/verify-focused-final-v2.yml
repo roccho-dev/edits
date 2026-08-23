@@ -22,7 +22,7 @@ jobs:
       BASE: 05f10d7105682f2346f8f741fa609af3faf33ee1
       SEED: 6d12ee46ba86175578933fe146189e2884f6a336
       PATCH: proofs/vim-nix/focused-final-simplify-observer.patch
-      PATCH_SHA256: 225860b0140be105e61243147abb8b47de2a8d85df04125b7c858b21b07e62c8
+      PATCH_BLOB: 3ba2bde7e4d9609425be5aac41925a4ad9b80d91
       SOURCE_BRANCH: ux/focused-e2e-merge-source-final-v2-20260823
       FINAL_BRANCH: ux/focused-e2e-merge-final-v3-20260823
       EVIDENCE: /tmp/focused-e2e-final-v2
@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sha256sum "$PATCH" | cut -d' ' -f1)" = "$PATCH_SHA256"
+          test "$(git rev-parse "HEAD:$PATCH")" = "$PATCH_BLOB"
           cp "$PATCH" "$RUNNER_TEMP/focused-final.patch"
           git checkout --detach "$SEED"
           test "$(git rev-parse HEAD^)" = "$BASE"

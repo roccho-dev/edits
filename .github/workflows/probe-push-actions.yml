@@ -1,0 +1,28 @@
+name: probe push actions
+
+on:
+  push:
+    branches: [automation/probe-push-actions-20260823]
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name roccho
+          git config user.email 40359643+roccho-dev@users.noreply.github.com
+          git checkout --orphan proof-push-actions-probe
+          git rm -rf .
+          printf 'PASS\n' > PASS.txt
+          git add PASS.txt
+          git commit -m 'proof: push workflow trigger works'
+          git push origin HEAD:refs/heads/proof/push-actions-probe-20260823

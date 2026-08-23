@@ -1,0 +1,42 @@
+name: watch clean focused merge
+
+on:
+  push:
+    branches:
+      - automation/watch-focused-e2e-20260822
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: integrate-focused-e2e-clean.yml
+      TARGET_BRANCH: automation/merge-focused-e2e-20260823
+      TARGET_HEAD: c2895f51903ca034249f365d5007d91ce7fedf68
+      TARGET_PR: "106"
+    steps:
+      - name: Wait for exact clean integration run
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 240); do
+            runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 20 --json databaseId,status,conclusion,headSha,event,url)
+            row=$(printf '%s' "$runs" | jq -c --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.databaseId) | last // empty')
+            if test -n "$row" && test "$(printf '%s' "$row" | jq -r .status)" = completed; then
+              id=$(printf '%s' "$row" | jq -r .databaseId)
+              conclusion=$(printf '%s' "$row" | jq -r .conclusion)
+              url=$(printf '%s' "$row" | jq -r .url)
+              gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body "Clean focused integration readback: run \`$id\`, conclusion \`$conclusion\`, head \`$TARGET_HEAD\`. $url"
+              test "$conclusion" = success
+              exit 0
+            fi
+            sleep 10
+          done
+          gh pr comment "$TARGET_PR" --repo "$GITHUB_REPOSITORY" --body "Clean focused integration readback timed out for \`$TARGET_HEAD\`; no merge claim."
+          exit 1

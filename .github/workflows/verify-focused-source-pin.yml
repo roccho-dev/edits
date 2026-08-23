@@ -15,8 +15,8 @@ jobs:
     env:
       BASE: 05f10d7105682f2346f8f741fa609af3faf33ee1
       SOURCE_SEED_BRANCH: ux/focused-e2e-merge-source-v3-20260823
-      SOURCE_BRANCH: ux/focused-e2e-merge-source-v4-20260823
-      FINAL_BRANCH: ux/focused-e2e-merge-final-v4-20260823
+      SOURCE_BRANCH: ux/focused-e2e-merge-source-v4b-20260823
+      FINAL_BRANCH: ux/focused-e2e-merge-final-v4b-20260823
     steps:
       - uses: actions/checkout@v4
         with:

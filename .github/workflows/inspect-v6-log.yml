@@ -1,0 +1,40 @@
+name: inspect v6 workflow error
+
+on:
+  push:
+    branches: [automation/probe-push-actions-20260823]
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: "32621935657"
+    steps:
+      - shell: bash
+        run: |
+          set -u
+          root=$RUNNER_TEMP/v6-log
+          mkdir -p "$root"
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" > "$root/view.txt" 2>&1
+          view_rc=$?
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > "$root/log-failed.txt" 2>&1
+          failed_rc=$?
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log > "$root/log.txt" 2>&1
+          log_rc=$?
+          {
+            printf 'V6 workflow error readback: view=%s log-failed=%s log=%s\n\n```text\n' "$view_rc" "$failed_rc" "$log_rc"
+            echo '[view]'
+            sed -n '1,200p' "$root/view.txt"
+            echo '[log-failed]'
+            sed -n '1,200p' "$root/log-failed.txt"
+            echo '[log]'
+            sed -n '1,200p' "$root/log.txt"
+            echo '```'
+          } > "$root/comment.md"
+          gh pr comment 108 --repo "$GITHUB_REPOSITORY" --body-file "$root/comment.md"

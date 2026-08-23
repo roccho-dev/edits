@@ -14,31 +14,34 @@ import (
 )
 
 type Config struct {
-	HQBin                   string
-	Vim                     string
-	Vim9LSP                 string
-	PluginRoot              string
-	Profile                 string
-	Buffer                  string
-	BufferText              string
-	CompletionText          string
-	ExpectedCompletionLabel string
-	ExpectedCompletionText  string
-	NativePopupFileFormat   string
-	Headless                bool
-	StartOnly               bool
-	OmitHQBin               bool
-	SkipSubmit              bool
-	SubmitCount             int
-	Env                     map[string]string
-	Timeout                 time.Duration
-	VimLog                  string
-	LSPLog                  string
-	ResultPath              string
-	BufferResultPath        string
-	UndoResultPath          string
-	MessagesPath            string
-	NativePopupArtifact     string
+	HQBin                     string
+	Vim                       string
+	Vim9LSP                   string
+	PluginRoot                string
+	Profile                   string
+	Buffer                    string
+	BufferText                string
+	CompletionText            string
+	ExpectedCompletionLabel   string
+	ExpectedCompletionText    string
+	RequireDocumentationPopup bool
+	NativePopupFileFormat     string
+	Headless                  bool
+	StartOnly                 bool
+	OmitHQBin                 bool
+	SkipSubmit                bool
+	SubmitCount               int
+	Env                       map[string]string
+	Timeout                   time.Duration
+	VimLog                    string
+	LSPLog                    string
+	ResultPath                string
+	BufferResultPath          string
+	UndoResultPath            string
+	MessagesPath              string
+	NativePopupArtifact       string
+	CaptureReadyPath          string
+	CaptureDonePath           string
 }
 
 func Run(cfg Config) error {
@@ -84,7 +87,7 @@ func Run(cfg Config) error {
 	if err := os.MkdirAll(filepath.Dir(cfg.Buffer), 0o755); err != nil {
 		return err
 	}
-	for _, path := range []string{cfg.ResultPath, cfg.BufferResultPath, cfg.UndoResultPath, cfg.MessagesPath, cfg.NativePopupArtifact} {
+	for _, path := range []string{cfg.ResultPath, cfg.BufferResultPath, cfg.UndoResultPath, cfg.MessagesPath, cfg.NativePopupArtifact, cfg.CaptureReadyPath, cfg.CaptureDonePath} {
 		if path != "" {
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 				return err
@@ -99,6 +102,9 @@ func Run(cfg Config) error {
 	}
 	if cfg.NativePopupFileFormat != "" && cfg.NativePopupFileFormat != "unix" && cfg.NativePopupFileFormat != "dos" {
 		return errors.New("NativePopupFileFormat must be unix or dos")
+	}
+	if (cfg.CaptureReadyPath == "") != (cfg.CaptureDonePath == "") {
+		return errors.New("PTY capture requires both ready and done paths")
 	}
 
 	cleanupLogs := false
@@ -137,6 +143,14 @@ func Run(cfg Config) error {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	cmd.Env = environmentWithOverrides(os.Environ(), cfg.Env)
+	if cfg.NativePopupArtifact != "" && runtime.GOOS != "windows" {
+		terminal, terminalErr := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+		if terminalErr != nil {
+			return diagnosticError(fmt.Errorf("open controlling terminal: %w", terminalErr), cfg)
+		}
+		defer terminal.Close()
+		cmd.Stdout, cmd.Stderr, cmd.Stdin = terminal, terminal, terminal
+	}
 	err = cmd.Run()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return diagnosticError(fmt.Errorf("Vim smoke timed out after %s", timeout), cfg)
@@ -252,6 +266,8 @@ func writeVimScript(root string, cfg Config) (string, error) {
 	lines := []string{
 		"set nocompatible",
 		"set noswapfile",
+		"set encoding=utf-8",
+		"set completeopt=menuone,noinsert,noselect,popup",
 		"execute 'set runtimepath^=' . fnameescape(" + vimString(cfg.Vim9LSP) + ")",
 		"execute 'set runtimepath^=' . fnameescape(" + vimString(root) + ")",
 		"runtime plugin/lsp.vim",
@@ -370,6 +386,26 @@ func nativePopupProofLines(cfg Config) []string {
 	if cfg.NativePopupFileFormat != "" {
 		lines = append(lines, "setlocal fileformat="+cfg.NativePopupFileFormat)
 	}
+	if cfg.CaptureReadyPath != "" {
+		captureAccept := `    call feedkeys("\<C-Y>\<Esc>", 'n')`
+		if !cfg.RequireDocumentationPopup {
+			captureAccept = `    call feedkeys(repeat("\<C-N>", g:hq_native_expected_index + 1) . "\<C-Y>\<Esc>", 'int')`
+		}
+		lines = append(lines,
+			"function! HqNativePopupCaptureWait(timer) abort",
+			"  if filereadable("+vimString(cfg.CaptureDonePath)+")",
+			captureAccept,
+			"    call timer_start(100, function('HqNativePopupVerify'))",
+			"    return",
+			"  endif",
+			"  if reltimefloat(reltime()) >= g:hq_native_deadline",
+			"    call HqNativePopupFinish('failed', 'PTY capture observer timeout')",
+			"    return",
+			"  endif",
+			"  call timer_start(20, function('HqNativePopupCaptureWait'))",
+			"endfunction",
+		)
+	}
 	lines = append(lines,
 		"let g:hq_native_deadline = reltimefloat(reltime()) + 10.0",
 		"function! HqNativePopupFinish(status, failure) abort",
@@ -393,6 +429,19 @@ func nativePopupProofLines(cfg Config) []string {
 		"    return",
 		"  endif",
 		"  call HqNativePopupFinish('passed', '')",
+		"endfunction",
+		"function! HqNativePopupAccept(timer) abort",
+		"  if reltimefloat(reltime()) >= g:hq_native_deadline",
+		"    call HqNativePopupFinish('failed', 'native popup selection timeout')",
+		"    return",
+		"  endif",
+		"  let l:selected = get(complete_info(['selected']), 'selected', -1)",
+		"  if l:selected != g:hq_native_expected_index",
+		"    call timer_start(20, function('HqNativePopupAccept'))",
+		"    return",
+		"  endif",
+		`  call feedkeys("\<C-Y>\<Esc>", 'n')`,
+		"  call timer_start(100, function('HqNativePopupVerify'))",
 		"endfunction",
 		"function! HqNativePopupObserve(timer) abort",
 		"  if reltimefloat(reltime()) >= g:hq_native_deadline",
@@ -421,7 +470,16 @@ func nativePopupProofLines(cfg Config) []string {
 		"    call HqNativePopupFinish('failed', 'native documentation popup is missing or truncated')",
 		"    return",
 		"  endif",
-		"  call feedkeys(\"\\<C-Y>\\<Esc>\", 'n')",
+	)
+	if cfg.CaptureReadyPath != "" {
+		lines = append(lines,
+			"  call writefile(['ready'], "+vimString(cfg.CaptureReadyPath)+")",
+			"  call timer_start(20, function('HqNativePopupCaptureWait'))",
+			"  return",
+		)
+	}
+	lines = append(lines,
+		`  call feedkeys("\<C-Y>\<Esc>", 'n')`,
 		"  call timer_start(100, function('HqNativePopupVerify'))",
 		"endfunction",
 		"function! HqNativePopupPoll(timer) abort",
@@ -447,9 +505,50 @@ func nativePopupProofLines(cfg Config) []string {
 		"    return",
 		"  endif",
 		"  let g:hq_native_expected_index = l:index",
-		"  call feedkeys(repeat(\"\\<C-N>\", l:index + 1), 'n')",
-		"  call timer_start(20, function('HqNativePopupObserve'))",
-		"endfunction",
+		"  let l:item = l:info.items[l:index]",
+		"  let l:data = get(l:item, 'user_data', {})",
+		"  let g:hq_native_candidate_detail = type(l:data) == v:t_dict ? get(l:data, 'detail', get(l:item, 'menu', '')) : get(l:item, 'menu', '')",
+		"  let l:doc = type(l:data) == v:t_dict ? get(l:data, 'documentation', get(l:item, 'info', '')) : get(l:item, 'info', '')",
+		"  if type(l:doc) == v:t_dict | let l:doc = get(l:doc, 'value', '') | endif",
+		"  let g:hq_native_candidate_documentation = type(l:doc) == v:t_string ? l:doc : ''",
+		"  if empty(g:hq_native_candidate_detail) || empty(g:hq_native_candidate_documentation)",
+		"    call HqNativePopupFinish('failed', 'native candidate metadata is missing')",
+		"    return",
+		"  endif",
+	)
+	if cfg.RequireDocumentationPopup {
+		lines = append(lines,
+			"  let l:selected = get(complete_info(['selected']), 'selected', -1)",
+			"  if l:selected != l:index",
+			"    let l:steps = l:selected < 0 ? l:index + 1 : (l:index - l:selected + len(l:info.items)) % len(l:info.items)",
+			"    if l:steps > 0",
+			"      call feedkeys(repeat(\"\\<C-N>\", l:steps), 'nt')",
+			"    endif",
+			"  endif",
+			"  call timer_start(20, function('HqNativePopupObserve'))",
+			"endfunction",
+		)
+	} else if cfg.CaptureReadyPath != "" {
+		lines = append(lines,
+			"  call writefile(['ready'], "+vimString(cfg.CaptureReadyPath)+")",
+			"  call timer_start(20, function('HqNativePopupCaptureWait'))",
+			"  return",
+			"endfunction",
+		)
+	} else {
+		lines = append(lines,
+			"  let l:selected = get(complete_info(['selected']), 'selected', -1)",
+			"  if l:selected != l:index",
+			"    let l:steps = l:selected < 0 ? l:index + 1 : (l:index - l:selected + len(l:info.items)) % len(l:info.items)",
+			"    if l:steps > 0",
+			`      call feedkeys(repeat("\<C-N>", l:steps), 'int')`,
+			"    endif",
+			"  endif",
+			"  call timer_start(20, function('HqNativePopupAccept'))",
+			"endfunction",
+		)
+	}
+	lines = append(lines,
 		"function! HqNativePopupType(timer) abort",
 		"  call setline(1, "+vimLines(prefix)+")",
 		"  call cursor(line('$'), strlen(getline('$')) + 1)",

@@ -24,6 +24,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config user.name roccho
+          git config user.email 40359643+roccho-dev@users.noreply.github.com
           git fetch origin automation/focused-e2e-source-20260822
           set +e
           git merge --squash --no-commit origin/automation/focused-e2e-source-20260822

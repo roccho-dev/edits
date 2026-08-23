@@ -40,6 +40,13 @@ def CompletionUndoReset()
     timer_start(0, (_) => CompletionUndoResume())
     return
   endif
+  timer_start(0, (_) => CompletionUndoFinish())
+enddef
+
+def CompletionUndoFinish()
+  if mode(1) =~# '^i' && pumvisible()
+    return
+  endif
   b:hq_completion_undo_armed = false
 enddef
 

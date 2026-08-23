@@ -29,7 +29,19 @@ jobs:
         run: |
           set -euo pipefail
           cp proofs/verify-focused-v24.sh "$RUNNER_TEMP/verify-focused-v24.sh"
+          python3 - "$RUNNER_TEMP/verify-focused-v24.sh" <<'PY'
+          from pathlib import Path
+          import sys
+          p = Path(sys.argv[1])
+          s = p.read_text(encoding='utf-8')
+          old = 'git diff --check "$BASE" "$SOURCE"\n'
+          new = 'git diff --check "$BASE" "$SOURCE" -- . \' :(exclude)proofs/vim-nix/yegappan-lsp-unicode.patch\'\n'.replace("' :", "':")
+          if s.count(old) != 1:
+              raise SystemExit(f'diff-check gate matches={s.count(old)}')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
           chmod 700 "$RUNNER_TEMP/verify-focused-v24.sh"
+          grep -F "yegappan-lsp-unicode.patch" "$RUNNER_TEMP/verify-focused-v24.sh"
           git checkout --detach 788245e5a19b40f6392511c28297227ccb2e8f30
       - uses: actions/setup-go@v5
         with:

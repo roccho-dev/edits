@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          body=$(jq -cn --arg strict "$STRICT" --arg tree "$STRICT_TREE" --arg source "$PRODUCT_SOURCE" --arg run "$GITHUB_RUN_ID" --arg trigger "$GITHUB_SHA" '{schema:"edits.v25-strict-distribution-status/1",status:"RUNNING",proofCommit:$strict,proofTree:$tree,productSource:$source,runId:($run|tonumber),triggerCommit:$trigger,physicalWindowsWslc:"OPEN"}')
+          body=$(jq -cn --arg strict "$STRICT" --arg tree "$STRICT_TREE" --arg source "$PRODUCT_SOURCE" --arg run "$GITHUB_RUN_ID" --arg trigger "$GITHUB_SHA" '{schema:"edits.v25-strict-distribution-status/1",status:"RUNNING",proofCommit:$strict,proofTree:$tree,productSource:$source,runId:($run|tonumber),triggerCommit:$trigger,physicalWindowsWslc:"OPEN",failure:null}')
           encoded=$(printf '%s\n' "$body" | base64 -w0)
           existing=$(gh api "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH?ref=$STATUS_BRANCH" --jq .sha 2>/dev/null || true)
           args=(--method PUT "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH" -f message='proof: record strict v25 distribution run start' -f content="$encoded" -f branch="$STATUS_BRANCH")
@@ -86,12 +86,69 @@ jobs:
           set -euo pipefail
           status=FAIL
           test "$OUTCOME" = success && status=DISTRIBUTION_CLOSURE_PASS
-          body=$(jq -cn --arg status "$status" --arg strict "$STRICT" --arg tree "$STRICT_TREE" --arg source "$PRODUCT_SOURCE" --arg run "$GITHUB_RUN_ID" --arg trigger "$GITHUB_SHA" '{schema:"edits.v25-strict-distribution-status/1",status:$status,proofCommit:$strict,proofTree:$tree,productSource:$source,runId:($run|tonumber),triggerCommit:$trigger,physicalWindowsWslc:"OPEN"}')
+
+          failurePhase=""
+          failureCommand=""
+          failureExitCode=""
+          if test -f "$ARTIFACT/strict-failure.json"; then
+            failurePhase=$(jq -r '.phase // ""' "$ARTIFACT/strict-failure.json")
+            failureCommand=$(jq -r '.command // ""' "$ARTIFACT/strict-failure.json")
+            failureExitCode=$(jq -r '.exitCode // "" | tostring' "$ARTIFACT/strict-failure.json")
+          fi
+
+          errorTail=$(tail -c 8000 "$ARTIFACT/product/clean-store-import.stderr" 2>/dev/null || true)
+          if test -z "$errorTail"; then
+            errorTail=$(tail -c 8000 "$ARTIFACT/product/clean-offline-build.stderr" 2>/dev/null || true)
+          fi
+
+          body=$(jq -cn \
+            --arg status "$status" \
+            --arg strict "$STRICT" \
+            --arg tree "$STRICT_TREE" \
+            --arg source "$PRODUCT_SOURCE" \
+            --arg run "$GITHUB_RUN_ID" \
+            --arg trigger "$GITHUB_SHA" \
+            --arg failurePhase "$failurePhase" \
+            --arg failureCommand "$failureCommand" \
+            --arg failureExitCode "$failureExitCode" \
+            --arg errorTail "$errorTail" \
+            '{
+              schema:"edits.v25-strict-distribution-status/1",
+              status:$status,
+              proofCommit:$strict,
+              proofTree:$tree,
+              productSource:$source,
+              runId:($run|tonumber),
+              triggerCommit:$trigger,
+              physicalWindowsWslc:"OPEN",
+              failure:(if $status == "FAIL" then {
+                phase:$failurePhase,
+                command:$failureCommand,
+                exitCode:(if $failureExitCode == "" then null else ($failureExitCode|tonumber) end),
+                errorTail:$errorTail
+              } else null end)
+            }')
           encoded=$(printf '%s\n' "$body" | base64 -w0)
           existing=$(gh api "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH?ref=$STATUS_BRANCH" --jq .sha 2>/dev/null || true)
           args=(--method PUT "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH" -f message='proof: record strict v25 distribution verification' -f content="$encoded" -f branch="$STATUS_BRANCH")
           if test -n "$existing"; then args+=(-f sha="$existing"); fi
           gh api "${args[@]}" >/dev/null
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strict-v25-diagnostic-${{ github.run_id }}
+          path: |
+            /tmp/vim-nix-herdr-oci-proof/strict-failure.json
+            /tmp/vim-nix-herdr-oci-proof/product/clean-store-import.stdout
+            /tmp/vim-nix-herdr-oci-proof/product/clean-store-import.stderr
+            /tmp/vim-nix-herdr-oci-proof/product/clean-offline-build.stdout
+            /tmp/vim-nix-herdr-oci-proof/product/clean-offline-build.stderr
+            /tmp/vim-nix-herdr-oci-proof/clean-offline-replay.receipt.json
+            /tmp/vim-nix-herdr-oci-proof/ci-receipt.json
+          compression-level: 9
+          retention-days: 14
+          if-no-files-found: warn
 
       - uses: actions/upload-artifact@v4
         if: always()

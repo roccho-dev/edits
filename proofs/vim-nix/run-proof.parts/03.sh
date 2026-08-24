@@ -142,3 +142,7 @@ jq -n \
 
 trap - EXIT INT TERM
 printf 'VIM_NIX_RUNTIME_E2E_PASS\n'
+if test "$RUN_EDITOR" -eq 1; then
+  jq -e '.status == "PASS" and .gates.testCount == 8' "$OUT/editor-receipt.json" >/dev/null
+  printf 'VIM_NIX_FULL_E2E_PASS\n'
+fi

@@ -146,7 +146,7 @@ exec "$root/tools/vim-nix-local/vim-nix" verify "$@"
             stage_root / "README.md",
             """# Vim/Nix local-first Carry
 
-Run the locally verifiable product/test delta without network access:
+Run the verified editor-adapter delta without network access:
 
 ```bash
 unzip <pack>.zip
@@ -154,15 +154,16 @@ cd vim-nix-local-first
 bash run
 ```
 
-`run` checks prerequisites, auto-discovers the bundled Herdr 0.8.0 when present,
-runs the controlling-TTY RED/GREEN proof, all patched hq-vim Go tests, the real
-Vim `feedkeys('n')`/`feedkeys('nx')` race proof, OCI positive/mutation proof,
-and the optional Herdr exactly-two-pane/clean-stop proof. Evidence is written to
-`.local/vim-nix-proof`.
+The local proof keeps eight focused behavior boundaries: the minimal editor
+surface, agent-default choice, Agent prompt-field completion, explicit direct
+choice, Unicode/CRLF edit and undo, agent submit, direct submit, and fail-closed draft preservation. Each E2E
+owns one seam; no umbrella E2E invokes another. The separate screenshot harness
+observes the permanent agent-choice and runtime-lifecycle E2Es without changing
+their assertions. OCI mutation control and the optional Herdr topology probe
+remain independent distribution checks.
 
-This pack is a carryable local development and verification surface. It is not
-the final exact Nix/HQ/yegappan/worker/Docker/OCI distribution claim; those
-high-cost gates remain separate.
+The carry is a development surface, not the final exact Nix/HQ/yegappan/worker/
+Docker/OCI distribution claim.
 """,
         )
 

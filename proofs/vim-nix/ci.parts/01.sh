@@ -11,12 +11,12 @@ docker image inspect "$OCI_IMAGE_REF" > "$ARTIFACT/oci-loaded-image-inspect.json
 docker run --rm --name vim-nix-proof-oci \
   --volume "$ARTIFACT/evidence-oci:/work/evidence" \
   "$OCI_IMAGE_REF" all | tee "$ARTIFACT/oci-runtime.transcript.txt"
-grep -Fxq 'VIM_NIX_HERDR_OCI_RUNTIME_PROOF_PASS' "$ARTIFACT/oci-runtime.transcript.txt"
+grep -Fxq 'VIM_NIX_RUNTIME_E2E_PASS' "$ARTIFACT/oci-runtime.transcript.txt"
 jq -e '.status == "PASS"' "$ARTIFACT/evidence-oci/receipt.json" >/dev/null
 (cd "$ARTIFACT/evidence-oci" && sha256sum --check SHA256SUMS)
 
-jq -S '{status,source,runtime,gates,limitations}' "$ARTIFACT/evidence-docker/receipt.json" > "$ARTIFACT/docker-semantic.json"
-jq -S '{status,source,runtime,gates,limitations}' "$ARTIFACT/evidence-oci/receipt.json" > "$ARTIFACT/oci-semantic.json"
+jq -S '{status,source,input,runtime,gates,capture,limitations}' "$ARTIFACT/evidence-docker/receipt.json" > "$ARTIFACT/docker-semantic.json"
+jq -S '{status,source,input,runtime,gates,capture,limitations}' "$ARTIFACT/evidence-oci/receipt.json" > "$ARTIFACT/oci-semantic.json"
 cmp "$ARTIFACT/docker-semantic.json" "$ARTIFACT/oci-semantic.json"
 printf 'PASS\n' > "$ARTIFACT/docker-oci-semantic-parity.txt"
 
@@ -52,7 +52,7 @@ jq -n \
     schema:"edits.vim-nix-herdr-oci-ci-proof/1",
     status:"PASS",
     workflowCommit:$workflowCommit,
-    exactBase:"d83bf4c4860e02f37d6b41cc54fe8c881af4c779",
+    sourceCommit:$workflowCommit,
     productStorePath:$product,
     dockerArchiveSha256:("sha256:"+$dockerSha),
     ociArchiveSha256:("sha256:"+$ociSha),

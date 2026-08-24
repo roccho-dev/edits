@@ -47,67 +47,81 @@ cmp "$ARTIFACT/host-full-semantic.json" "$ARTIFACT/docker-full-semantic.json"
 cmp "$ARTIFACT/host-full-semantic.json" "$ARTIFACT/oci-full-semantic.json"
 printf 'PASS\n' > "$ARTIFACT/host-docker-oci-semantic-parity.txt"
 
-printf '\n== Clean offline replay in a separate empty Nix store ==\n'
-# RUNNER_TEMP is a workspace-backed mount where nested Nix sandbox bind mounts
-# are denied, while /tmp is rejected as a world-writable ancestor. The runner
-# home is on the root filesystem, has trusted ownership, and remains ephemeral.
+printf '\n== Clean offline replay in an independent chrooted Nix store ==\n'
+# Hosted runners deny the bind mounts required by a nested Nix sandbox. Instead,
+# place the independent store under a trusted parent, import the exact build
+# prerequisites plus the Nix CLI runtime, and make that store the entire chroot.
+# The outer chroot hides the host store; the outer network namespace removes all
+# network routes. Nix's inner sandbox is therefore intentionally unnecessary.
 CLEAN_ROOT="$HOME/.vim-nix-clean-store-${GITHUB_RUN_ID:-manual}"
 CLEAN_STORE="local?root=$CLEAN_ROOT"
 PREREQ_CACHE="$ARTIFACT/nix-build-prerequisite-cache"
+NIX_BIN="$(readlink -f "$(command -v nix)")"
+NIX_PACKAGE="$(dirname "$(dirname "$NIX_BIN")")"
 rm -rf "$CLEAN_ROOT" "$PREREQ_CACHE"
 mkdir -p "$CLEAN_ROOT" "$PREREQ_CACHE"
+printf '%s\n' "$NIX_PACKAGE" > "$ARTIFACT/product/nix-tool-store-path.txt"
 
 pushd proofs/vim-nix >/dev/null
 drv="$(nix path-info --derivation .#default)"
 popd >/dev/null
 printf '%s\n' "$drv" > "$ARTIFACT/product/default-derivation.txt"
 
-# Include the top-level derivation plus all realised build inputs and their
-# derivations, while explicitly excluding only the final product output. The
-# independent store therefore knows what to build but cannot receive the result.
+# Include the top-level derivation, every realised build prerequisite, and only
+# the Nix runtime needed to operate the independent store. Exclude the final
+# product output itself.
 {
-  printf '%s\n' "$drv"
+  printf '%s\n' "$drv" "$NIX_PACKAGE"
   nix-store --query --requisites --include-outputs "$drv"
+  nix-store --query --requisites "$NIX_PACKAGE"
 } | sort -u | grep -vxF "$PROOF" > "$ARTIFACT/product/build-prerequisites.txt"
 grep -Fxq "$drv" "$ARTIFACT/product/build-prerequisites.txt"
+grep -Fxq "$NIX_PACKAGE" "$ARTIFACT/product/build-prerequisites.txt"
 ! grep -Fxq "$PROOF" "$ARTIFACT/product/build-prerequisites.txt"
 mapfile -t prereqs < "$ARTIFACT/product/build-prerequisites.txt"
 test "${#prereqs[@]}" -gt 0
 
-# Materialise all prerequisite paths in one Nix copy transaction. This preserves
-# the exact prerequisite set while avoiding one Nix process per store path.
 nix copy --to "file://$PREREQ_CACHE" "${prereqs[@]}"
 
-# Start from an actually empty independent local store and import only the cache.
 if nix path-info --store "$CLEAN_STORE" "$PROOF" >/dev/null 2>&1; then
   echo 'clean store unexpectedly contains the final product before import' >&2
   exit 1
 fi
-# This cache is generated locally from the already verified source store. It has
-# no private-key signatures, so disable signature trust only for this one import;
-# nix copy still verifies every path against its narHash before registration.
 STRICT_CURRENT_PHASE="clean-store-import"
 nix copy --no-check-sigs --from "file://$PREREQ_CACHE" --to "$CLEAN_STORE" "${prereqs[@]}"
 nix path-info --store "$CLEAN_STORE" "$drv" > "$ARTIFACT/product/clean-top-level-derivation.txt"
 test "$(cat "$ARTIFACT/product/clean-top-level-derivation.txt")" = "$drv"
+nix path-info --store "$CLEAN_STORE" "$NIX_PACKAGE" > "$ARTIFACT/product/clean-nix-tool-path.txt"
+test "$(cat "$ARTIFACT/product/clean-nix-tool-path.txt")" = "$NIX_PACKAGE"
 if nix path-info --store "$CLEAN_STORE" "$PROOF" >/dev/null 2>&1; then
   echo 'prerequisite import unexpectedly materialised the final product' >&2
   exit 1
 fi
 printf 'ABSENT\n' > "$ARTIFACT/product/clean-final-before-build.txt"
 
-# Prove the build has no network namespace and no substituter route. Keep Nix's
-# own filesystem sandbox explicitly enabled; moving the store must not weaken it.
+# Supply only the operating-system nodes needed by the Nix CLI and builders.
+sudo install -d -m 0755 "$CLEAN_ROOT/etc" "$CLEAN_ROOT/dev" "$CLEAN_ROOT/root"
+sudo install -d -m 1777 "$CLEAN_ROOT/tmp"
+printf 'root:x:0:0:root:/root:/bin/sh\n' | sudo tee "$CLEAN_ROOT/etc/passwd" >/dev/null
+printf 'root:x:0:\n' | sudo tee "$CLEAN_ROOT/etc/group" >/dev/null
+sudo rm -f "$CLEAN_ROOT/dev/null" "$CLEAN_ROOT/dev/zero" "$CLEAN_ROOT/dev/random" "$CLEAN_ROOT/dev/urandom"
+sudo mknod -m 0666 "$CLEAN_ROOT/dev/null" c 1 3
+sudo mknod -m 0666 "$CLEAN_ROOT/dev/zero" c 1 5
+sudo mknod -m 0444 "$CLEAN_ROOT/dev/random" c 1 8
+sudo mknod -m 0444 "$CLEAN_ROOT/dev/urandom" c 1 9
+
+# The Nix executable below is the copy inside CLEAN_ROOT because chroot changes
+# the meaning of /nix. No host /nix/store path is addressable from the process.
 STRICT_CURRENT_PHASE="clean-offline-build"
-NIX_BIN="$(command -v nix)"
 sudo unshare --net -- ip -brief addr > "$ARTIFACT/product/clean-network-namespace.txt"
 sudo --preserve-env=PATH unshare --net -- \
-  "$NIX_BIN" build \
+  chroot "$CLEAN_ROOT" \
+  "$NIX_PACKAGE/bin/nix" build \
     --extra-experimental-features 'nix-command flakes' \
-    --store "$CLEAN_STORE" \
+    --store local \
     --offline \
     --option substituters '' \
-    --option sandbox true \
+    --option sandbox false \
     --no-link \
     "$drv^*" \
     > "$ARTIFACT/product/clean-offline-build.stdout" \
@@ -133,16 +147,21 @@ jq -n \
   --arg product "$PROOF" \
   --arg drv "$drv" \
   --arg nar "$normal_nar" \
+  --arg nixTool "$NIX_PACKAGE" \
   --arg prereqCache "nix-build-prerequisite-cache" '{
-    schema:"edits.vim-nix-clean-offline-replay/1",
+    schema:"edits.vim-nix-clean-offline-replay/2",
     status:"PASS",
     productStorePath:$product,
     derivation:$drv,
+    nixToolStorePath:$nixTool,
     topLevelDerivationImported:true,
     finalOutputAbsentBeforeBuild:true,
     separateStore:true,
+    hostStoreVisible:false,
+    outerFilesystemIsolation:"chroot",
     networkNamespace:"isolated",
-    nixSandbox:true,
+    nixSandbox:false,
+    nixSandboxReason:"hosted-runner-denies-nested-bind-mounts; outer chroot hides host store",
     substituters:"empty",
     offline:true,
     noWriteLockFile:true,

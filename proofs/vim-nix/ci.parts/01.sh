@@ -11,8 +11,11 @@ docker image inspect "$OCI_IMAGE_REF" > "$ARTIFACT/oci-loaded-image-inspect.json
 docker run --rm --name vim-nix-proof-oci \
   --volume "$ARTIFACT/evidence-oci:/work/evidence" \
   "$OCI_IMAGE_REF" all | tee "$ARTIFACT/oci-runtime.transcript.txt"
+sudo chown -R "$(id -u):$(id -g)" "$ARTIFACT/evidence-oci"
 grep -Fxq 'VIM_NIX_RUNTIME_E2E_PASS' "$ARTIFACT/oci-runtime.transcript.txt"
-jq -e '.status == "PASS"' "$ARTIFACT/evidence-oci/receipt.json" >/dev/null
+grep -Fxq 'VIM_NIX_FULL_E2E_PASS' "$ARTIFACT/oci-runtime.transcript.txt"
+jq -e '.status == "PASS" and .gates.testCount == 8' "$ARTIFACT/evidence-oci/editor-receipt.json" >/dev/null
+jq -e '.status == "PASS" and .gates.residualProcessCount == 0' "$ARTIFACT/evidence-oci/receipt.json" >/dev/null
 (cd "$ARTIFACT/evidence-oci" && sha256sum --check SHA256SUMS)
 
 jq -S '{status,source,input,runtime,gates,capture,limitations}' "$ARTIFACT/evidence-docker/receipt.json" > "$ARTIFACT/docker-semantic.json"
@@ -41,7 +44,7 @@ git diff --exit-code
 git status --porcelain=v1 > "$ARTIFACT/source/git-status.txt"
 test ! -s "$ARTIFACT/source/git-status.txt"
 
-printf '\n== Create closure receipt and SHA manifest ==\n'
+printf '\n== Create pre-final Linux distribution receipt and SHA manifest ==\n'
 jq -n \
   --arg workflowCommit "$GITHUB_SHA" \
   --arg product "$PROOF" \

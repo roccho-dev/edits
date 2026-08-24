@@ -134,9 +134,11 @@ jq -n \
     }
   }' > "$OUT/receipt.json"
 
+manifest_tmp="$RUNTIME/runtime-SHA256SUMS.tmp"
 (
   cd "$OUT"
-  find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+  find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$manifest_tmp"
+  mv "$manifest_tmp" SHA256SUMS
   sha256sum --check SHA256SUMS
 )
 

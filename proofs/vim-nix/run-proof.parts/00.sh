@@ -53,12 +53,10 @@ WORKSPACE_ID=""
 ROOT_PANE_ID=""
 TASK_PANE_ID=""
 PROVEN_WORKSPACE_ID=""
-cleanup_started=0
 
 cleanup() {
   local status=$?
   set +e
-  cleanup_started=1
   if test -f "$PROFILE"; then
     "$HQ_WORKER" stop --profile local --profile-root "$PROFILE_ROOT" --timeout 10s \
       > "$OUT/worker-stop.cleanup.jsonl" 2> "$OUT/worker-stop.cleanup.stderr" || true
@@ -228,9 +226,11 @@ if test "$RUN_EDITOR" -eq 1; then
 fi
 
 if test "$RUN_RUNTIME" -eq 0; then
+  manifest_tmp="$RUNTIME/editor-SHA256SUMS.tmp"
   (
     cd "$OUT"
-    find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+    find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$manifest_tmp"
+    mv "$manifest_tmp" SHA256SUMS
     sha256sum --check SHA256SUMS
   )
   trap - EXIT INT TERM

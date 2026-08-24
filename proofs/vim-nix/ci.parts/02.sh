@@ -77,7 +77,10 @@ if nix path-info --store "$CLEAN_STORE" "$PROOF" >/dev/null 2>&1; then
   echo 'clean store unexpectedly contains the final product before import' >&2
   exit 1
 fi
-nix copy --from "file://$PREREQ_CACHE" --to "$CLEAN_STORE" "${prereqs[@]}"
+# This cache is generated locally from the already verified source store. It has
+# no private-key signatures, so disable signature trust only for this one import;
+# nix copy still verifies every path against its narHash before registration.
+nix copy --no-check-sigs --from "file://$PREREQ_CACHE" --to "$CLEAN_STORE" "${prereqs[@]}"
 if nix path-info --store "$CLEAN_STORE" "$PROOF" >/dev/null 2>&1; then
   echo 'prerequisite import unexpectedly materialised the final product' >&2
   exit 1
@@ -132,6 +135,8 @@ jq -n \
     sameStorePath:true,
     sameRuntimeClosure:true,
     sameNarHash:true,
+    prerequisiteImportSignaturePolicy:"local-cache-no-check-sigs",
+    prerequisiteIntegrity:"narHash-verified-by-nix-copy",
     narHash:$nar,
     prerequisiteCache:$prereqCache
   }' > "$ARTIFACT/clean-offline-replay.receipt.json"

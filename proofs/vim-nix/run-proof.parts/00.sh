@@ -41,8 +41,10 @@ export LANG=C.UTF-8
 export LC_ALL=C.UTF-8
 export PATH="/bin:${PATH:-}"
 
-rm -rf "$OUT" "$RUNTIME"
-mkdir -p "$OUT" "$HOME" "$XDG_CONFIG_HOME" "$XDG_RUNTIME_DIR" "$XDG_STATE_HOME" "$XDG_CACHE_HOME" \
+rm -rf "$RUNTIME"
+mkdir -p "$OUT"
+find "$OUT" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_RUNTIME_DIR" "$XDG_STATE_HOME" "$XDG_CACHE_HOME" \
   "$PROFILE_ROOT" "$WORKSPACE_ROOT/.hq/events"
 chmod 700 "$XDG_RUNTIME_DIR"
 : > "$ACCEPTED"

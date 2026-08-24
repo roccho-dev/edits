@@ -48,10 +48,10 @@ cmp "$ARTIFACT/host-full-semantic.json" "$ARTIFACT/oci-full-semantic.json"
 printf 'PASS\n' > "$ARTIFACT/host-docker-oci-semantic-parity.txt"
 
 printf '\n== Clean offline replay in a separate empty Nix store ==\n'
-# GitHub's RUNNER_TEMP is a workspace-backed mount where nested Nix sandbox bind
-# mounts are denied. Use the runner root filesystem's /tmp while keeping the
-# store independent, ephemeral, sandboxed, and network-isolated.
-CLEAN_ROOT="/tmp/vim-nix-clean-store-root-${GITHUB_RUN_ID:-manual}"
+# RUNNER_TEMP is a workspace-backed mount where nested Nix sandbox bind mounts
+# are denied, while /tmp is rejected as a world-writable ancestor. The runner
+# home is on the root filesystem, has trusted ownership, and remains ephemeral.
+CLEAN_ROOT="$HOME/.vim-nix-clean-store-${GITHUB_RUN_ID:-manual}"
 CLEAN_STORE="local?root=$CLEAN_ROOT"
 PREREQ_CACHE="$ARTIFACT/nix-build-prerequisite-cache"
 rm -rf "$CLEAN_ROOT" "$PREREQ_CACHE"
@@ -86,6 +86,7 @@ fi
 # This cache is generated locally from the already verified source store. It has
 # no private-key signatures, so disable signature trust only for this one import;
 # nix copy still verifies every path against its narHash before registration.
+STRICT_CURRENT_PHASE="clean-store-import"
 nix copy --no-check-sigs --from "file://$PREREQ_CACHE" --to "$CLEAN_STORE" "${prereqs[@]}"
 nix path-info --store "$CLEAN_STORE" "$drv" > "$ARTIFACT/product/clean-top-level-derivation.txt"
 test "$(cat "$ARTIFACT/product/clean-top-level-derivation.txt")" = "$drv"
@@ -97,6 +98,7 @@ printf 'ABSENT\n' > "$ARTIFACT/product/clean-final-before-build.txt"
 
 # Prove the build has no network namespace and no substituter route. Keep Nix's
 # own filesystem sandbox explicitly enabled; moving the store must not weaken it.
+STRICT_CURRENT_PHASE="clean-offline-build"
 NIX_BIN="$(command -v nix)"
 sudo unshare --net -- ip -brief addr > "$ARTIFACT/product/clean-network-namespace.txt"
 sudo --preserve-env=PATH unshare --net -- \

@@ -22,8 +22,8 @@
   outputs = inputs@{ self, nixpkgs, go-nixpkgs, vim-src, hq, yegappan-lsp, ... }:
     let
       system = "x86_64-linux";
-      edits-src = self.outPath;
-      editsRevision = if self ? rev then self.rev else if self ? dirtyRev then self.dirtyRev else "dirty";
+      edits-src = inputs.editsSource.outPath;
+      editsRevision = if inputs.editsSource ? rev then inputs.editsSource.rev else "unknown";
       editsTag = if builtins.stringLength editsRevision >= 12 then builtins.substring 0 12 editsRevision else "dirty";
       hqRevision = if hq ? rev then hq.rev else "unknown";
       source-manifest = builtins.toFile "vim-nix-source.json" (builtins.toJSON {

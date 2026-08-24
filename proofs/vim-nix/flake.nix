@@ -2,6 +2,10 @@
   description = "Locked Herdr, Vim, and HQ proof composition";
 
   inputs = {
+    editsSource = {
+      url = "github:roccho-dev/edits/bfdac8df95ec435ed8aad7042fa1fc9bc1082f6a";
+      flake = false;
+    };
     nixpkgs.url = "github:NixOS/nixpkgs/0ae2bc1419c3f345984c2629e72e7a631820fa4d";
     go-nixpkgs.url = "github:NixOS/nixpkgs/cbb826608f7d081948eeb4ea0211b0cbd867b9d1";
     vim-src = {

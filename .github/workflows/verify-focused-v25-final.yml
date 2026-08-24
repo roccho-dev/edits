@@ -28,6 +28,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      - name: Persist strict run start
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(jq -cn --arg strict "$STRICT" --arg tree "$STRICT_TREE" --arg source "$PRODUCT_SOURCE" --arg run "$GITHUB_RUN_ID" --arg trigger "$GITHUB_SHA" '{schema:"edits.v25-strict-distribution-status/1",status:"RUNNING",proofCommit:$strict,proofTree:$tree,productSource:$source,runId:($run|tonumber),triggerCommit:$trigger,physicalWindowsWslc:"OPEN"}')
+          encoded=$(printf '%s\n' "$body" | base64 -w0)
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH?ref=$STATUS_BRANCH" --jq .sha 2>/dev/null || true)
+          args=(--method PUT "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH" -f message='proof: record strict v25 distribution run start' -f content="$encoded" -f branch="$STATUS_BRANCH")
+          if test -n "$existing"; then args+=(-f sha="$existing"); fi
+          gh api "${args[@]}" >/dev/null
+
       - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
         with:
           extra_nix_config: |
@@ -63,18 +74,11 @@ jobs:
         shell: bash
         env:
           OUTCOME: ${{ steps.proof.outcome }}
-          DISTRIBUTION: ${{ steps.proof.outputs.distribution }}
         run: |
           set -euo pipefail
           status=FAIL
           test "$OUTCOME" = success && status=DISTRIBUTION_CLOSURE_PASS
-          body=$(jq -cn \
-            --arg status "$status" \
-            --arg strict "$STRICT" \
-            --arg tree "$STRICT_TREE" \
-            --arg source "$PRODUCT_SOURCE" \
-            --arg run "$GITHUB_RUN_ID" \
-            '{schema:"edits.v25-strict-distribution-status/1",status:$status,proofCommit:$strict,proofTree:$tree,productSource:$source,runId:($run|tonumber),physicalWindowsWslc:"OPEN"}')
+          body=$(jq -cn --arg status "$status" --arg strict "$STRICT" --arg tree "$STRICT_TREE" --arg source "$PRODUCT_SOURCE" --arg run "$GITHUB_RUN_ID" --arg trigger "$GITHUB_SHA" '{schema:"edits.v25-strict-distribution-status/1",status:$status,proofCommit:$strict,proofTree:$tree,productSource:$source,runId:($run|tonumber),triggerCommit:$trigger,physicalWindowsWslc:"OPEN"}')
           encoded=$(printf '%s\n' "$body" | base64 -w0)
           existing=$(gh api "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH?ref=$STATUS_BRANCH" --jq .sha 2>/dev/null || true)
           args=(--method PUT "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH" -f message='proof: record strict v25 distribution verification' -f content="$encoded" -f branch="$STATUS_BRANCH")

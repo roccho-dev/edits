@@ -1,20 +1,31 @@
 "$HERDR" --session "$SESSION" pane process-info --pane "$TASK_PANE_ID" > "$OUT/task-pane-process.json"
 
-# Exact finite world, executable binding, and managed worker profile.
-cat > "$WORLD" <<'EOF_WORLD'
-{"kind":"hq.world.v1","world_id":"vim-nix-proof"}
-{"kind":"hq.local-tool.v1","tool_id":"proof-sh","tool_version":"1","binding_ref":"local-tool.proof-sh","binding_contract_version":"1","actions":[{"action_id":"echo","argv":[{"literal":"echo"},{"literal":"hq-vim-e2e-ok"}],"stdin":{"mode":"none","max_bytes":0},"limits":{"timeout_ms":5000,"stdout_bytes":4096,"stderr_bytes":4096},"output":{"format":"text"},"lifecycle":"one-shot","risk":"low","approval":"explicit"}]}
-{"kind":"hq.command.v1","command_id":"proof.echo","command_version":"1","name":"proof.echo","description":"Emit a harmless deterministic proof token","instruction":{"version":"instruction.v1","op":"run","target":"local-tool","payload":{"tool_id":"proof-sh","tool_version":"1","action_id":"echo","input":{}}}}
-EOF_WORLD
+# Runtime lifecycle E2E input is an exact accepted instruction fixture. Editor
+# choice and submit are proved by their own focused E2Es and are not re-run here.
+cp "$RUNTIME_WORLD_FIXTURE" "$WORLD"
 
-jq -n --arg digest "sha256:$proof_sha" --arg executable "$PROOF/bin/proof-sh" '{
+test "$(grep -cve '^[[:space:]]*$' "$RUNTIME_ACCEPTED_FIXTURE")" -eq 1 \
+  || fail "runtime accepted fixture must contain exactly one row"
+jq -e '.kind == "accepted.instruction" and .instruction.version == "instruction.v1"' \
+  "$RUNTIME_ACCEPTED_FIXTURE" >/dev/null || fail "runtime accepted fixture is invalid"
+
+provider_log="$RUNTIME/provider-invocations.jsonl"
+configuration_sha="$(printf 'envctl.verifiedExecutableBinding.environment.v1\0HQ_PROOF_PROVIDER_LOG\0%s\0' "$provider_log" | sha256sum | awk '{print $1}')"
+configuration_digest="sha256:$configuration_sha"
+jq -n \
+  --arg digest "sha256:$proof_sha" \
+  --arg executable "$PROOF/bin/proof-sh" \
+  --arg provider_log "$provider_log" \
+  --arg configuration_digest "$configuration_digest" '{
   schema:"envctl.verified-executable-bindings.v1",
   entries:[{
     bindingRef:"local-tool.proof-sh",
     resourceId:"proof-sh",
-    contractVersion:"1",
+    contractVersion:"2",
     executable:$executable,
     materialDigest:$digest,
+    environment:[{name:"HQ_PROOF_PROVIDER_LOG",value:$provider_log}],
+    configurationDigest:$configuration_digest,
     deploymentId:("proof-sh@1:" + $digest),
     declarationEventId:"vim-nix-proof.declare.proof-sh.v1",
     selectionEventId:"vim-nix-proof.select.proof-sh.v1"
@@ -62,36 +73,9 @@ test "$worker_ready" -eq 1 || fail "managed worker never became ready"
 pane_read "$TASK_PANE_ID" "$OUT/worker-pane-read.txt"
 "$HERDR" --session "$SESSION" pane process-info --pane "$TASK_PANE_ID" > "$OUT/worker-pane-process.json"
 
-cat > "$RUNTIME/run-submit.sh" <<EOF_SUBMIT
-#!/bin/sh
-set +e
-HOME="$HOME" \
-XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
-XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
-XDG_STATE_HOME="$XDG_STATE_HOME" \
-XDG_CACHE_HOME="$XDG_CACHE_HOME" \
-HQ_BUFFER_TEXT='@proof.echo' \
-LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color \
-"$PROOF/bin/hq-vim-smoke" \
-  -headless \
-  -hq-bin "$PROOF/bin/hq" \
-  -vim "$PROOF/bin/vim" \
-  -vim9-lsp "$PROOF/share/yegappan-lsp" \
-  -plugin-root "$PROOF/share/hq-vim" \
-  -profile local \
-  -buffer "$RUNTIME/proof.hqjson" \
-  > "$OUT/submit.log" 2>&1
-code=\$?
-cat "$OUT/submit.log"
-printf '__VIM_NIX_SUBMIT_EXIT_%s__\\n' "\$code"
-exit 0
-EOF_SUBMIT
-chmod 700 "$RUNTIME/run-submit.sh"
-
-"$HERDR" --session "$SESSION" pane run "$ROOT_PANE_ID" "$RUNTIME/run-submit.sh" \
-  > "$OUT/submit-pane-run.json" 2> "$OUT/submit-pane-run.stderr"
-wait_for_pane_marker "$ROOT_PANE_ID" '__VIM_NIX_SUBMIT_EXIT_0__' "$OUT/submit-pane-recent.txt" 600 \
-  || fail "real Vim submit failed or timed out"
+# Append only the exact fixture after readiness. This is the sole input effect of
+# the runtime E2E; no Vim/editor E2E is nested inside it.
+cat "$RUNTIME_ACCEPTED_FIXTURE" >> "$ACCEPTED"
 
 result_ready=0
 for _ in $(seq 1 400); do
@@ -115,3 +99,8 @@ test "$(jq '[.[] | select(.version == "result.v1") | .run_id] | unique | length'
   || fail "result chain has multiple run IDs"
 test "$(jq '[.[] | select(.version == "result.v1") | .instruction_id] | unique | length' "$OUT/result-events.json")" -eq 1 \
   || fail "result chain has multiple instruction IDs"
+
+test -s "$provider_log" || fail "proof provider invocation log is missing"
+jq -s -e 'length == 1 and .[0].version == "worker.provider-invocation-proof.v1" and .[0].fixture_only == true and .[0].provider == "sh" and .[0].argv == ["echo","hq-vim-e2e-ok"] and .[0].stdin_bytes == 0' "$provider_log" >/dev/null \
+  || fail "proof provider invocation evidence is invalid"
+cp "$provider_log" "$OUT/provider-invocations.jsonl"

@@ -101,6 +101,7 @@ printf 'ABSENT\n' > "$ARTIFACT/product/clean-final-before-build.txt"
 
 # Supply only the operating-system nodes needed by the Nix CLI and builders.
 sudo install -d -m 0755 "$CLEAN_ROOT/etc" "$CLEAN_ROOT/dev" "$CLEAN_ROOT/root"
+sudo install -d -m 0555 "$CLEAN_ROOT/proc"
 sudo install -d -m 1777 "$CLEAN_ROOT/tmp"
 printf 'root:x:0:0:root:/root:/bin/sh\n' | sudo tee "$CLEAN_ROOT/etc/passwd" >/dev/null
 printf 'root:x:0:\n' | sudo tee "$CLEAN_ROOT/etc/group" >/dev/null
@@ -110,10 +111,12 @@ sudo mknod -m 0666 "$CLEAN_ROOT/dev/zero" c 1 5
 sudo mknod -m 0444 "$CLEAN_ROOT/dev/random" c 1 8
 sudo mknod -m 0444 "$CLEAN_ROOT/dev/urandom" c 1 9
 
-# The Nix executable below is the copy inside CLEAN_ROOT because chroot changes
-# the meaning of /nix. No host /nix/store path is addressable from the process.
+# /proc is mounted only around the chroot command because Nix resolves its own
+# executable through /proc/self/exe. The build still runs with no network route.
 STRICT_CURRENT_PHASE="clean-offline-build"
+sudo mount -t proc -o nosuid,nodev,noexec proc "$CLEAN_ROOT/proc"
 sudo unshare --net -- ip -brief addr > "$ARTIFACT/product/clean-network-namespace.txt"
+build_rc=0
 sudo --preserve-env=PATH unshare --net -- \
   chroot "$CLEAN_ROOT" \
   "$NIX_PACKAGE/bin/nix" build \
@@ -125,7 +128,9 @@ sudo --preserve-env=PATH unshare --net -- \
     --no-link \
     "$drv^*" \
     > "$ARTIFACT/product/clean-offline-build.stdout" \
-    2> "$ARTIFACT/product/clean-offline-build.stderr"
+    2> "$ARTIFACT/product/clean-offline-build.stderr" || build_rc=$?
+sudo umount "$CLEAN_ROOT/proc"
+test "$build_rc" -eq 0
 
 nix path-info --store "$CLEAN_STORE" "$PROOF" > "$ARTIFACT/product/clean-product-path.txt"
 test "$(cat "$ARTIFACT/product/clean-product-path.txt")" = "$PROOF"
@@ -159,6 +164,7 @@ jq -n \
     separateStore:true,
     hostStoreVisible:false,
     outerFilesystemIsolation:"chroot",
+    procFilesystem:"mounted-only-during-build",
     networkNamespace:"isolated",
     nixSandbox:false,
     nixSandboxReason:"hosted-runner-denies-nested-bind-mounts; outer chroot hides host store",

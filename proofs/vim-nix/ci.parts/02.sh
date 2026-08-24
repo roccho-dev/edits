@@ -48,7 +48,10 @@ cmp "$ARTIFACT/host-full-semantic.json" "$ARTIFACT/oci-full-semantic.json"
 printf 'PASS\n' > "$ARTIFACT/host-docker-oci-semantic-parity.txt"
 
 printf '\n== Clean offline replay in a separate empty Nix store ==\n'
-CLEAN_ROOT="$RUNNER_TEMP/vim-nix-clean-store-root"
+# GitHub's RUNNER_TEMP is a workspace-backed mount where nested Nix sandbox bind
+# mounts are denied. Use the runner root filesystem's /tmp while keeping the
+# store independent, ephemeral, sandboxed, and network-isolated.
+CLEAN_ROOT="/tmp/vim-nix-clean-store-root-${GITHUB_RUN_ID:-manual}"
 CLEAN_STORE="local?root=$CLEAN_ROOT"
 PREREQ_CACHE="$ARTIFACT/nix-build-prerequisite-cache"
 rm -rf "$CLEAN_ROOT" "$PREREQ_CACHE"
@@ -92,7 +95,8 @@ if nix path-info --store "$CLEAN_STORE" "$PROOF" >/dev/null 2>&1; then
 fi
 printf 'ABSENT\n' > "$ARTIFACT/product/clean-final-before-build.txt"
 
-# Prove the build has no network namespace and no substituter route.
+# Prove the build has no network namespace and no substituter route. Keep Nix's
+# own filesystem sandbox explicitly enabled; moving the store must not weaken it.
 NIX_BIN="$(command -v nix)"
 sudo unshare --net -- ip -brief addr > "$ARTIFACT/product/clean-network-namespace.txt"
 sudo --preserve-env=PATH unshare --net -- \
@@ -101,6 +105,7 @@ sudo --preserve-env=PATH unshare --net -- \
     --store "$CLEAN_STORE" \
     --offline \
     --option substituters '' \
+    --option sandbox true \
     --no-link \
     "$drv^*" \
     > "$ARTIFACT/product/clean-offline-build.stdout" \
@@ -135,6 +140,7 @@ jq -n \
     finalOutputAbsentBeforeBuild:true,
     separateStore:true,
     networkNamespace:"isolated",
+    nixSandbox:true,
     substituters:"empty",
     offline:true,
     noWriteLockFile:true,

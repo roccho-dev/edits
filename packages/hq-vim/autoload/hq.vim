@@ -14,6 +14,8 @@ def InstallCompletionUndoBoundary()
     autocmd! CompleteDone <buffer>
     autocmd CompleteChanged <buffer> CompletionUndoBreak()
     autocmd CompleteDone <buffer> CompletionUndoReset()
+    autocmd InsertCharPre <buffer> CompletionUndoDisarm()
+    autocmd InsertLeave <buffer> CompletionUndoDisarm()
   augroup END
 enddef
 
@@ -40,6 +42,9 @@ def CompletionUndoReset()
     timer_start(0, (_) => CompletionUndoResume())
     return
   endif
+enddef
+
+def CompletionUndoDisarm()
   b:hq_completion_undo_armed = false
 enddef
 

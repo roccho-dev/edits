@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      STRICT: 019c26840267bebeb8c82cf0b4b60e8e4122091a
-      STRICT_TREE: 17dbe05e3aef706f88165b4a38c029c375c85230
+      STRICT: d8eeee612ffe8dc9ed92c34d367f35116aa0b0e9
+      STRICT_TREE: aea112268a282025637ae886d8cab69676260c34
       PRODUCT_SOURCE: bfdac8df95ec435ed8aad7042fa1fc9bc1082f6a
       STATUS_BRANCH: status/focused-v25-final-verify-20260824-a
       STATUS_PATH: proofs/v25-strict-distribution.json
@@ -68,6 +68,14 @@ jobs:
             (.gates | to_entries | all(.value == "PASS"))
           ' "$ARTIFACT/ci-receipt.json" >/dev/null
           echo "distribution=DISTRIBUTION_CLOSURE_PASS" >> "$GITHUB_OUTPUT"
+
+      - name: Normalize artifact ownership
+        if: always()
+        shell: bash
+        run: |
+          if test -e "$ARTIFACT"; then
+            sudo chown -R "$(id -u):$(id -g)" "$ARTIFACT" || true
+          fi
 
       - name: Persist strict verification result
         if: always()

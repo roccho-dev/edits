@@ -1,0 +1,120 @@
+name: verify focused v25 final
+
+on:
+  push:
+    branches:
+      - automation/verify-focused-v25-final-20260824
+    paths:
+      - proofs/verify-focused-v25-final.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      BASE: 05f10d7105682f2346f8f741fa609af3faf33ee1
+      SOURCE: bfdac8df95ec435ed8aad7042fa1fc9bc1082f6a
+      FINAL: 0870fdfe761f834fe90be54df051a307086e453d
+      STATUS_BRANCH: status/focused-v25-final-verify-20260824-a
+      STATUS_PATH: proofs/v25-final-verify.json
+      EVIDENCE: /tmp/focused-v25-final-verify
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+          cache: false
+
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - id: proof
+        name: Re-prove exact v25 final without screenshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$EVIDENCE"
+          mkdir -p "$EVIDENCE"/{source,product,e2e,runtime}
+          git checkout --detach "$FINAL"
+          test "$(git rev-parse HEAD^)" = "$SOURCE"
+          test "$(git rev-parse HEAD^^)" = "$BASE"
+          test -z "$(git diff --name-only "$BASE" "$FINAL" | grep -F '.github/workflows/' || true)"
+          test -z "$(git diff --name-only "$BASE" "$FINAL" | grep -E '\.(png|jpe?g|webp)$' || true)"
+          test ! -e packages/hq-vim/internal/smoke/tty_test.go
+          test ! -e proofs/vim-nix/hq-vim-native-popup-proof.patch
+          test ! -e tools/vim-nix-local/feedkeys-race.vim
+
+          (cd packages/hq-vim && go test ./... -count=1) | tee "$EVIDENCE/source/go-test.log"
+          mapfile -t tests < <(grep -Rh '^func Test' packages/hq-vim --include='*_test.go' | sed -E 's/^func (Test[^ (]+).*/\1/' | sort)
+          expected=(TestAcceptedSubmitKeepsDraftOnUnsafeConsumption TestAgentDecisionSubmitE2E TestAgentDefaultChoiceE2E TestAgentPromptFieldChoiceE2E TestDirectCommandSubmitE2E TestDirectFallbackChoiceE2E TestEditorSurfaceAndBindingFailClosed TestUnicodeDirectFieldValueE2E)
+          test "${tests[*]}" = "${expected[*]}"
+          printf '%s\n' "${tests[@]}" > "$EVIDENCE/source/focused-tests.txt"
+
+          pushd proofs/vim-nix >/dev/null
+          before=$(sha256sum flake.lock | cut -d' ' -f1)
+          product=$(nix build --no-link --print-out-paths .#default)
+          offline=$(nix build --offline --no-write-lock-file --no-link --print-out-paths .#default)
+          after=$(sha256sum flake.lock | cut -d' ' -f1)
+          popd >/dev/null
+          test "$product" = "$offline"
+          test "$before" = "$after"
+          jq -e --arg source "$SOURCE" '.editsRevision == $source' "$product/share/proof/source.json" >/dev/null
+          printf '%s\n' "$product" | tee "$EVIDENCE/product/store-path.txt"
+          cp "$product/share/proof/source.json" "$EVIDENCE/product/source.json"
+
+          export HQ_BIN="$product/bin/hq" VIM_EXE="$product/bin/vim" VIM9_LSP_PATH="$product/share/yegappan-lsp" VIMRUNTIME="$product/share/vim/vim92" LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color
+          for t in TestAgentDefaultChoiceE2E TestAgentPromptFieldChoiceE2E TestDirectFallbackChoiceE2E TestUnicodeDirectFieldValueE2E; do
+            cmd=$(printf 'cd %q && stty cols 180 rows 55 && HQ_CHOICE_E2E=1 HQ_BIN=%q VIM_EXE=%q VIM9_LSP_PATH=%q VIMRUNTIME=%q LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color %q -test.v -test.count=1 -test.run %q' "$product/share/hq-vim" "$HQ_BIN" "$VIM_EXE" "$VIM9_LSP_PATH" "$VIMRUNTIME" "$product/bin/hq-vim.test" "^${t}$")
+            timeout 90s script -qefc "$cmd" "$EVIDENCE/e2e/${t}.typescript" | tee "$EVIDENCE/e2e/${t}.log"
+            grep -F -- "--- PASS: $t" "$EVIDENCE/e2e/${t}.log" >/dev/null
+          done
+          for t in TestEditorSurfaceAndBindingFailClosed TestAgentDecisionSubmitE2E TestDirectCommandSubmitE2E TestAcceptedSubmitKeepsDraftOnUnsafeConsumption; do
+            (cd "$product/share/hq-vim" && "$product/bin/hq-vim.test" -test.v -test.count=1 -test.run "^${t}$") | tee "$EVIDENCE/e2e/${t}.log"
+            grep -F -- "--- PASS: $t" "$EVIDENCE/e2e/${t}.log" >/dev/null
+          done
+
+          cat proofs/vim-nix/run-proof.parts/*.sh > "$RUNNER_TEMP/runtime-v25.sh"
+          chmod 700 "$RUNNER_TEMP/runtime-v25.sh"
+          PROOF_ROOT="$product" PROOF_OUTPUT_DIR="$EVIDENCE/runtime" PROOF_RUNTIME_DIR="$RUNNER_TEMP/runtime-v25" PROOF_RUN_SUFFIX=v25verify "$RUNNER_TEMP/runtime-v25.sh" | tee "$EVIDENCE/runtime/stdout.log"
+          jq -e '.status == "PASS" and .gates.resultKinds == ["accepted", "started", "stdout", "completed"] and .gates.residualProcessCount == 0' "$EVIDENCE/runtime/receipt.json" >/dev/null
+
+          jq -n --arg base "$BASE" --arg source "$SOURCE" --arg final "$FINAL" --arg product "$product" '{schema:"edits.focused-v25-final-verify/1",status:"PASS",base:$base,sourceCommit:$source,proofCommit:$final,productStorePath:$product,editorBehaviorE2Es:8,runtimeLifecycleE2Es:1,normalOfflineSameStorePath:true,resultKinds:["accepted","started","stdout","completed"],residualProcessCount:0,screenshotsPushed:false,e2eComposition:false}' > "$EVIDENCE/receipt.json"
+          (cd "$EVIDENCE" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS && sha256sum --check SHA256SUMS)
+          echo "product=$product" >> "$GITHUB_OUTPUT"
+
+      - name: Persist exact verification result
+        if: always()
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.proof.outcome }}
+          PRODUCT: ${{ steps.proof.outputs.product }}
+        run: |
+          set -euo pipefail
+          status=FAIL
+          test "$OUTCOME" = success && status=PASS
+          body=$(jq -cn --arg status "$status" --arg base "$BASE" --arg source "$SOURCE" --arg final "$FINAL" --arg product "${PRODUCT:-}" --arg run "$GITHUB_RUN_ID" '{schema:"edits.focused-v25-final-status/1",status:$status,base:$base,sourceCommit:$source,proofCommit:$final,productStorePath:$product,runId:($run|tonumber)}')
+          encoded=$(printf '%s\n' "$body" | base64 -w0)
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH?ref=$STATUS_BRANCH" --jq .sha 2>/dev/null || true)
+          args=(--method PUT "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH" -f message='proof: record v25 final verification' -f content="$encoded" -f branch="$STATUS_BRANCH")
+          if test -n "$existing"; then args+=(-f sha="$existing"); fi
+          gh api "${args[@]}" >/dev/null
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: focused-v25-final-verify-${{ github.run_id }}
+          path: /tmp/focused-v25-final-verify
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: warn

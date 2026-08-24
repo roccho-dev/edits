@@ -77,6 +77,7 @@ test "$(jq -r '.[0].Os + "/" + .[0].Architecture' "$ARTIFACT/docker-image-inspec
 docker run --rm --name vim-nix-proof-docker \
   --volume "$ARTIFACT/evidence-docker:/work/evidence" \
   "$IMAGE_REF" all | tee "$ARTIFACT/docker-runtime.transcript.txt"
+sudo chown -R "$(id -u):$(id -g)" "$ARTIFACT/evidence-docker"
 grep -Fxq 'VIM_NIX_RUNTIME_E2E_PASS' "$ARTIFACT/docker-runtime.transcript.txt"
 grep -Fxq 'VIM_NIX_FULL_E2E_PASS' "$ARTIFACT/docker-runtime.transcript.txt"
 jq -e '.status == "PASS" and .gates.testCount == 8' "$ARTIFACT/evidence-docker/editor-receipt.json" >/dev/null

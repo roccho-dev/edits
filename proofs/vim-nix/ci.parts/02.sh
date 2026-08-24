@@ -100,11 +100,29 @@ fi
 printf 'ABSENT\n' > "$ARTIFACT/product/clean-final-before-build.txt"
 
 # Supply only the operating-system nodes needed by the Nix CLI and builders.
-sudo install -d -m 0755 "$CLEAN_ROOT/etc" "$CLEAN_ROOT/dev" "$CLEAN_ROOT/root"
-sudo install -d -m 0555 "$CLEAN_ROOT/proc"
+# Keep ordinary Nix build-user separation inside the isolated root rather than
+# weakening the global build-users-group setting for this proof.
+sudo install -d -m 0755 "$CLEAN_ROOT/etc" "$CLEAN_ROOT/dev" "$CLEAN_ROOT/root" "$CLEAN_ROOT/var"
+sudo install -d -m 0555 "$CLEAN_ROOT/proc" "$CLEAN_ROOT/var/empty"
 sudo install -d -m 1777 "$CLEAN_ROOT/tmp"
-printf 'root:x:0:0:root:/root:/bin/sh\n' | sudo tee "$CLEAN_ROOT/etc/passwd" >/dev/null
-printf 'root:x:0:\n' | sudo tee "$CLEAN_ROOT/etc/group" >/dev/null
+{
+  printf 'root:x:0:0:root:/root:/bin/sh\n'
+  for n in $(seq 1 10); do
+    printf 'nixbld%d:x:%d:30000:Nix build user %d:/var/empty:/noshell\n' \
+      "$n" "$((30000 + n))" "$n"
+  done
+} | sudo tee "$CLEAN_ROOT/etc/passwd" >/dev/null
+{
+  printf 'root:x:0:\n'
+  printf 'nixbld:x:30000:'
+  separator=''
+  for n in $(seq 1 10); do
+    printf '%snixbld%d' "$separator" "$n"
+    separator=','
+  done
+  printf '\n'
+} | sudo tee "$CLEAN_ROOT/etc/group" >/dev/null
+printf 'passwd: files\ngroup: files\n' | sudo tee "$CLEAN_ROOT/etc/nsswitch.conf" >/dev/null
 sudo rm -f "$CLEAN_ROOT/dev/null" "$CLEAN_ROOT/dev/zero" "$CLEAN_ROOT/dev/random" "$CLEAN_ROOT/dev/urandom"
 sudo mknod -m 0666 "$CLEAN_ROOT/dev/null" c 1 3
 sudo mknod -m 0666 "$CLEAN_ROOT/dev/zero" c 1 5
@@ -168,6 +186,8 @@ jq -n \
     networkNamespace:"isolated",
     nixSandbox:false,
     nixSandboxReason:"hosted-runner-denies-nested-bind-mounts; outer chroot hides host store",
+    buildUsersGroup:"nixbld",
+    buildUserCount:10,
     substituters:"empty",
     offline:true,
     noWriteLockFile:true,

@@ -1,7 +1,7 @@
 {
   "schema": "edits.vimNixOciProofRequest/1",
-  "requestId": "vim-nix-canonical-runtime-20260824-017",
-  "commit": "dd417b2671c0bd1b9e56b6095cfa23d3019506c4",
-  "tree": "cb2b0509802d69527851c0eec94be5eae0df6965",
+  "requestId": "vim-nix-canonical-runtime-20260824-018",
+  "commit": "10f7968759674f14d456d2fe63108751c0dadb90",
+  "tree": "7448ba0232f51d67c13f96bf327caaed86a4f213",
   "ref": "refs/heads/proof/vim-nix-herdr-oci-current-20260821"
 }

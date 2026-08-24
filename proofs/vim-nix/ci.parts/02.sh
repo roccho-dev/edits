@@ -59,11 +59,14 @@ drv="$(nix path-info --derivation .#default)"
 popd >/dev/null
 printf '%s\n' "$drv" > "$ARTIFACT/product/default-derivation.txt"
 
-# Include realised build inputs and their derivations, but explicitly exclude the
-# final product output. This is the exact prerequisite closure used to rebuild
-# only the final derivation without network or substituters.
-nix-store --query --requisites --include-outputs "$drv" | sort -u \
-  | grep -vxF "$PROOF" > "$ARTIFACT/product/build-prerequisites.txt"
+# Include the top-level derivation plus all realised build inputs and their
+# derivations, while explicitly excluding only the final product output. The
+# independent store therefore knows what to build but cannot receive the result.
+{
+  printf '%s\n' "$drv"
+  nix-store --query --requisites --include-outputs "$drv"
+} | sort -u | grep -vxF "$PROOF" > "$ARTIFACT/product/build-prerequisites.txt"
+grep -Fxq "$drv" "$ARTIFACT/product/build-prerequisites.txt"
 ! grep -Fxq "$PROOF" "$ARTIFACT/product/build-prerequisites.txt"
 mapfile -t prereqs < "$ARTIFACT/product/build-prerequisites.txt"
 test "${#prereqs[@]}" -gt 0
@@ -81,6 +84,8 @@ fi
 # no private-key signatures, so disable signature trust only for this one import;
 # nix copy still verifies every path against its narHash before registration.
 nix copy --no-check-sigs --from "file://$PREREQ_CACHE" --to "$CLEAN_STORE" "${prereqs[@]}"
+nix path-info --store "$CLEAN_STORE" "$drv" > "$ARTIFACT/product/clean-top-level-derivation.txt"
+test "$(cat "$ARTIFACT/product/clean-top-level-derivation.txt")" = "$drv"
 if nix path-info --store "$CLEAN_STORE" "$PROOF" >/dev/null 2>&1; then
   echo 'prerequisite import unexpectedly materialised the final product' >&2
   exit 1
@@ -126,6 +131,7 @@ jq -n \
     status:"PASS",
     productStorePath:$product,
     derivation:$drv,
+    topLevelDerivationImported:true,
     finalOutputAbsentBeforeBuild:true,
     separateStore:true,
     networkNamespace:"isolated",

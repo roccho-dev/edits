@@ -1,0 +1,47 @@
+name: readback focused v25 final verifier
+
+on:
+  push:
+    branches:
+      - status/focused-v25-final-verify-20260824-a
+    paths:
+      - proofs/readback-focused-v25-final-verifier.trigger
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TARGET_WORKFLOW: verify-focused-v25-final.yml
+      TARGET_BRANCH: automation/verify-focused-v25-final-20260824
+      TARGET_HEAD: 9353920c078f62ac13766a1b1eee8d4980dfd3e4
+      STATUS_BRANCH: status/focused-v25-final-verify-20260824-a
+      STATUS_PATH: proofs/v25-verifier-run.json
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Poll exact verifier run
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 240); do
+            runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 50 --json databaseId,status,conclusion,headSha,event,url,createdAt)
+            row=$(printf '%s' "$runs" | jq -c --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.databaseId) | last // empty')
+            if test -n "$row"; then
+              status=$(printf '%s' "$row" | jq -r .status)
+              if test "$status" = completed; then
+                result=$(printf '%s' "$row" | jq -c --arg schema 'edits.focused-v25-verifier-run/1' '{schema:$schema,run:.}')
+                encoded=$(printf '%s\n' "$result" | base64 -w0)
+                existing=$(gh api "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH?ref=$STATUS_BRANCH" --jq .sha 2>/dev/null || true)
+                args=(--method PUT "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH" -f message='proof: record exact v25 verifier run' -f content="$encoded" -f branch="$STATUS_BRANCH")
+                if test -n "$existing"; then args+=(-f sha="$existing"); fi
+                gh api "${args[@]}" >/dev/null
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          exit 1

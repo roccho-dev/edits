@@ -56,11 +56,19 @@ done > "$ARTIFACT/product/binaries-and-sha256.txt"
 
 printf '\n== Build Docker-compatible archive and pinned Skopeo ==\n'
 image=$(nix build --no-link --print-out-paths .#image)
-skopeo=$(nix build --no-link --print-out-paths .#skopeo)
+mapfile -t skopeo_outputs < <(nix build --no-link --print-out-paths .#skopeo)
 runner=$(nix build --no-link --print-out-paths .#runner)
 IMAGE="$image"
-SKOPEO="$skopeo"
+SKOPEO=""
+for candidate in "${skopeo_outputs[@]}"; do
+  if test -x "$candidate/bin/skopeo"; then
+    SKOPEO="$candidate"
+    break
+  fi
+done
+test -n "$SKOPEO" || { echo 'pinned Skopeo binary output not found' >&2; exit 1; }
 RUNNER="$runner"
+printf '%s\n' "$SKOPEO" > "$ARTIFACT/product/skopeo-store-path.txt"
 if gzip -t "$image" >/dev/null 2>&1; then
   gzip -dc "$image" > "$ARTIFACT/vim-nix-herdr-hq.docker.tar"
 else

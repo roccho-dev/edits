@@ -1,0 +1,44 @@
+name: readback focused v19 exact
+
+on:
+  push:
+    branches:
+      - status/focused-v19-readback-20260824-b
+    paths:
+      - proofs/readback-focused-v19-exact.trigger
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TARGET_WORKFLOW: run-focused-owned-boundaries-v19.yml
+      TARGET_BRANCH: automation/focused-owned-boundaries-v18-20260824
+      TARGET_HEAD: 7ee30803e32ad99837dc3723e8c1014800d9a20a
+      STATUS_BRANCH: status/focused-v19-readback-20260824-b
+      STATUS_PATH: proofs/v19-exact-status.json
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Poll only the exact v19 trigger head
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 240); do
+            runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 50 --json databaseId,status,conclusion,headSha,event,url,createdAt)
+            row=$(printf '%s' "$runs" | jq -c --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.databaseId) | last // empty')
+            if test -n "$row"; then
+              status=$(printf '%s' "$row" | jq -r .status)
+              if test "$status" = completed; then
+                result=$(printf '%s' "$row" | jq -c --arg schema 'edits.focused-v19-exact-status/1' '{schema:$schema,run:.}')
+                encoded=$(printf '%s\n' "$result" | base64 -w0)
+                gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$STATUS_PATH" -f message='proof: record exact v19 status' -f content="$encoded" -f branch="$STATUS_BRANCH" >/dev/null
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          exit 1

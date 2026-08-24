@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      STRICT: 3069e3dc4a1f0954ea3109aafcbae812af482af4
-      STRICT_TREE: bfecb003947fb020c173ad15f981508230fe025f
+      STRICT: 871d05dcf244f6e2577696751614864ad1d87ca3
+      STRICT_TREE: 00dbab3c1ca3e7cff7c8f951951920402830b621
       PRODUCT_SOURCE: bfdac8df95ec435ed8aad7042fa1fc9bc1082f6a
       STATUS_BRANCH: status/focused-v25-final-verify-20260824-a
       STATUS_PATH: proofs/v25-strict-distribution.json

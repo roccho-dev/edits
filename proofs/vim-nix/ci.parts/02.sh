@@ -102,9 +102,9 @@ printf 'ABSENT\n' > "$ARTIFACT/product/clean-final-before-build.txt"
 # Supply only the operating-system nodes needed by the Nix CLI and builders.
 # Keep ordinary Nix build-user separation inside the isolated root rather than
 # weakening the global build-users-group setting for this proof.
-sudo install -d -m 0755 "$CLEAN_ROOT/etc" "$CLEAN_ROOT/dev" "$CLEAN_ROOT/root" "$CLEAN_ROOT/var"
+sudo install -d -m 0755 "$CLEAN_ROOT/etc" "$CLEAN_ROOT/dev" "$CLEAN_ROOT/dev/pts" "$CLEAN_ROOT/root" "$CLEAN_ROOT/var"
 sudo install -d -m 0555 "$CLEAN_ROOT/proc" "$CLEAN_ROOT/var/empty"
-sudo install -d -m 1777 "$CLEAN_ROOT/tmp"
+sudo install -d -m 1777 "$CLEAN_ROOT/tmp" "$CLEAN_ROOT/dev/shm"
 {
   printf 'root:x:0:0:root:/root:/bin/sh\n'
   for n in $(seq 1 10); do
@@ -114,6 +114,7 @@ sudo install -d -m 1777 "$CLEAN_ROOT/tmp"
 } | sudo tee "$CLEAN_ROOT/etc/passwd" >/dev/null
 {
   printf 'root:x:0:\n'
+  printf 'tty:x:5:\n'
   printf 'nixbld:x:30000:'
   separator=''
   for n in $(seq 1 10); do
@@ -123,16 +124,19 @@ sudo install -d -m 1777 "$CLEAN_ROOT/tmp"
   printf '\n'
 } | sudo tee "$CLEAN_ROOT/etc/group" >/dev/null
 printf 'passwd: files\ngroup: files\n' | sudo tee "$CLEAN_ROOT/etc/nsswitch.conf" >/dev/null
-sudo rm -f "$CLEAN_ROOT/dev/null" "$CLEAN_ROOT/dev/zero" "$CLEAN_ROOT/dev/random" "$CLEAN_ROOT/dev/urandom"
+sudo rm -f "$CLEAN_ROOT/dev/null" "$CLEAN_ROOT/dev/zero" "$CLEAN_ROOT/dev/random" "$CLEAN_ROOT/dev/urandom" "$CLEAN_ROOT/dev/ptmx"
 sudo mknod -m 0666 "$CLEAN_ROOT/dev/null" c 1 3
 sudo mknod -m 0666 "$CLEAN_ROOT/dev/zero" c 1 5
 sudo mknod -m 0444 "$CLEAN_ROOT/dev/random" c 1 8
 sudo mknod -m 0444 "$CLEAN_ROOT/dev/urandom" c 1 9
+sudo ln -s pts/ptmx "$CLEAN_ROOT/dev/ptmx"
 
-# /proc is mounted only around the chroot command because Nix resolves its own
-# executable through /proc/self/exe. The build still runs with no network route.
+# /proc and a private devpts instance exist only around the chroot command.
+# The latter is required by the same real-PTY editor tests executed in the
+# normal, Docker, OCI, and clean-replay product builds.
 STRICT_CURRENT_PHASE="clean-offline-build"
 sudo mount -t proc -o nosuid,nodev,noexec proc "$CLEAN_ROOT/proc"
+sudo mount -t devpts -o nosuid,noexec,newinstance,ptmxmode=0666,mode=0620,gid=5 devpts "$CLEAN_ROOT/dev/pts"
 sudo unshare --net -- ip -brief addr > "$ARTIFACT/product/clean-network-namespace.txt"
 build_rc=0
 sudo --preserve-env=PATH unshare --net -- \
@@ -147,6 +151,7 @@ sudo --preserve-env=PATH unshare --net -- \
     "$drv^*" \
     > "$ARTIFACT/product/clean-offline-build.stdout" \
     2> "$ARTIFACT/product/clean-offline-build.stderr" || build_rc=$?
+sudo umount "$CLEAN_ROOT/dev/pts"
 sudo umount "$CLEAN_ROOT/proc"
 test "$build_rc" -eq 0
 
@@ -183,6 +188,7 @@ jq -n \
     hostStoreVisible:false,
     outerFilesystemIsolation:"chroot",
     procFilesystem:"mounted-only-during-build",
+    pseudoTerminalFilesystem:"private-devpts-mounted-only-during-build",
     networkNamespace:"isolated",
     nixSandbox:false,
     nixSandboxReason:"hosted-runner-denies-nested-bind-mounts; outer chroot hides host store",

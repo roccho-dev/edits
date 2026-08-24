@@ -65,20 +65,19 @@ printf '%s\n' "$drv" > "$ARTIFACT/product/default-derivation.txt"
 nix-store --query --requisites --include-outputs "$drv" | sort -u \
   | grep -vxF "$PROOF" > "$ARTIFACT/product/build-prerequisites.txt"
 ! grep -Fxq "$PROOF" "$ARTIFACT/product/build-prerequisites.txt"
+mapfile -t prereqs < "$ARTIFACT/product/build-prerequisites.txt"
+test "${#prereqs[@]}" -gt 0
 
-# Materialise a portable file cache of only those prerequisites.
-while IFS= read -r path; do
-  nix copy --to "file://$PREREQ_CACHE" "$path"
-done < "$ARTIFACT/product/build-prerequisites.txt"
+# Materialise all prerequisite paths in one Nix copy transaction. This preserves
+# the exact prerequisite set while avoiding one Nix process per store path.
+nix copy --to "file://$PREREQ_CACHE" "${prereqs[@]}"
 
 # Start from an actually empty independent local store and import only the cache.
 if nix path-info --store "$CLEAN_STORE" "$PROOF" >/dev/null 2>&1; then
   echo 'clean store unexpectedly contains the final product before import' >&2
   exit 1
 fi
-while IFS= read -r path; do
-  nix copy --from "file://$PREREQ_CACHE" --to "$CLEAN_STORE" "$path"
-done < "$ARTIFACT/product/build-prerequisites.txt"
+nix copy --from "file://$PREREQ_CACHE" --to "$CLEAN_STORE" "${prereqs[@]}"
 if nix path-info --store "$CLEAN_STORE" "$PROOF" >/dev/null 2>&1; then
   echo 'prerequisite import unexpectedly materialised the final product' >&2
   exit 1

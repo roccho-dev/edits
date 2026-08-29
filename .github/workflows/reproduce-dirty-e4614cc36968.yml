@@ -26,11 +26,16 @@ jobs:
       HANDOFF_INPUT_SHA256: c833c88a08c4e29b5accc5e5347bdc75104a1759ddf3bd9a1257ef405eadf426
       EXPECTED_TAR_SHA256: fba9c3bb803d9269c32d15b27910c4ff2a77eba44a13afa343d8e2e9815b9022
       EXPECTED_IMAGE_ID: sha256:ba3e136d7bf01f94433b91c5eebb632f70c5c25f745b5e793d735e3da393e32e
-      ARTIFACT: ${{ runner.temp }}/edits-nix-reproduction
-      SOURCE_DIR: ${{ runner.temp }}/edits-source-exact
-      BUILD_DIR: ${{ runner.temp }}/edits-nix-handoff
 
     steps:
+      - name: Initialize runner paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ARTIFACT=$RUNNER_TEMP/edits-nix-reproduction" >> "$GITHUB_ENV"
+          echo "SOURCE_DIR=$RUNNER_TEMP/edits-source-exact" >> "$GITHUB_ENV"
+          echo "BUILD_DIR=$RUNNER_TEMP/edits-nix-handoff" >> "$GITHUB_ENV"
+
       - name: Checkout proof branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

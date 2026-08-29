@@ -135,14 +135,20 @@ jobs:
             --override-input editsSource "$SOURCE_URL" \
             --out-link "$RUNNER_TEMP/result-first" \
             2>&1 | tee "$ARTIFACT/nix-build-first.log"
-          cp -L "$RUNNER_TEMP/result-first" "$ARTIFACT/edits-interactive-dirty-e4614cc36968.docker.tar"
-          sha256sum "$RUNNER_TEMP/result-first" | tee "$ARTIFACT/first-build.sha256"
+          gzip -t "$RUNNER_TEMP/result-first"
+          sha256sum "$RUNNER_TEMP/result-first" | tee "$ARTIFACT/first-nix-output-gzip.sha256"
+          gzip -dc "$RUNNER_TEMP/result-first" > "$RUNNER_TEMP/result-first.docker.tar"
+          cp "$RUNNER_TEMP/result-first.docker.tar" "$ARTIFACT/edits-interactive-dirty-e4614cc36968.docker.tar"
+          sha256sum "$RUNNER_TEMP/result-first.docker.tar" | tee "$ARTIFACT/first-build.sha256"
 
           nix build --rebuild --print-build-logs "path:.#interactiveImage" \
             --override-input editsSource "$SOURCE_URL" \
             --out-link "$RUNNER_TEMP/result-second" \
             2>&1 | tee "$ARTIFACT/nix-build-second.log"
-          sha256sum "$RUNNER_TEMP/result-second" | tee "$ARTIFACT/second-build.sha256"
+          gzip -t "$RUNNER_TEMP/result-second"
+          sha256sum "$RUNNER_TEMP/result-second" | tee "$ARTIFACT/second-nix-output-gzip.sha256"
+          gzip -dc "$RUNNER_TEMP/result-second" > "$RUNNER_TEMP/result-second.docker.tar"
+          sha256sum "$RUNNER_TEMP/result-second.docker.tar" | tee "$ARTIFACT/second-build.sha256"
 
       - name: Prove byte, image, layer, and rootfs identity
         shell: bash
@@ -150,8 +156,8 @@ jobs:
           set -euo pipefail
           python3 proof-input/nix-reproduce-dirty-e4614cc36968/verify-reproduction.py \
             --expected proof-input/nix-reproduce-dirty-e4614cc36968/expected-baseline.json \
-            --first "$RUNNER_TEMP/result-first" \
-            --second "$RUNNER_TEMP/result-second" \
+            --first "$RUNNER_TEMP/result-first.docker.tar" \
+            --second "$RUNNER_TEMP/result-second.docker.tar" \
             --out "$ARTIFACT/reproduction-verdict.json" \
             | tee "$ARTIFACT/reproduction-verifier.log"
           echo "$EXPECTED_TAR_SHA256  $ARTIFACT/edits-interactive-dirty-e4614cc36968.docker.tar" | sha256sum -c -

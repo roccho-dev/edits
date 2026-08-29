@@ -20,8 +20,10 @@ The complete command surface is deliberately small:
 ```
 
 After `:HqStart`, yegappan/lsp owns automatic native completion. Typing `@`
-queries the selected-world command language. Vim adds no manual completion
-command, matcher, history browser, route picker, retry UI, or provider UI.
+queries the selected-world command language. When the current profile has
+eligible accepted input, HQ includes its history candidates in the same popup.
+Vim adds no manual completion command, matcher, history search, ranker,
+materializer, route picker, retry UI, or provider UI.
 
 The selected world owns command order and meaning:
 
@@ -49,7 +51,7 @@ This package owns only:
 It must not own:
 
 - command vocabulary, parser meaning, or candidate rank;
-- accepted-history search or command promotion;
+- accepted-history search, ranking, materialization, or command promotion;
 - agent/direct routing, policy, approval, timeout, cancellation, or retry;
 - JSONL paths, provider bindings, worker lifecycle, or Herdr process control.
 
@@ -146,6 +148,7 @@ HQ_CHOICE_E2E=1 go test -run '^TestAgentDefaultChoiceE2E$' -v
 HQ_CHOICE_E2E=1 go test -run '^TestAgentPromptFieldChoiceE2E$' -v
 HQ_CHOICE_E2E=1 go test -run '^TestDirectFallbackChoiceE2E$' -v
 HQ_CHOICE_E2E=1 go test -run '^TestUnicodeDirectFieldValueE2E$' -v
+HQ_CHOICE_E2E=1 go test -run '^TestAcceptedHistoryRecallE2E$' -v
 go test -run '^TestAgentDecisionSubmitE2E$' -v
 go test -run '^TestDirectCommandSubmitE2E$' -v
 ```

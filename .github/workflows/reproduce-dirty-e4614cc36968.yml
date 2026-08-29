@@ -11,14 +11,15 @@ permissions:
 
 concurrency:
   group: reproduce-edits-dirty-e4614cc36968
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   reproduce:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      SOURCE_COMMIT: 19840a9f5c8748462b3e6430b398c7fdff4641e0
+      SOURCE_SEED_COMMIT: 19840a9f5c8748462b3e6430b398c7fdff4641e0
+      SOURCE_REV: 77e1861554bc5c55da6103bac0278e63e97614f1
       SOURCE_TREE: 0907470419f72a16f6a21b9ecf18105845e0e0f5
       SOURCE_NAR: sha256-iTH9pQY/mAYX/0QkQHjOrnTsD58ByNTd1erYMw/OBIQ=
       NIX_VERSION: 2.34.4
@@ -33,7 +34,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "ARTIFACT=$RUNNER_TEMP/edits-nix-reproduction" >> "$GITHUB_ENV"
-          echo "SOURCE_DIR=$RUNNER_TEMP/edits-source-exact" >> "$GITHUB_ENV"
           echo "BUILD_DIR=$RUNNER_TEMP/edits-nix-handoff" >> "$GITHUB_ENV"
 
       - name: Checkout proof branch
@@ -46,10 +46,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$ARTIFACT" "$SOURCE_DIR" "$BUILD_DIR"
-          test "$(git rev-parse "$SOURCE_COMMIT^{tree}")" = "$SOURCE_TREE"
-          git archive "$SOURCE_COMMIT" | tar -x -C "$SOURCE_DIR"
-          test -z "$(find "$SOURCE_DIR" -name .git -print -quit)"
+          mkdir -p "$ARTIFACT" "$BUILD_DIR"
+          test "$(git rev-parse "$SOURCE_SEED_COMMIT^{tree}")" = "$SOURCE_TREE"
+
+          cat > "$RUNNER_TEMP/exact-source.commit" <<'COMMIT'
+          tree 0907470419f72a16f6a21b9ecf18105845e0e0f5
+          parent 518542536e4d9a6828b4a0e99b5a230dc03f1c0b
+          author roccho <40359643+roccho-dev@users.noreply.github.com> 1787556467 +0900
+          committer roccho <40359643+roccho-dev@users.noreply.github.com> 1787559089 +0900
+
+          test(hq-vim): expose history proof latch
+          COMMIT
+          reconstructed="$(git hash-object -t commit -w "$RUNNER_TEMP/exact-source.commit")"
+          test "$reconstructed" = "$SOURCE_REV"
+          test "$(git rev-parse "$SOURCE_REV^{tree}")" = "$SOURCE_TREE"
+          printf '%s\n' "$SOURCE_REV" > .git/shallow
+          git update-ref refs/heads/exact-source "$SOURCE_REV"
+          source_url="git+file://$GITHUB_WORKSPACE?rev=$SOURCE_REV&shallow=1"
+          echo "SOURCE_URL=$source_url" >> "$GITHUB_ENV"
 
           echo "$HANDOFF_INPUT_SHA256  proof-input/nix-reproduce-dirty-e4614cc36968/nix-handoff-input.tar.xz" | sha256sum -c -
           echo "a2ec11503943102d6b8cfba73d4fc52f9c4fd64db0f4a187b0f1b380f8ccbad9  proof-input/nix-reproduce-dirty-e4614cc36968/expected-baseline.json" | sha256sum -c -
@@ -63,8 +77,9 @@ jobs:
           cat > "$ARTIFACT/source-identity.json" <<EOF
           {
             "schema": "edits.exactSourceIdentity.v1",
-            "commit": "$SOURCE_COMMIT",
+            "commit": "$SOURCE_REV",
             "tree": "$SOURCE_TREE",
+            "transport": "$source_url",
             "expectedNarHash": "$SOURCE_NAR"
           }
           EOF
@@ -96,7 +111,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nix flake prefetch --json "path:$SOURCE_DIR" | tee "$ARTIFACT/source-prefetch.json"
+          nix flake prefetch --json "$SOURCE_URL" | tee "$ARTIFACT/source-prefetch.json"
           python3 - "$ARTIFACT/source-prefetch.json" "$SOURCE_NAR" <<'PY'
           import json, pathlib, sys
           got = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))
@@ -113,18 +128,18 @@ jobs:
           rm -f "$RUNNER_TEMP/result-first" "$RUNNER_TEMP/result-second"
 
           nix flake metadata --json "path:." \
-            --override-input editsSource "path:$SOURCE_DIR" \
+            --override-input editsSource "$SOURCE_URL" \
             > "$ARTIFACT/flake-metadata.json"
 
           nix build --print-build-logs "path:.#interactiveImage" \
-            --override-input editsSource "path:$SOURCE_DIR" \
+            --override-input editsSource "$SOURCE_URL" \
             --out-link "$RUNNER_TEMP/result-first" \
             2>&1 | tee "$ARTIFACT/nix-build-first.log"
           cp -L "$RUNNER_TEMP/result-first" "$ARTIFACT/edits-interactive-dirty-e4614cc36968.docker.tar"
           sha256sum "$RUNNER_TEMP/result-first" | tee "$ARTIFACT/first-build.sha256"
 
           nix build --rebuild --print-build-logs "path:.#interactiveImage" \
-            --override-input editsSource "path:$SOURCE_DIR" \
+            --override-input editsSource "$SOURCE_URL" \
             --out-link "$RUNNER_TEMP/result-second" \
             2>&1 | tee "$ARTIFACT/nix-build-second.log"
           sha256sum "$RUNNER_TEMP/result-second" | tee "$ARTIFACT/second-build.sha256"
@@ -169,7 +184,7 @@ jobs:
           receipt = {
               'schema': 'edits.nixReproductionRun.v1',
               'workflowRun': sys.argv[2],
-              'sourceCommit': os.environ['SOURCE_COMMIT'],
+              'sourceCommit': os.environ['SOURCE_REV'],
               'sourceTree': os.environ['SOURCE_TREE'],
               'sourceNarHash': os.environ['SOURCE_NAR'],
               'nixVersion': os.environ['NIX_VERSION'],

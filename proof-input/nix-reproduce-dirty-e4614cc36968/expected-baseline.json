@@ -1,0 +1,38 @@
+{
+  "artifact_sha256": "fba9c3bb803d9269c32d15b27910c4ff2a77eba44a13afa343d8e2e9815b9022",
+  "artifact_size": 231228928,
+  "config_digest": "sha256:ba3e136d7bf01f94433b91c5eebb632f70c5c25f745b5e793d735e3da393e32e",
+  "config_name": "blobs/sha256/ba3e136d7bf01f94433b91c5eebb632f70c5c25f745b5e793d735e3da393e32e",
+  "image_config": {
+    "Cmd": null,
+    "Entrypoint": [
+      "/nix/store/i2xwy1xnk613gkp8xhyfvn9d0js593nk-edits/bin/edits"
+    ],
+    "Env": [
+      "PATH=/bin",
+      "HOME=/home/dev",
+      "XDG_CONFIG_HOME=/home/dev/.config",
+      "XDG_STATE_HOME=/home/dev/.local/state",
+      "XDG_CACHE_HOME=/home/dev/.cache",
+      "XDG_RUNTIME_DIR=/tmp",
+      "HERDR_CONFIG_PATH=/nix/store/zd2hqc5m4632lzy6psdz6mq8dp4faz04-herdr-vim-hq-proof/share/proof/herdr.toml",
+      "VIMRUNTIME=/nix/store/zd2hqc5m4632lzy6psdz6mq8dp4faz04-herdr-vim-hq-proof/share/vim/vim92",
+      "SHELL=/bin/sh",
+      "TERM=xterm-256color",
+      "LANG=C.UTF-8",
+      "LC_ALL=C.UTF-8"
+    ],
+    "User": "1000:1000",
+    "WorkingDir": "/work/repos"
+  },
+  "layer_count": 68,
+  "layer_manifest_sha256": "7282295ecec570216ccb83acac2e24a5755e941d5ead26dc97ba8fb9de0b46a5",
+  "member_count": 144,
+  "member_names_sha256": "8862fd084a61ae996a8493f2a80b7aaf54f7ee1f757fb5c3b594ff0692914353",
+  "repo_tags": [
+    "roccho/edits:dirty-e4614cc36968"
+  ],
+  "rootfs_diff_ids_sha256": "cf4a5715114b52066458930502d631d8fac0b8a69ae18cb643405eefcbab2778",
+  "rootfs_layer_chain_sha256": "a26398bc7cdbecf2d2416b2b21764af8e17b27d4610ff0eb3bd4c6a1e2782765",
+  "schema": "edits.nixReproductionExpected.v2"
+}

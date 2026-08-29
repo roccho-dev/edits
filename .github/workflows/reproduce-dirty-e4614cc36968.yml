@@ -1,0 +1,194 @@
+name: reproduce edits Docker tar with Nix 2.34.4
+
+on:
+  push:
+    branches:
+      - proof/nix-reproduce-dirty-e4614cc36968-260829191022
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reproduce-edits-dirty-e4614cc36968
+  cancel-in-progress: false
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      SOURCE_COMMIT: 19840a9f5c8748462b3e6430b398c7fdff4641e0
+      SOURCE_TREE: 0907470419f72a16f6a21b9ecf18105845e0e0f5
+      SOURCE_NAR: sha256-iTH9pQY/mAYX/0QkQHjOrnTsD58ByNTd1erYMw/OBIQ=
+      NIX_VERSION: 2.34.4
+      NIX_ARCHIVE_SHA256: 595669eb6db6117135ca8ba6667b273eaf980a47523a92e61ed963556cd547b8
+      HANDOFF_INPUT_SHA256: c833c88a08c4e29b5accc5e5347bdc75104a1759ddf3bd9a1257ef405eadf426
+      EXPECTED_TAR_SHA256: fba9c3bb803d9269c32d15b27910c4ff2a77eba44a13afa343d8e2e9815b9022
+      EXPECTED_IMAGE_ID: sha256:ba3e136d7bf01f94433b91c5eebb632f70c5c25f745b5e793d735e3da393e32e
+      ARTIFACT: ${{ runner.temp }}/edits-nix-reproduction
+      SOURCE_DIR: ${{ runner.temp }}/edits-source-exact
+      BUILD_DIR: ${{ runner.temp }}/edits-nix-handoff
+
+    steps:
+      - name: Checkout proof branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact immutable inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT" "$SOURCE_DIR" "$BUILD_DIR"
+          test "$(git rev-parse "$SOURCE_COMMIT^{tree}")" = "$SOURCE_TREE"
+          git archive "$SOURCE_COMMIT" | tar -x -C "$SOURCE_DIR"
+          test -z "$(find "$SOURCE_DIR" -name .git -print -quit)"
+
+          echo "$HANDOFF_INPUT_SHA256  proof-input/nix-reproduce-dirty-e4614cc36968/nix-handoff-input.tar.xz" | sha256sum -c -
+          echo "a2ec11503943102d6b8cfba73d4fc52f9c4fd64db0f4a187b0f1b380f8ccbad9  proof-input/nix-reproduce-dirty-e4614cc36968/expected-baseline.json" | sha256sum -c -
+          echo "e729a05a7c84cbb5709c3f8741b751c3fe83758c23d80a970df44249a22e66b9  proof-input/nix-reproduce-dirty-e4614cc36968/verify-reproduction.py" | sha256sum -c -
+
+          cp proof-input/nix-reproduce-dirty-e4614cc36968/{nix-handoff-input.tar.xz,expected-baseline.json,verify-reproduction.py} "$ARTIFACT/"
+          tar -xJf proof-input/nix-reproduce-dirty-e4614cc36968/nix-handoff-input.tar.xz -C "$BUILD_DIR"
+          test -f "$BUILD_DIR/nix-handoff-input/flake.nix"
+          test -f "$BUILD_DIR/nix-handoff-input/flake.lock"
+
+          cat > "$ARTIFACT/source-identity.json" <<EOF
+          {
+            "schema": "edits.exactSourceIdentity.v1",
+            "commit": "$SOURCE_COMMIT",
+            "tree": "$SOURCE_TREE",
+            "expectedNarHash": "$SOURCE_NAR"
+          }
+          EOF
+
+      - name: Install exact supplied Nix release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl --fail --location --retry 5 --output nix-${NIX_VERSION}-x86_64-linux.tar.xz \
+            "https://releases.nixos.org/nix/nix-${NIX_VERSION}/nix-${NIX_VERSION}-x86_64-linux.tar.xz"
+          echo "$NIX_ARCHIVE_SHA256  nix-${NIX_VERSION}-x86_64-linux.tar.xz" | sha256sum -c -
+          tar -xJf nix-${NIX_VERSION}-x86_64-linux.tar.xz
+          "nix-${NIX_VERSION}-x86_64-linux/install" \
+            --no-daemon --yes --no-channel-add --no-modify-profile
+          echo "$HOME/.nix-profile/bin" >> "$GITHUB_PATH"
+          mkdir -p "$HOME/.config/nix"
+          cat > "$HOME/.config/nix/nix.conf" <<EOF
+          experimental-features = nix-command flakes
+          flake-registry =
+          access-tokens = github.com=${{ github.token }}
+          warn-dirty = false
+          EOF
+          "$HOME/.nix-profile/bin/nix" --version | tee "$ARTIFACT/nix-version.txt"
+          test "$("$HOME/.nix-profile/bin/nix" --version)" = "nix (Nix) $NIX_VERSION"
+          sha256sum nix-${NIX_VERSION}-x86_64-linux.tar.xz > "$ARTIFACT/nix-archive.sha256"
+
+      - name: Verify exact source NAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix flake prefetch --json "path:$SOURCE_DIR" | tee "$ARTIFACT/source-prefetch.json"
+          python3 - "$ARTIFACT/source-prefetch.json" "$SOURCE_NAR" <<'PY'
+          import json, pathlib, sys
+          got = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))
+          if got.get('hash') != sys.argv[2]:
+              raise SystemExit(f"source NAR mismatch: {got.get('hash')} != {sys.argv[2]}")
+          print('EXACT_SOURCE_NAR_PASS')
+          PY
+
+      - name: Build the Docker archive twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$BUILD_DIR/nix-handoff-input"
+          rm -f "$RUNNER_TEMP/result-first" "$RUNNER_TEMP/result-second"
+
+          nix flake metadata --json "path:." \
+            --override-input editsSource "path:$SOURCE_DIR" \
+            > "$ARTIFACT/flake-metadata.json"
+
+          nix build --print-build-logs "path:.#interactiveImage" \
+            --override-input editsSource "path:$SOURCE_DIR" \
+            --out-link "$RUNNER_TEMP/result-first" \
+            2>&1 | tee "$ARTIFACT/nix-build-first.log"
+          cp -L "$RUNNER_TEMP/result-first" "$ARTIFACT/edits-interactive-dirty-e4614cc36968.docker.tar"
+          sha256sum "$RUNNER_TEMP/result-first" | tee "$ARTIFACT/first-build.sha256"
+
+          nix build --rebuild --print-build-logs "path:.#interactiveImage" \
+            --override-input editsSource "path:$SOURCE_DIR" \
+            --out-link "$RUNNER_TEMP/result-second" \
+            2>&1 | tee "$ARTIFACT/nix-build-second.log"
+          sha256sum "$RUNNER_TEMP/result-second" | tee "$ARTIFACT/second-build.sha256"
+
+      - name: Prove byte, image, layer, and rootfs identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 proof-input/nix-reproduce-dirty-e4614cc36968/verify-reproduction.py \
+            --expected proof-input/nix-reproduce-dirty-e4614cc36968/expected-baseline.json \
+            --first "$RUNNER_TEMP/result-first" \
+            --second "$RUNNER_TEMP/result-second" \
+            --out "$ARTIFACT/reproduction-verdict.json" \
+            | tee "$ARTIFACT/reproduction-verifier.log"
+          echo "$EXPECTED_TAR_SHA256  $ARTIFACT/edits-interactive-dirty-e4614cc36968.docker.tar" | sha256sum -c -
+
+      - name: Load and smoke the rebuilt image on Linux OCI runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker load --input "$ARTIFACT/edits-interactive-dirty-e4614cc36968.docker.tar" | tee "$ARTIFACT/docker-load.txt"
+          actual_id="$(docker image inspect roccho/edits:dirty-e4614cc36968 --format '{{.Id}}')"
+          test "$actual_id" = "$EXPECTED_IMAGE_ID"
+          printf '%s\n' "$actual_id" | tee "$ARTIFACT/docker-image-id.txt"
+          docker run --rm --name edits-nix-reproduction-smoke \
+            --entrypoint /bin/edits-smoke \
+            roccho/edits:dirty-e4614cc36968 \
+            | tee "$ARTIFACT/docker-smoke.txt"
+          grep -Fx 'EDITS_INTERACTIVE_PTY_SMOKE_PASS' "$ARTIFACT/docker-smoke.txt"
+
+      - name: Assemble immutable proof receipt
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT"
+          python3 - "$ARTIFACT" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" <<'PY'
+          import hashlib, json, os, pathlib, sys
+          root = pathlib.Path(sys.argv[1])
+          verdict_path = root / 'reproduction-verdict.json'
+          verdict = json.loads(verdict_path.read_text()) if verdict_path.exists() else None
+          receipt = {
+              'schema': 'edits.nixReproductionRun.v1',
+              'workflowRun': sys.argv[2],
+              'sourceCommit': os.environ['SOURCE_COMMIT'],
+              'sourceTree': os.environ['SOURCE_TREE'],
+              'sourceNarHash': os.environ['SOURCE_NAR'],
+              'nixVersion': os.environ['NIX_VERSION'],
+              'nixArchiveSha256': os.environ['NIX_ARCHIVE_SHA256'],
+              'expectedTarSha256': os.environ['EXPECTED_TAR_SHA256'],
+              'expectedImageId': os.environ['EXPECTED_IMAGE_ID'],
+              'reproductionVerdict': verdict,
+              'linuxOciSmokePass': (root / 'docker-smoke.txt').exists() and 'EDITS_INTERACTIVE_PTY_SMOKE_PASS' in (root / 'docker-smoke.txt').read_text(),
+          }
+          (root / 'run-receipt.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+          rows = []
+          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.name != 'SHA256SUMS':
+                  h = hashlib.sha256(path.read_bytes()).hexdigest()
+                  rows.append(f'{h}  {path.relative_to(root).as_posix()}')
+          (root / 'SHA256SUMS').write_text('\n'.join(rows) + '\n')
+          PY
+
+      - name: Upload rebuilt Windows-ready archive and proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: edits-nix-reproduction-dirty-e4614cc36968
+          path: ${{ runner.temp }}/edits-nix-reproduction
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error

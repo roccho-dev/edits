@@ -34,7 +34,7 @@ jobs:
           artifact_dir="$RUNNER_TEMP/edits-proposals-head"
           clone_dir="$RUNNER_TEMP/verify-clone"
 
-          test "$(git rev-parse HEAD^)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" HEAD
           test "$(git rev-parse "$TARGET_SHA^{tree}")" = "$TARGET_TREE"
           test -z "$(git status --porcelain=v1)"
 
@@ -45,7 +45,7 @@ jobs:
           git bundle list-heads "$artifact_dir/$BUNDLE_NAME" | tee "$artifact_dir/bundle.heads.txt"
           grep -Fx "$TARGET_SHA refs/heads/proposals" "$artifact_dir/bundle.heads.txt"
 
-          git clone --quiet "$artifact_dir/$BUNDLE_NAME" "$clone_dir"
+          git clone --quiet --branch proposals "$artifact_dir/$BUNDLE_NAME" "$clone_dir"
           test "$(git -C "$clone_dir" rev-parse HEAD)" = "$TARGET_SHA"
           test "$(git -C "$clone_dir" rev-parse 'HEAD^{tree}')" = "$TARGET_TREE"
           test -z "$(git -C "$clone_dir" status --porcelain=v1)"

@@ -1,0 +1,8 @@
+{"expected_durable_writes":0,"expected_effect_count":0,"expected_status":"blocked-before-load","failure_id":"F-HASH","source_evidence":"run-edits-wslc.ps1","trigger":"Docker tar SHA mismatch"}
+{"expected_durable_writes":0,"expected_effect_count":0,"expected_status":"blocked-before-run","failure_id":"F-IMAGE-ID","source_evidence":"run-edits-wslc.ps1","trigger":"loaded image ID mismatch"}
+{"expected_durable_writes":0,"expected_effect_count":0,"expected_status":"failed","failure_id":"F-NO-TTY","source_evidence":"Golden /bin/edits source","trigger":"stdin or stdout is not a PTY"}
+{"expected_durable_writes":0,"expected_effect_count":0,"expected_status":"failed","failure_id":"F-HOME","source_evidence":"Golden /bin/edits source","trigger":"HOME missing or unwritable"}
+{"expected_durable_writes":0,"expected_effect_count":0,"expected_status":"failed","failure_id":"F-HQ-BINDING","source_evidence":"Golden /bin/edits source","trigger":"exact /bin/hq missing"}
+{"expected_durable_writes":0,"expected_effect_count":0,"expected_status":"failed","failure_id":"F-VIM-BINDING","source_evidence":"Golden /bin/edits source","trigger":"exact /bin/vim missing"}
+{"expected_durable_writes":0,"expected_effect_count":0,"expected_status":"failed","failure_id":"F-MUX-BINDING","source_evidence":"Golden /bin/edits source","trigger":"exact /bin/herdr missing"}
+{"expected_durable_writes":0,"expected_effect_count":0,"expected_status":"PENDING-not-PASS","failure_id":"F-NATIVE-LINUX-UNPROVED","source_evidence":"handoff-evidence.json#lanes.nativeLinuxPortableRepeat","trigger":"native Linux portable lane absent"}

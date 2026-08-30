@@ -1,0 +1,25 @@
+{
+  "allowed": [
+    "product-facing-role-name",
+    "package-directory",
+    "help-text",
+    "process-display-label",
+    "candidate-image-digest",
+    "evidence-timestamp"
+  ],
+  "denied": [
+    "command-meaning",
+    "candidate-rank",
+    "history-eligibility",
+    "edit-content",
+    "undo-count",
+    "durable-write-count",
+    "result-meaning",
+    "state-contract",
+    "failure-class",
+    "authority-boundary"
+  ],
+  "frozenBeforeCandidateObservation": true,
+  "kind": "edits.goldenAllowedDifferences.v1",
+  "status": "PASS"
+}

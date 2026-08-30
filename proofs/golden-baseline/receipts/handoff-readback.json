@@ -1,0 +1,9 @@
+{
+  "artifacts": {
+    "edits-handoff-dirty-e4614cc36968.delivery.zip": "ba0df26570290c2ad84750546761e04f7fed29f7ae277e8d15bb2b759aa36229",
+    "edits-nix-handoff-dirty-e4614cc36968.tar": "e055a1a3cb3672c7cf1df5f8ea3e47dc09daca8258eee5c86629bc1ff1c32d9d"
+  },
+  "kind": "edits.goldenHandoffReadback.v1",
+  "requiredArtifact": "edits-nix-handoff-dirty-e4614cc36968.tar",
+  "status": "PASS"
+}

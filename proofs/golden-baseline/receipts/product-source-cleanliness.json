@@ -1,0 +1,11 @@
+{
+  "allowedRoots": [
+    "proofs/issue-118/",
+    "proofs/golden-baseline/",
+    "tools/issue-118-golden/"
+  ],
+  "canonicalBase": "576a701507eb1d1ceb6a64bf0aa450cda3e1ad30",
+  "kind": "edits.goldenProductSourceCleanliness.v1",
+  "productSourceChanges": 0,
+  "status": "PASS"
+}

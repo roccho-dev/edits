@@ -531,8 +531,20 @@ def main() -> int:
     tests = flake / "tests"
     canon_tests = repo / "proofs/issue-118/wt05a-ci-release/tests/test_candidate_ci_release.py"
     unit_tests = tests / "test_candidate_archive_unit.py"
-    if not (flake / "flake.nix").is_file() or not tests.is_dir() or not canon_tests.is_file() or not unit_tests.is_file():
-        raise BuildFailure("candidate flake, Canon RED, or pytest suite is missing")
+    canon_runner = repo / "proofs/issue-118/canon_runner.py"
+    completion_lanes = [
+        repo / "proofs/issue-118/completion",
+        repo / "proofs/issue-118/workflow-evaluation",
+    ]
+    required_inputs = [
+        flake / "flake.nix",
+        canon_tests,
+        unit_tests,
+        canon_runner,
+        *(lane / "canon.json" for lane in completion_lanes),
+    ]
+    if not tests.is_dir() or any(not path.is_file() for path in required_inputs):
+        raise BuildFailure("candidate flake, Canon contract, or pytest suite is missing")
 
     identity = source_identity(repo)
     if output.exists():
@@ -553,6 +565,23 @@ def main() -> int:
         },
     )
 
+    canon_status: dict[str, str] = {}
+    for lane in completion_lanes:
+        run(
+            [
+                sys.executable,
+                str(canon_runner),
+                str(lane),
+                "--expect-green",
+                "--result",
+                str(evidence_dir / f"{lane.name}-canon.json"),
+            ],
+            cwd=repo,
+            log_dir=log_dir,
+            label=f"canon-{lane.name}",
+        )
+        canon_status[lane.name] = "PASS"
+
     plan_counts = run_pytest(
         repo=repo,
         paths=[canon_tests, unit_tests],
@@ -570,6 +599,7 @@ def main() -> int:
                 "clean": True,
             },
             "buildEntrypoint": "nix run ./proofs/vim-nix#candidate",
+            "canon": canon_status,
             "pytest": plan_counts,
         }
         write_json(output / "release-manifest.json", manifest)
@@ -779,6 +809,8 @@ def main() -> int:
         ],
         "gates": {
             "canonRedFixedGreen": "PASS",
+            "completionCanon": canon_status["completion"],
+            "workflowEvaluationCanon": canon_status["workflow-evaluation"],
             "nixNormalOfflineSameOutputs": "PASS",
             "nixRebuild": "PASS",
             "dockerArchiveIntegrity": "PASS",

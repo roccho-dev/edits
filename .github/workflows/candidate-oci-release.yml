@@ -16,19 +16,18 @@ name: build and release edits candidate OCI
         default: true
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: edits-candidate-oci-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build-e2e-release:
+  build-e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
       RELEASE_TAG: edits-candidate-${{ github.sha }}
-      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout exact candidate source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -60,16 +59,31 @@ jobs:
           retention-days: 90
           if-no-files-found: warn
 
+  publish-release:
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release) }}
+    needs: build-e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: edits-candidate-${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download exact CI evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: edits-candidate-${{ github.sha }}
+          path: ${{ runner.temp }}/edits-candidate-release
+
       - name: Create or verify immutable exact-commit candidate prerelease
-        if: ${{ success() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)) }}
         shell: bash
         run: |
           set -euo pipefail
           RELEASE_DIR="$RUNNER_TEMP/edits-candidate-release"
+          compgen -G "$RELEASE_DIR/*.docker.tar" >/dev/null
           compgen -G "$RELEASE_DIR/*.oci.tar" >/dev/null
           compgen -G "$RELEASE_DIR/*.windows.zip" >/dev/null
-          mapfile -t assets < <(find "$RELEASE_DIR" -maxdepth 1 -type f -print | sort)
-          compgen -G "$RELEASE_DIR/*.docker.tar" >/dev/null
           compgen -G "$RELEASE_DIR/*.git.bundle" >/dev/null
           compgen -G "$RELEASE_DIR/*.evidence.zip" >/dev/null
           test -f "$RELEASE_DIR/build-manifest.json"
@@ -78,6 +92,7 @@ jobs:
           test -f "$RELEASE_DIR/RELEASE.md"
           test -f "$RELEASE_DIR/SHA256SUMS"
           (cd "$RELEASE_DIR" && sha256sum --check SHA256SUMS)
+          mapfile -t assets < <(find "$RELEASE_DIR" -maxdepth 1 -type f -print | sort)
 
           verify_release() {
             local verify_dir="$RUNNER_TEMP/release-readback"

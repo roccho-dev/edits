@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      ARTIFACT: ${{ runner.temp }}/vim-nix-herdr-oci-proof
+      ARTIFACT: /tmp/vim-nix-herdr-oci-proof
     steps:
       - name: Checkout control revision
         uses: actions/checkout@v4

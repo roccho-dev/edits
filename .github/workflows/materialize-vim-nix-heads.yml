@@ -155,7 +155,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
-      ARTIFACT: ${{ runner.temp }}/vim-nix-current-runtime
+      ARTIFACT: /tmp/vim-nix-current-runtime
       IMAGE_REF: roccho/vim-nix-herdr-hq-proof:d83bf4c
       OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
     steps:

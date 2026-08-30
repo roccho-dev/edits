@@ -7,7 +7,6 @@ name: build and release edits candidate OCI
   push:
     branches:
       - proposals
-      - proposal/issue-118-candidate-oci-ci
   workflow_dispatch:
     inputs:
       publish_release:
@@ -28,7 +27,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      RELEASE_DIR: ${{ runner.temp }}/edits-candidate-release
       RELEASE_TAG: edits-candidate-${{ github.sha }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -49,7 +47,7 @@ jobs:
         run: >-
           nix run ./proofs/vim-nix#candidate --
           --repo-root "$GITHUB_WORKSPACE"
-          --output "$RELEASE_DIR"
+          --output "$RUNNER_TEMP/edits-candidate-release"
           --release-tag "$RELEASE_TAG"
 
       - name: Upload exact CI evidence
@@ -63,13 +61,11 @@ jobs:
           if-no-files-found: warn
 
       - name: Create or verify immutable exact-commit candidate prerelease
-        if: >-
-          success() &&
-          (github.event_name == 'push' ||
-           (github.event_name == 'workflow_dispatch' && inputs.publish_release))
+        if: ${{ success() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)) }}
         shell: bash
         run: |
           set -euo pipefail
+          RELEASE_DIR="$RUNNER_TEMP/edits-candidate-release"
           compgen -G "$RELEASE_DIR/*.oci.tar" >/dev/null
           compgen -G "$RELEASE_DIR/*.windows.zip" >/dev/null
           mapfile -t assets < <(find "$RELEASE_DIR" -maxdepth 1 -type f -print | sort)
@@ -82,23 +78,6 @@ jobs:
           test -f "$RELEASE_DIR/RELEASE.md"
           test -f "$RELEASE_DIR/SHA256SUMS"
           (cd "$RELEASE_DIR" && sha256sum --check SHA256SUMS)
-
-          find "$RELEASE_DIR" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/local-assets.txt"
-          verify_release() {
-            local verify_dir="$RUNNER_TEMP/existing-release"
-            rm -rf "$verify_dir"
-            mkdir -p "$verify_dir"
-            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$verify_dir"
-            test -f "$verify_dir/SHA256SUMS"
-            (cd "$verify_dir" && sha256sum --check SHA256SUMS)
-            find "$verify_dir" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/remote-assets.txt"
-            diff -u "$RUNNER_TEMP/local-assets.txt" "$RUNNER_TEMP/remote-assets.txt"
-            while IFS= read -r name; do
-              cmp "$RELEASE_DIR/$name" "$verify_dir/$name"
-            done < "$RUNNER_TEMP/local-assets.txt"
-            target="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)"
-            test "$target" = "$GITHUB_SHA"
-          }
 
           verify_release() {
             local verify_dir="$RUNNER_TEMP/release-readback"

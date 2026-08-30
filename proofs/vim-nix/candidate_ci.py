@@ -735,7 +735,7 @@ def main() -> int:
     bundle = source_bundle(repo, output, identity.commit, suffix, log_dir)
     e2e_report = {
         "schema": "edits.candidateE2E.v1",
-        "status": "PASS",
+        "status": "CI_PASS",
         "sourceCommit": identity.commit,
         "sourceTree": identity.tree,
         "dockerImageRef": image_ref,
@@ -763,7 +763,7 @@ def main() -> int:
 
     release_manifest = {
         "schema": "edits.candidateRelease.v1",
-        "status": "PASS",
+        "status": "CI_PASS",
         "releaseTag": args.release_tag or None,
         "buildEntrypoint": "nix run ./proofs/vim-nix#candidate",
         "source": build_manifest["source"],
@@ -799,6 +799,8 @@ def main() -> int:
             "falseSuccess": 0,
         },
         "productionPromotion": False,
+        "issue118Closure": False,
+        "finalAssertion": "CI_COMPLETE_WINDOWS_PHYSICAL_READBACK_OPEN",
     }
     write_json(output / "release-manifest.json", release_manifest)
     (output / "RELEASE.md").write_text(

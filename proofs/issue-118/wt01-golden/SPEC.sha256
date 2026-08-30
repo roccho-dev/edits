@@ -2,6 +2,4 @@ e07dda47c939377f85f819e902239612fa55b97dfd9343f23c82fedf746553bf  ./CANON.md
 0dafc51c1cacae76460970c00270e92f52744ff547f5ad74bd0fc32ceb6a357c  ./TEST_LIST.md
 99635d18b314e342e40b01fd3c5961aa07d0a6e8d30d4fb49fb4ef925b296470  ./canon.json
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./tests/__init__.py
-5d1463e7fade79a138fad2b1ad939e9af33b7f675b10a0dc5e2c39e36bfa6d20  ./tests/__pycache__/__init__.cpython-313.pyc
-651eb1480b1dd546deed9ca82078462e8598dc7e9893abdce7aa71bf02bd814c  ./tests/__pycache__/test_golden_baseline.cpython-313.pyc
 b80ab3f7ded89193910dfcce14c0a3b4b2854ddd4a58d70cc71bc95a1073bfbd  ./tests/test_golden_baseline.py

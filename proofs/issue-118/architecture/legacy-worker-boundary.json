@@ -1,0 +1,7 @@
+{
+  "canonicalRuntime": false,
+  "kind": "edits.legacyWorkerBoundary.v1",
+  "path": "packages/hq-local-worker",
+  "proofOnly": true,
+  "status": "PASS"
+}

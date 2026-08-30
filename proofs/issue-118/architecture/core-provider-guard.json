@@ -1,0 +1,6 @@
+{
+  "kind": "edits.coreProviderGuard.v1",
+  "providerSemanticBranches": 0,
+  "scannedPath": "packages/core",
+  "status": "PASS"
+}

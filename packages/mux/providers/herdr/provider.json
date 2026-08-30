@@ -1,0 +1,12 @@
+{
+  "kind": "edits.providerReference.v1",
+  "role": "mux",
+  "provider": "herdr",
+  "sourceMode": "exact-reference",
+  "sourceAuthority": "github:NixOS/nixpkgs#herdr",
+  "sourceRevision": "0ae2bc1419c3f345984c2629e72e7a631820fa4d",
+  "artifactSha256": "98e1bb638b299340224b1f66a5f6b5bcadeca0d987e72eee2a8e304d4e71d0d2",
+  "version": "0.8.0",
+  "vendoredSourceFiles": 0,
+  "note": "The exact package selection is the pinned package-set revision; upstream commit provenance remains a distribution-lane concern."
+}

@@ -1,0 +1,11 @@
+{
+  "completionIntakeCount": 0,
+  "duplicateIntakes": 0,
+  "intakePerExplicitSubmit": 1,
+  "kind": "edits.acceptanceEffectsEvidence.v1",
+  "previewIntakeCount": 0,
+  "selectionIntakeCount": 0,
+  "status": "PASS",
+  "submitFixtures": 1,
+  "undoIntakeCount": 0
+}

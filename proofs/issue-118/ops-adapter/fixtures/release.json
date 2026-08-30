@@ -1,0 +1,10 @@
+{
+  "kind": "ops.operationCatalogRelease.v1",
+  "release_id": "ops-proposals-0c07b2d3-shadow-1",
+  "ops_source_commit": "0c07b2d3214ab10f1eb33f3af589670a0b0b179a",
+  "ops_source_tree": "55c70e307648913ff57ab9c54afbc443200857ba",
+  "catalog_path": "operation-catalog.jsonl",
+  "scope": "shadow-fixture",
+  "production_promotion": false,
+  "authority": false
+}

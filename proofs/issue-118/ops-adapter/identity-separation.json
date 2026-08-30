@@ -1,0 +1,12 @@
+{
+  "canonicalRunId": "run-canonical-1",
+  "fixtureCount": 1,
+  "kind": "edits.identitySeparationEvidence.v1",
+  "paneRefAsRunId": 0,
+  "providerRef": {
+    "pane_id": "%7",
+    "provider": "mux"
+  },
+  "providerRefAsRunId": 0,
+  "status": "PASS"
+}

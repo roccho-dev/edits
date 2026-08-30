@@ -1,0 +1,12 @@
+{
+  "kind": "edits.opsReleaseBindingEvidence.v1",
+  "mutableRefCount": 0,
+  "operationCatalogDigest": "cc6f125ee86c5743a075d707c6c06ed896275e07eb9c09e2c55c670506811428",
+  "opsReleaseDigest": "a54c02960f32d812c3a4c2ca90dabe04957d703f1f4b861b776d055f72bff420",
+  "opsReleaseId": "ops-proposals-0c07b2d3-shadow-1",
+  "productionPromotion": false,
+  "runtimeMutableBranchReads": 0,
+  "runtimeRepositoryHeadReads": 0,
+  "scope": "strict-shadow-fixture",
+  "status": "PASS"
+}

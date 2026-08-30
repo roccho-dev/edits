@@ -1,0 +1,25 @@
+{
+  "schema": "edits.issue118.canonTdd.v1",
+  "issue": "roccho-dev/edits#118",
+  "lane": "WT-04-ops-adapter-shadow",
+  "baseCommit": "576a701507eb1d1ceb6a64bf0aa450cda3e1ad30",
+  "purpose": "Prove a strict exact-release ops adapter in zero-effect shadow mode before cutover.",
+  "mergeCondition": "Catalog, intent, result, and view-plan contracts are exact and strict; shadow semantics match; all effect/fallback/stale counts are zero.",
+  "requiredTests": [
+    "TestOpsAdapterShadow.test_catalog_intake_result_and_view_plan_packages_exist",
+    "TestOpsAdapterShadow.test_exact_ops_release_and_catalog_digest_are_bound",
+    "TestOpsAdapterShadow.test_catalog_validation_rejects_malformed_duplicate_orphan_and_unknown_rows",
+    "TestOpsAdapterShadow.test_shadow_candidates_are_semantically_equal_to_legacy_candidates",
+    "TestOpsAdapterShadow.test_pre_accept_ops_intake_count_is_zero",
+    "TestOpsAdapterShadow.test_one_explicit_accept_produces_exactly_one_ops_intake",
+    "TestOpsAdapterShadow.test_edits_direct_executable_start_count_is_zero",
+    "TestOpsAdapterShadow.test_ops_unavailable_fails_closed_without_local_fallback",
+    "TestOpsAdapterShadow.test_stale_result_generation_is_rejected",
+    "TestOpsAdapterShadow.test_provider_reference_never_replaces_canonical_run_id",
+    "TestOpsAdapterShadow.test_result_projection_is_read_only",
+    "TestOpsAdapterShadow.test_runtime_ops_head_reads_are_zero",
+    "TestOpsAdapterShadow.test_new_released_operation_projects_without_edits_source_change",
+    "TestOpsAdapterShadow.test_shadow_mode_effect_count_is_zero"
+  ],
+  "forbiddenGreenMechanisms": ["skip", "xfail", "waiver", "delete-test", "weaken-assertion", "change-expected-output"]
+}

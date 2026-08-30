@@ -1,0 +1,24 @@
+{
+  "schema": "edits.issue118.canonTdd.v1",
+  "issue": "roccho-dev/edits#118",
+  "lane": "completion-pr",
+  "baseCommit": "0c1195e15d0fd2fd3f25b63260e6bb13712543cd",
+  "purpose": "Turn the source-integrated operator-console candidate into an exact CI-proved, immutable, downloadable OCI and Windows release without falsely closing physical Windows/WSLC.",
+  "mergeCondition": "The exact PR head creates real Actions jobs, the one Nix entrypoint is Green, Docker and OCI pytest E2E are Green, Release readback is byte-identical, all pre-existing suites remain Green, and physical Windows remains explicitly OPEN.",
+  "requiredTests": [
+    "TestCompletionContract.test_completion_state_contract_exists",
+    "TestCompletionContract.test_workflow_uses_step_runtime_directory_not_job_runner_context",
+    "TestCompletionContract.test_release_readback_has_one_implementation",
+    "TestCompletionContract.test_workflow_has_no_obsolete_candidate_push_branch",
+    "TestCompletionContract.test_machine_verdict_is_ci_pass_not_physical_closure"
+  ],
+  "forbiddenGreenMechanisms": [
+    "skip",
+    "xfail",
+    "waiver",
+    "delete-test",
+    "weaken-assertion",
+    "change-expected-output",
+    "claim-physical-windows-from-linux-ci"
+  ]
+}

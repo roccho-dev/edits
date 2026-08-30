@@ -46,8 +46,9 @@ inspection, evidence assembly, Windows packaging validation, and E2E control.
 Python is not added to the production image solely for CI orchestration.
 
 The GitHub workflow invokes the build entrypoint exactly once. Pull requests run
-all gates without publishing. A successful `proposals` push, or an explicit
-workflow dispatch, creates an exact-commit prerelease containing:
+all gates without publishing. A successful push to the bounded candidate branch
+or `proposals`, or an explicit workflow dispatch, creates an exact-commit
+prerelease containing:
 
 - `*.docker.tar` for WSLC load;
 - `*.oci.tar` as the OCI release artifact;
@@ -58,3 +59,8 @@ workflow dispatch, creates an exact-commit prerelease containing:
 A Windows user downloads only the `.windows.zip`, extracts it, runs
 `verify.cmd`, then `run.cmd`. Windows performs no build and needs no registry.
 Physical Windows/WSLC readback remains a separate final gate after download.
+
+The prerelease tag is `edits-candidate-<full-source-sha>`. If that exact tag
+already exists, CI downloads every asset and requires the complete file set and
+all bytes to match the newly built release before accepting it. It never repairs
+or replaces a mismatched existing candidate release.

@@ -7,4 +7,5 @@ args=("$lane" "$mode")
 if [[ -n "$result" ]]; then
   args+=(--result "$result")
 fi
+export PYTHONDONTWRITEBYTECODE=1
 exec python3 "$(dirname "$0")/canon_runner.py" "${args[@]}"

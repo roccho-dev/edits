@@ -73,7 +73,13 @@ jobs:
           compgen -G "$RELEASE_DIR/*.oci.tar" >/dev/null
           compgen -G "$RELEASE_DIR/*.windows.zip" >/dev/null
           mapfile -t assets < <(find "$RELEASE_DIR" -maxdepth 1 -type f -print | sort)
-          test "${#assets[@]}" -ge 12
+          compgen -G "$RELEASE_DIR/*.docker.tar" >/dev/null
+          compgen -G "$RELEASE_DIR/*.git.bundle" >/dev/null
+          compgen -G "$RELEASE_DIR/*.evidence.zip" >/dev/null
+          test -f "$RELEASE_DIR/build-manifest.json"
+          test -f "$RELEASE_DIR/e2e-report.json"
+          test -f "$RELEASE_DIR/release-manifest.json"
+          test -f "$RELEASE_DIR/RELEASE.md"
           test -f "$RELEASE_DIR/SHA256SUMS"
           (cd "$RELEASE_DIR" && sha256sum --check SHA256SUMS)
 

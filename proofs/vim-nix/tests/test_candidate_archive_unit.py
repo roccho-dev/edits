@@ -161,3 +161,10 @@ def test_oci_archive_inspection_marks_tampered_layer_non_green(tmp_path: Path) -
     receipt = MODULE.inspect_oci_archive(archive)
     assert receipt["status"] == "FAIL"
     assert len(receipt["digestMismatches"]) == 1
+
+
+def test_candidate_ci_collects_pytest_outcomes_in_memory() -> None:
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    assert "PytestOutcomeCollector" in source
+    assert ".xml" not in source
+    assert "ElementTree" not in source

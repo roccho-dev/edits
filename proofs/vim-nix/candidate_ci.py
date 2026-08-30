@@ -21,7 +21,6 @@ import sys
 import tarfile
 import time
 import uuid
-import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
@@ -413,26 +412,69 @@ def write_checksums(root: pathlib.Path) -> None:
     (root / "SHA256SUMS").write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
-def assert_junit_green(path: pathlib.Path) -> dict[str, int]:
-    root = ET.parse(path).getroot()
-    suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
-    counts = {
-        name: sum(int(suite.attrib.get(name, "0")) for suite in suites)
-        for name in ("tests", "failures", "errors", "skipped")
-    }
-    if counts["tests"] < 1 or any(counts[name] for name in ("failures", "errors", "skipped")):
-        raise BuildFailure(f"pytest JUnit is not strictly Green: {counts}")
-    return counts
+class PytestOutcomeCollector:
+    """Collect strict pytest outcomes in memory without an XML projection."""
+
+    def __init__(self) -> None:
+        self._collected = 0
+        self._passed: set[str] = set()
+        self._failures: set[str] = set()
+        self._errors: set[str] = set()
+        self._skipped: set[str] = set()
+        self._xfailed: set[str] = set()
+        self._xpassed: set[str] = set()
+
+    def pytest_collection_finish(self, session: pytest.Session) -> None:
+        self._collected = len(session.items)
+
+    def pytest_collectreport(self, report: Any) -> None:
+        if report.failed:
+            self._errors.add(str(report.nodeid))
+
+    def pytest_runtest_logreport(self, report: Any) -> None:
+        nodeid = str(report.nodeid)
+        was_xfail = bool(getattr(report, "wasxfail", False))
+        if report.when == "call":
+            if was_xfail:
+                target = self._xfailed if report.skipped else self._xpassed
+                target.add(nodeid)
+            elif report.passed:
+                self._passed.add(nodeid)
+            elif report.failed:
+                self._failures.add(nodeid)
+            elif report.skipped:
+                self._skipped.add(nodeid)
+            return
+        if report.when == "setup" and (report.failed or report.skipped):
+            if was_xfail:
+                self._xfailed.add(nodeid)
+            elif report.failed:
+                self._errors.add(nodeid)
+            else:
+                self._skipped.add(nodeid)
+        elif report.when == "teardown" and report.failed:
+            self._errors.add(nodeid)
+
+    def counts(self) -> dict[str, int]:
+        return {
+            "tests": self._collected,
+            "passed": len(self._passed),
+            "failures": len(self._failures),
+            "errors": len(self._errors),
+            "skipped": len(self._skipped),
+            "xfailed": len(self._xfailed),
+            "xpassed": len(self._xpassed),
+        }
 
 
 def run_pytest(
     *,
     repo: pathlib.Path,
     paths: Sequence[pathlib.Path],
-    junit: pathlib.Path,
     env: Mapping[str, str],
 ) -> dict[str, int]:
     previous = {key: os.environ.get(key) for key in env}
+    collector = PytestOutcomeCollector()
     os.environ.update(env)
     try:
         status = pytest.main(
@@ -440,9 +482,9 @@ def run_pytest(
                 "-q",
                 "-ra",
                 "--strict-markers",
-                f"--junitxml={junit}",
                 *(str(path) for path in paths),
-            ]
+            ],
+            plugins=[collector],
         )
     finally:
         for key, value in previous.items():
@@ -450,9 +492,13 @@ def run_pytest(
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+    counts = collector.counts()
     if status != pytest.ExitCode.OK:
-        raise BuildFailure(f"pytest failed with exit code {status}")
-    return assert_junit_green(junit)
+        raise BuildFailure(f"pytest failed with exit code {status}: {counts}")
+    non_green = ("failures", "errors", "skipped", "xfailed", "xpassed")
+    if counts["tests"] < 1 or counts["passed"] != counts["tests"] or any(counts[name] for name in non_green):
+        raise BuildFailure(f"pytest is not strictly Green: {counts}")
+    return counts
 
 
 def source_bundle(repo: pathlib.Path, output: pathlib.Path, commit: str, suffix: str, log_dir: pathlib.Path) -> pathlib.Path:
@@ -507,11 +553,9 @@ def main() -> int:
         },
     )
 
-    plan_junit = evidence_dir / "pytest-plan.xml"
     plan_counts = run_pytest(
         repo=repo,
         paths=[canon_tests, unit_tests],
-        junit=plan_junit,
         env={"EDITS_REPO": str(repo)},
     )
     if args.plan_only:
@@ -676,11 +720,9 @@ def main() -> int:
     os.environ["EDITS_CANDIDATE_DOCKER_IMAGE_REF"] = image_ref
     os.environ["EDITS_CANDIDATE_OCI_IMAGE_REF"] = oci_runtime_ref
     os.environ["EDITS_CANDIDATE_SOURCE_COMMIT"] = identity.commit
-    pytest_xml = output / "pytest.xml"
     full_counts = run_pytest(
         repo=repo,
         paths=[canon_tests, tests],
-        junit=pytest_xml,
         env={
             "EDITS_REPO": str(repo),
             "EDITS_CANDIDATE_RELEASE_DIR": str(output),
@@ -701,8 +743,8 @@ def main() -> int:
         "imageId": docker_inspection["imageId"],
         "runner": "pytest",
         "pytest": full_counts,
-        "mandatorySkips": 0,
-        "xfail": 0,
+        "mandatorySkips": full_counts["skipped"],
+        "xfail": full_counts["xfailed"],
         "waivers": 0,
         "goldenTokens": [
             "EDITS_INTERACTIVE_PTY_SMOKE_PASS",
@@ -731,7 +773,6 @@ def main() -> int:
             release_asset(oci_tar),
             release_asset(windows_zip),
             release_asset(bundle),
-            release_asset(pytest_xml),
             release_asset(output / "build-manifest.json"),
             release_asset(output / "e2e-report.json"),
             release_asset(evidence_zip),
@@ -749,10 +790,11 @@ def main() -> int:
             "physicalWindowsWslc": "OPEN",
         },
         "nonGreenCounts": {
-            "failed": 0,
-            "errors": 0,
-            "skipped": 0,
-            "xfail": 0,
+            "failed": full_counts["failures"],
+            "errors": full_counts["errors"],
+            "skipped": full_counts["skipped"],
+            "xfail": full_counts["xfailed"],
+            "xpass": full_counts["xpassed"],
             "waivers": 0,
             "falseSuccess": 0,
         },

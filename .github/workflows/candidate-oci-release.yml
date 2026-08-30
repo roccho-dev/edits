@@ -83,17 +83,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          verify_release() {
+            local readback="$RUNNER_TEMP/release-readback"
+            rm -rf "$readback"
+            mkdir -p "$readback"
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$readback"
+            cmp "$RELEASE_DIR/release-manifest.json" "$readback/release-manifest.json"
+            (cd "$readback" && sha256sum --check SHA256SUMS)
+          }
+
           existing="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)"
           if test -n "$existing"; then
-            asset_count="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')"
-            test "$asset_count" -ge 10
-            echo "exact candidate release already exists with $asset_count assets: $RELEASE_TAG"
+            verify_release
+            echo "exact candidate release already exists and readback is byte-valid: $RELEASE_TAG"
             exit 0
           fi
           mapfile -t assets < <(find "$RELEASE_DIR" -maxdepth 1 -type f \
             \( -name '*.docker.tar' -o -name '*.oci.tar' -o -name '*.windows.zip' \
                -o -name '*.evidence.zip' -o -name '*.git.bundle' -o -name '*.json' \
-               -o -name '*.xml' -o -name 'SHA256SUMS' \) -print | sort)
+               -o -name '*.xml' -o -name '*.md' -o -name '*.txt' -o -name 'SHA256SUMS' \) \
+            -print | sort)
           test "${#assets[@]}" -ge 10
           gh release create "$RELEASE_TAG" "${assets[@]}" \
             --repo "$GITHUB_REPOSITORY" \
@@ -101,3 +110,4 @@ jobs:
             --prerelease \
             --title "Edits operator-console candidate ${GITHUB_SHA:0:12}" \
             --notes-file "$RELEASE_DIR/RELEASE.md"
+          verify_release

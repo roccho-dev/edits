@@ -113,6 +113,9 @@ jobs:
         env:
           VIM9_LSP_PATH: ${{ github.workspace }}/yegappan-lsp
           HQ_CONFORMANCE_ARTIFACT: ${{ github.workspace }}/artifacts/hq-vim-conformance-${{ runner.os }}.json
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+          TMPDIR: ${{ runner.temp }}
         run: |
           mkdir -p "${{ github.workspace }}/artifacts"
           export HQ_NATIVE_HQ_FUZZY_PROOF=1

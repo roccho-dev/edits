@@ -24,14 +24,14 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 3ea3a86f6785201ba4ab4c9ac222673f46512eb8
+          ref: af5ac7daebbfa3908e204eac4fa3600834b4261e
           persist-credentials: false
 
       - name: Assert exact candidate
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "3ea3a86f6785201ba4ab4c9ac222673f46512eb8"
+          test "$(git rev-parse HEAD)" = "af5ac7daebbfa3908e204eac4fa3600834b4261e"
           test -z "$(git status --porcelain=v1)"
           git rev-parse HEAD
           git rev-parse 'HEAD^{tree}'
@@ -123,6 +123,9 @@ jobs:
         env:
           VIM9_LSP_PATH: ${{ github.workspace }}/yegappan-lsp
           HQ_CONFORMANCE_ARTIFACT: ${{ github.workspace }}/artifacts/hq-vim-conformance-${{ runner.os }}.json
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+          TMPDIR: ${{ runner.temp }}
         run: |
           set -euo pipefail
           mkdir -p "${{ github.workspace }}/artifacts"

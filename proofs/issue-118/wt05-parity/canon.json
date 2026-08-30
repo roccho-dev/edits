@@ -1,0 +1,27 @@
+{
+  "schema": "edits.issue118.canonTdd.v1",
+  "issue": "roccho-dev/edits#118",
+  "lane": "WT-05-nix-windows-parity",
+  "baseCommit": "576a701507eb1d1ceb6a64bf0aa450cda3e1ad30",
+  "purpose": "Materialize a reproducible candidate and prove zero observable regression against the delivered tar on physical Windows/WSLC.",
+  "mergeCondition": "Candidate build/readback and all old/new semantic, state, failure, and paired-performance proofs pass with zero non-green counts.",
+  "requiredTests": [
+    "TestNixWindowsParity.test_nix_product_candidate_and_parity_entrypoints_exist",
+    "TestNixWindowsParity.test_exact_candidate_inputs_are_bound",
+    "TestNixWindowsParity.test_two_clean_builds_have_identical_image_identity",
+    "TestNixWindowsParity.test_archive_config_manifest_and_layers_are_verified",
+    "TestNixWindowsParity.test_windows_verify_checks_tar_hash_before_load",
+    "TestNixWindowsParity.test_windows_verify_checks_image_id_before_run",
+    "TestNixWindowsParity.test_launch_preserves_tty_volumes_workdir_and_no_ports",
+    "TestNixWindowsParity.test_golden_tar_identity_is_unchanged_and_read_back",
+    "TestNixWindowsParity.test_physical_windows_wslc_journey_passes",
+    "TestNixWindowsParity.test_semantic_parity_is_complete",
+    "TestNixWindowsParity.test_state_and_persistence_parity_is_complete",
+    "TestNixWindowsParity.test_failure_parity_is_complete",
+    "TestNixWindowsParity.test_predeclared_paired_performance_parity_passes",
+    "TestNixWindowsParity.test_all_non_green_counts_are_zero",
+    "TestNixWindowsParity.test_delivery_requires_no_external_registry",
+    "TestNixWindowsParity.test_exact_candidate_git_bundle_is_carried_and_verified"
+  ],
+  "forbiddenGreenMechanisms": ["skip", "xfail", "waiver", "delete-test", "weaken-assertion", "change-expected-output"]
+}

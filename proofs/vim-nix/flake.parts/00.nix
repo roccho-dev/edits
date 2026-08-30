@@ -25,6 +25,7 @@
       edits-src = inputs.editsSource.outPath;
       editsRevision = if inputs.editsSource ? rev then inputs.editsSource.rev else "unknown";
       editsTag = if builtins.stringLength editsRevision >= 12 then builtins.substring 0 12 editsRevision else "dirty";
+      interactiveTag = "git-" + editsTag;
       hqRevision = if hq ? rev then hq.rev else "unknown";
       source-manifest = builtins.toFile "vim-nix-source.json" (builtins.toJSON {
         schema = "edits.vim-nix-source/1";

@@ -1,0 +1,110 @@
+name: build and release edits candidate OCI
+
+"on":
+  push:
+    branches:
+      - proposal/issue-118-candidate-oci-ci
+    paths:
+      - ".github/workflows/candidate-oci-release.yml"
+      - "cmd/edits-client/**"
+      - "cmd/edits-service/**"
+      - "cmd/edits-mux/**"
+      - "packages/hq-vim/**"
+      - "proofs/vim-nix/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: edits-candidate-oci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-e2e-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      RELEASE_DIR: ${{ runner.temp }}/edits-candidate-release
+      RELEASE_TAG: edits-candidate-${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - name: Build every artifact and run pytest E2E through one entrypoint
+        run: >-
+          nix run ./proofs/vim-nix#candidate --
+          --repo-root "$GITHUB_WORKSPACE"
+          --output "$RELEASE_DIR"
+          --release-tag "$RELEASE_TAG"
+
+      - name: Upload exact CI artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: edits-candidate-${{ github.sha }}
+          path: ${{ runner.temp }}/edits-candidate-release
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Create immutable candidate prerelease with OCI and Windows kit
+        shell: bash
+        run: |
+          set -euo pipefail
+          existing="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)"
+          if test -n "$existing"; then
+            asset_count="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')"
+            test "$asset_count" -ge 10
+            echo "exact candidate release already exists with $asset_count assets: $RELEASE_TAG"
+            exit 0
+          fi
+          mapfile -t assets < <(find "$RELEASE_DIR" -maxdepth 1 -type f \
+            \( -name '*.docker.tar' -o -name '*.oci.tar' -o -name '*.windows.zip' \
+               -o -name '*.evidence.zip' -o -name '*.git.bundle' -o -name '*.json' \
+               -o -name '*.xml' -o -name 'SHA256SUMS' \) -print | sort)
+          test "${#assets[@]}" -ge 10
+          gh release create "$RELEASE_TAG" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Edits operator-console candidate ${GITHUB_SHA:0:12}" \
+            --notes-file "$RELEASE_DIR/RELEASE.md"
+
+      - name: Append exact result to edits issue 118
+        if: always()
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        env:
+          BUILD_OUTCOME: ${{ job.status }}
+        with:
+          script: |
+            const ok = process.env.BUILD_OUTCOME === 'success';
+            const tag = process.env.RELEASE_TAG;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 118,
+              body: [
+                '## Candidate OCI CI / pytest E2E',
+                '',
+                `status: **${ok ? 'PASS' : 'FAIL'}**`,
+                `source commit: \`${context.sha}\``,
+                `run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                ok ? `release: https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${tag}` : 'release: not produced',
+                '',
+                ok
+                  ? 'One Nix-backed Python entrypoint built the Docker archive, OCI archive, and no-build Windows kit; pytest then executed interactive PTY smoke, full runtime lifecycle, accepted-history, volume persistence, role-entrypoint, archive-integrity, and mutation-rejection gates.'
+                  : 'The candidate failed closed. No successful release is claimed.'
+              ].join('\n')
+            });

@@ -1,0 +1,17 @@
+{
+  "profile": [
+    "g:edits_profile",
+    "g:hq_profile",
+    "local"
+  ],
+  "serverName": [
+    "g:edits_server_name",
+    "g:hq_server_name",
+    "edits-service"
+  ],
+  "serviceBinary": [
+    "g:edits_service_bin",
+    "g:hq_bin"
+  ],
+  "status": "PASS"
+}

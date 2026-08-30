@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+provider=${EDITS_HQ_BIN:-/bin/hq}
+[ -x "$provider" ] || { echo "edits-service: exact HQ provider is not executable: $provider" >&2; exit 1; }
+exec "$provider" "$@"

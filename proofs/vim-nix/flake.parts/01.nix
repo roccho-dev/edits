@@ -97,15 +97,14 @@
       '';
 
       candidatePython = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pytest ]);
-      candidateCiSource = pkgs.replaceVars (root + "/candidate_ci.py") {
-        git = "${pkgs.git}/bin/git";
-        nix = "${pkgs.nix}/bin/nix";
-        skopeo = "${pkgs.skopeo}/bin/skopeo";
-      };
+      candidateCiText = builtins.replaceStrings
+        [ "@git@" "@nix@" "@skopeo@" ]
+        [ "${pkgs.git}/bin/git" "${pkgs.nix}/bin/nix" "${pkgs.skopeo}/bin/skopeo" ]
+        (builtins.readFile (root + "/candidate_ci.py"));
       candidateCi = pkgs.writeTextFile {
         name = "edits-candidate-oci";
         executable = true;
-        text = "#!${candidatePython}/bin/python\n" + builtins.readFile candidateCiSource;
+        text = "#!${candidatePython}/bin/python\n" + candidateCiText;
       };
 
       imageRoot = pkgs.buildEnv {

@@ -1,0 +1,7 @@
+{
+  "kind": "edits.resultGenerationEvidence.v1",
+  "staleAcceptedAsSuccess": 0,
+  "staleFixtures": 1,
+  "staleRenderedAsCurrent": 0,
+  "status": "PASS"
+}

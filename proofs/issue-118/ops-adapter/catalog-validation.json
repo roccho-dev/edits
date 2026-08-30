@@ -1,0 +1,11 @@
+{
+  "acceptedInvalidRows": 0,
+  "kind": "edits.catalogValidationEvidence.v1",
+  "negative": {
+    "duplicate-operation": "REJECTED",
+    "malformed": "REJECTED",
+    "orphan-command": "REJECTED",
+    "unknown-operation-kind": "REJECTED"
+  },
+  "status": "PASS"
+}

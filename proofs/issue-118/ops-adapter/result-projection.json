@@ -1,0 +1,26 @@
+{
+  "cancelDecisions": 0,
+  "canonicalWrites": 0,
+  "kind": "edits.resultProjectionEvidence.v1",
+  "readOnly": true,
+  "retryDecisions": 0,
+  "status": "PASS",
+  "statusMutations": 0,
+  "viewPlan": {
+    "authority": false,
+    "cancel_on_close": false,
+    "canonical_run_id": "run-canonical-1",
+    "input_allowed": false,
+    "kind": "edits.muxViewPlan.v1",
+    "operations": [
+      "focus",
+      "read",
+      "snapshot",
+      "close"
+    ],
+    "provider_ref": {
+      "pane_id": "%7",
+      "provider": "mux"
+    }
+  }
+}

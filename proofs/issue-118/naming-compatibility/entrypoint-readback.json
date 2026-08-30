@@ -1,0 +1,10 @@
+{
+  "compositionKind": "product-role projection over exact providers",
+  "normalEntrypoint": "/bin/edits",
+  "starts": [
+    "edits-mux",
+    "edits-client",
+    "edits-service"
+  ],
+  "status": "PASS"
+}

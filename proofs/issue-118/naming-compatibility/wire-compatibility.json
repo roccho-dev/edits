@@ -1,0 +1,12 @@
+{
+  "bulkRewriteCount": 0,
+  "note": "No persisted row is rewritten by naming facade V1.",
+  "readKinds": [
+    "hq.*",
+    "edits.*"
+  ],
+  "status": "PASS",
+  "writeKinds": [
+    "hq.*"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "mapping": {
+    "command:HqDoctor": {
+      "implementation": "g:EditsVimDoctor",
+      "new": "command:EditsDoctor",
+      "status": "PASS"
+    },
+    "command:HqStart": {
+      "implementation": "g:EditsVimStart",
+      "new": "command:EditsStart",
+      "status": "PASS"
+    },
+    "command:HqSubmit": {
+      "implementation": "g:EditsVimSubmit",
+      "new": "command:EditsSubmit",
+      "status": "PASS"
+    },
+    "entrypoint:edits": {
+      "new": "entrypoint:edits",
+      "status": "PASS"
+    },
+    "global:g:hq_bin": {
+      "new": "global:g:edits_service_bin",
+      "status": "PASS"
+    },
+    "global:g:hq_profile": {
+      "new": "global:g:edits_profile",
+      "status": "PASS"
+    },
+    "global:g:hq_server_name": {
+      "new": "global:g:edits_server_name",
+      "status": "PASS"
+    }
+  },
+  "status": "PASS"
+}

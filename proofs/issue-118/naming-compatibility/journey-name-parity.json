@@ -1,0 +1,28 @@
+{
+  "journeys": [
+    {
+      "journey": "start",
+      "legacyPass": true,
+      "newPass": true,
+      "proofKind": "shared command target; physical parity deferred",
+      "semanticEqual": true
+    },
+    {
+      "journey": "submit",
+      "legacyPass": true,
+      "newPass": true,
+      "proofKind": "shared command target; physical parity deferred",
+      "semanticEqual": true
+    },
+    {
+      "journey": "doctor",
+      "legacyPass": true,
+      "newPass": true,
+      "proofKind": "shared command target; physical parity deferred",
+      "semanticEqual": true
+    }
+  ],
+  "newNameOnlyRequiredJourneys": 0,
+  "physicalParityOwner": "WT-05",
+  "status": "PASS"
+}

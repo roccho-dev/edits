@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+provider=${EDITS_HERDR_BIN:-/bin/herdr}
+[ -x "$provider" ] || { echo "edits-mux: exact Herdr provider is not executable: $provider" >&2; exit 1; }
+exec "$provider" "$@"

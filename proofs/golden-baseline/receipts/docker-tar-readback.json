@@ -1,0 +1,8 @@
+{
+  "artifact": "edits-interactive-dirty-e4614cc36968.docker.tar",
+  "bytes": 231228928,
+  "expectedSha256": "fba9c3bb803d9269c32d15b27910c4ff2a77eba44a13afa343d8e2e9815b9022",
+  "kind": "edits.goldenDockerTarReadback.v1",
+  "observedSha256": "fba9c3bb803d9269c32d15b27910c4ff2a77eba44a13afa343d8e2e9815b9022",
+  "status": "PASS"
+}

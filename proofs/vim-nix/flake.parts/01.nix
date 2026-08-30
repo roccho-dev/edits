@@ -97,10 +97,15 @@
       '';
 
       candidatePython = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pytest ]);
+      candidateCiSource = pkgs.replaceVars (root + "/candidate_ci.py") {
+        git = "${pkgs.git}/bin/git";
+        nix = "${pkgs.nix}/bin/nix";
+        skopeo = "${pkgs.skopeo}/bin/skopeo";
+      };
       candidateCi = pkgs.writeTextFile {
         name = "edits-candidate-oci";
         executable = true;
-        text = "#!${candidatePython}/bin/python\n" + builtins.readFile (root + "/candidate_ci.py");
+        text = "#!${candidatePython}/bin/python\n" + builtins.readFile candidateCiSource;
       };
 
       imageRoot = pkgs.buildEnv {
@@ -173,6 +178,12 @@
           Entrypoint = [ "/bin/edits" ];
           WorkingDir = "/work/repos";
           User = "1000:1000";
+          Labels = {
+            "org.opencontainers.image.source" = "https://github.com/roccho-dev/edits";
+            "org.opencontainers.image.revision" = editsRevision;
+            "roccho.edits.product-role" = "ops-operator-console";
+            "roccho.edits.build-entrypoint" = "nix run ./proofs/vim-nix#candidate";
+          };
           Env = [
             "PATH=/bin"
             "HOME=/home/dev"

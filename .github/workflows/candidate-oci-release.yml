@@ -1,21 +1,38 @@
 name: build and release edits candidate OCI
 
 "on":
-  push:
+  pull_request:
     branches:
-      - proposal/issue-118-candidate-oci-ci
+      - proposals
     paths:
       - ".github/workflows/candidate-oci-release.yml"
       - "cmd/edits-client/**"
       - "cmd/edits-service/**"
       - "cmd/edits-mux/**"
       - "packages/hq-vim/**"
+      - "proofs/issue-118/wt05a-ci-release/**"
       - "proofs/vim-nix/**"
-  workflow_dispatch: {}
+  push:
+    branches:
+      - proposals
+    paths:
+      - ".github/workflows/candidate-oci-release.yml"
+      - "cmd/edits-client/**"
+      - "cmd/edits-service/**"
+      - "cmd/edits-mux/**"
+      - "packages/hq-vim/**"
+      - "proofs/issue-118/wt05a-ci-release/**"
+      - "proofs/vim-nix/**"
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Create the exact-commit candidate prerelease after every gate passes
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: write
-  issues: write
 
 concurrency:
   group: edits-candidate-oci-${{ github.ref }}
@@ -43,14 +60,14 @@ jobs:
             experimental-features = nix-command flakes
             always-allow-substitutes = true
 
-      - name: Build every artifact and run pytest E2E through one entrypoint
+      - name: Build every artifact and run Docker plus OCI pytest E2E through one entrypoint
         run: >-
           nix run ./proofs/vim-nix#candidate --
           --repo-root "$GITHUB_WORKSPACE"
           --output "$RELEASE_DIR"
           --release-tag "$RELEASE_TAG"
 
-      - name: Upload exact CI artifact
+      - name: Upload exact CI evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: edits-candidate-${{ github.sha }}
@@ -59,7 +76,10 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      - name: Create immutable candidate prerelease with OCI and Windows kit
+      - name: Create immutable candidate prerelease with OCI and ready-to-run Windows kit
+        if: >-
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs.publish_release)
         shell: bash
         run: |
           set -euo pipefail
@@ -81,30 +101,3 @@ jobs:
             --prerelease \
             --title "Edits operator-console candidate ${GITHUB_SHA:0:12}" \
             --notes-file "$RELEASE_DIR/RELEASE.md"
-
-      - name: Append exact result to edits issue 118
-        if: always()
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
-        env:
-          BUILD_OUTCOME: ${{ job.status }}
-        with:
-          script: |
-            const ok = process.env.BUILD_OUTCOME === 'success';
-            const tag = process.env.RELEASE_TAG;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: 118,
-              body: [
-                '## Candidate OCI CI / pytest E2E',
-                '',
-                `status: **${ok ? 'PASS' : 'FAIL'}**`,
-                `source commit: \`${context.sha}\``,
-                `run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-                ok ? `release: https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${tag}` : 'release: not produced',
-                '',
-                ok
-                  ? 'One Nix-backed Python entrypoint built the Docker archive, OCI archive, and no-build Windows kit; pytest then executed interactive PTY smoke, full runtime lifecycle, accepted-history, volume persistence, role-entrypoint, archive-integrity, and mutation-rejection gates.'
-                  : 'The candidate failed closed. No successful release is claimed.'
-              ].join('\n')
-            });

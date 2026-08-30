@@ -120,6 +120,21 @@ jobs:
           set -o pipefail
           go test -v ./... 2>&1 | tee "${{ github.workspace }}/artifacts/hq-vim-conformance-${RUNNER_OS}.log"
 
+      - name: Run accepted-history native popup E2E on Linux
+        if: runner.os == 'Linux'
+        working-directory: packages/hq-vim
+        shell: bash
+        env:
+          VIM9_LSP_PATH: ${{ github.workspace }}/yegappan-lsp
+          HQ_CONFORMANCE_ARTIFACT: ${{ github.workspace }}/artifacts/hq-vim-conformance-${{ runner.os }}.json
+        run: |
+          set -euo pipefail
+          export HQ_NATIVE_HQ_FUZZY_PROOF=1
+          export HQ_CHOICE_E2E=1
+          export HQ_BIN="$HQ_CANONICAL_BIN"
+          script -q -e -f -c "go test -count=1 -run '^TestAcceptedHistoryRecallE2E$' -v" /dev/null \
+            2>&1 | tee "${{ github.workspace }}/artifacts/hq-vim-accepted-history-${RUNNER_OS}.log"
+
       - name: Upload conformance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -128,6 +143,8 @@ jobs:
           path: |
             artifacts/hq-vim-conformance-${{ runner.os }}.json
             artifacts/hq-vim-conformance-${{ runner.os }}.log
+            artifacts/hq-vim-accepted-history-*.json
+            artifacts/hq-vim-accepted-history-*.log
           if-no-files-found: error
 
   vim-nix-oci-proof:

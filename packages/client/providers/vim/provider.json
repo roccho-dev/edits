@@ -1,0 +1,11 @@
+{
+  "kind": "edits.providerReference.v1",
+  "role": "client",
+  "provider": "vim",
+  "sourceMode": "exact-reference",
+  "sourceAuthority": "github:vim/vim",
+  "sourceRevision": "8aecd377f08e9fbdf0092478ab7ec3ce5e0f04ec",
+  "artifactSha256": "4351b2effcf5461143be7353628880e1f65aa0a86042b4d8414e52551f1e3c33",
+  "version": "9.2.0478",
+  "vendoredSourceFiles": 0
+}

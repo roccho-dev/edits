@@ -1,0 +1,39 @@
+{
+  "kind": "edits.providerBindings.v1",
+  "providers": {
+    "herdr": {
+      "artifactSha256": "98e1bb638b299340224b1f66a5f6b5bcadeca0d987e72eee2a8e304d4e71d0d2",
+      "kind": "edits.providerReference.v1",
+      "note": "The exact package selection is the pinned package-set revision; upstream commit provenance remains a distribution-lane concern.",
+      "provider": "herdr",
+      "role": "mux",
+      "sourceAuthority": "github:NixOS/nixpkgs#herdr",
+      "sourceMode": "exact-reference",
+      "sourceRevision": "0ae2bc1419c3f345984c2629e72e7a631820fa4d",
+      "vendoredSourceFiles": 0,
+      "version": "0.8.0"
+    },
+    "hq": {
+      "artifactSha256": "243f3a7de6e38cd61a98168bb7ee06536cfe46c7f1b69ef9b2462221a9bcc5d3",
+      "kind": "edits.providerReference.v1",
+      "provider": "hq",
+      "role": "service",
+      "sourceAuthority": "github:roccho-dev/hq",
+      "sourceMode": "exact-reference",
+      "sourceRevision": "779a298f4efcff8df60205aaf973cb224388a82b",
+      "vendoredSourceFiles": 0
+    },
+    "vim": {
+      "artifactSha256": "4351b2effcf5461143be7353628880e1f65aa0a86042b4d8414e52551f1e3c33",
+      "kind": "edits.providerReference.v1",
+      "provider": "vim",
+      "role": "client",
+      "sourceAuthority": "github:vim/vim",
+      "sourceMode": "exact-reference",
+      "sourceRevision": "8aecd377f08e9fbdf0092478ab7ec3ce5e0f04ec",
+      "vendoredSourceFiles": 0,
+      "version": "9.2.0478"
+    }
+  },
+  "status": "PASS"
+}

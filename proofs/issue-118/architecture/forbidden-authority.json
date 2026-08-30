@@ -1,0 +1,11 @@
+{
+  "arbitraryShellInvocations": 0,
+  "cancelPolicyDefinitions": 0,
+  "canonicalReceiptWriters": 0,
+  "canonicalResultWriters": 0,
+  "directBusinessEffects": 0,
+  "editsWorkerCount": 0,
+  "kind": "edits.forbiddenAuthority.v1",
+  "retryPolicyDefinitions": 0,
+  "status": "PASS"
+}

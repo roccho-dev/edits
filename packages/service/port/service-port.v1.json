@@ -1,0 +1,8 @@
+{
+  "kind": "edits.servicePort.v1",
+  "version": "1",
+  "input": ["edits.editContext.v1", "ops.operationCatalog.v1", "edits.acceptance.v1"],
+  "output": ["edits.suggestion.v1", "edits.diagnostic.v1", "ops.intent.submit.v1"],
+  "effect_authority": false,
+  "result_authority": false
+}

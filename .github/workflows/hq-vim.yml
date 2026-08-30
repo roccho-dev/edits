@@ -20,13 +20,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout edits
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: '1.23.x'
 
@@ -59,7 +59,7 @@ jobs:
       - name: Setup pinned Vim on Linux
         if: runner.os == 'Linux'
         id: linux-vim
-        uses: rhysd/action-setup-vim@v1
+        uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7
         with:
           version: v9.2.0478
 
@@ -74,17 +74,17 @@ jobs:
           "$PINNED_VIM" --version | head -n 3
 
       - name: Checkout pinned yegappan/lsp
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: yegappan/lsp
           ref: 989016ae2ae4cbf304a9ca29478f47fec794493f
           path: yegappan-lsp
 
-      - name: Checkout accepted canonical hq
-        uses: actions/checkout@v4
+      - name: Checkout exact canonical hq
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: roccho-dev/hq
-          ref: proposals
+          ref: 779a298f4efcff8df60205aaf973cb224388a82b
           path: canonical-hq
 
       - name: Record canonical hq commit
@@ -113,6 +113,9 @@ jobs:
         env:
           VIM9_LSP_PATH: ${{ github.workspace }}/yegappan-lsp
           HQ_CONFORMANCE_ARTIFACT: ${{ github.workspace }}/artifacts/hq-vim-conformance-${{ runner.os }}.json
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+          TMPDIR: ${{ runner.temp }}
         run: |
           mkdir -p "${{ github.workspace }}/artifacts"
           export HQ_NATIVE_HQ_FUZZY_PROOF=1
@@ -120,14 +123,31 @@ jobs:
           set -o pipefail
           go test -v ./... 2>&1 | tee "${{ github.workspace }}/artifacts/hq-vim-conformance-${RUNNER_OS}.log"
 
+      - name: Run accepted-history native popup E2E on Linux
+        if: runner.os == 'Linux'
+        working-directory: packages/hq-vim
+        shell: bash
+        env:
+          VIM9_LSP_PATH: ${{ github.workspace }}/yegappan-lsp
+          HQ_CONFORMANCE_ARTIFACT: ${{ github.workspace }}/artifacts/hq-vim-conformance-${{ runner.os }}.json
+        run: |
+          set -euo pipefail
+          export HQ_NATIVE_HQ_FUZZY_PROOF=1
+          export HQ_CHOICE_E2E=1
+          export HQ_BIN="$HQ_CANONICAL_BIN"
+          script -q -e -f -c "go test -count=1 -run '^TestAcceptedHistoryRecallE2E$' -v" /dev/null \
+            2>&1 | tee "${{ github.workspace }}/artifacts/hq-vim-accepted-history-${RUNNER_OS}.log"
+
       - name: Upload conformance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hq-vim-conformance-${{ runner.os }}
           path: |
             artifacts/hq-vim-conformance-${{ runner.os }}.json
             artifacts/hq-vim-conformance-${{ runner.os }}.log
+            artifacts/hq-vim-accepted-history-*.json
+            artifacts/hq-vim-accepted-history-*.log
           if-no-files-found: error
 
   vim-nix-oci-proof:
@@ -140,7 +160,7 @@ jobs:
       OCI_IMAGE_REF: roccho/vim-nix-herdr-hq-proof:oci-d83bf4c
     steps:
       - name: Checkout isolated proof candidate
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
 
@@ -176,7 +196,7 @@ jobs:
 
       - name: Upload downloadable OCI and WSLC proof pack
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: vim-nix-herdr-hq-oci-wslc-${{ github.event.pull_request.head.sha }}
           path: ${{ runner.temp }}/vim-nix-herdr-oci-proof

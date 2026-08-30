@@ -23,12 +23,15 @@ jobs:
     steps:
       - name: Checkout exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 3ea3a86f6785201ba4ab4c9ac222673f46512eb8
+          persist-credentials: false
 
-      - name: Assert candidate parent
+      - name: Assert exact candidate
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "3ea3a86f6785201ba4ab4c9ac222673f46512eb8"
+          test "$(git rev-parse HEAD)" = "3ea3a86f6785201ba4ab4c9ac222673f46512eb8"
           test -z "$(git status --porcelain=v1)"
           git rev-parse HEAD
           git rev-parse 'HEAD^{tree}'
@@ -87,6 +90,7 @@ jobs:
           repository: yegappan/lsp
           ref: 989016ae2ae4cbf304a9ca29478f47fec794493f
           path: yegappan-lsp
+          persist-credentials: false
 
       - name: Checkout exact canonical hq
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -94,6 +98,7 @@ jobs:
           repository: roccho-dev/hq
           ref: 779a298f4efcff8df60205aaf973cb224388a82b
           path: canonical-hq
+          persist-credentials: false
 
       - name: Build exact canonical hq on Windows
         if: runner.os == 'Windows'

@@ -1,0 +1,117 @@
+{
+  "candidateResultsObserved": false,
+  "kind": "edits.goldenAaPerformance.v1",
+  "metrics": {
+    "dockerTarSha256Readback": {
+      "maxAbsoluteDeltaMs": 45.95343600000001,
+      "medianAbsoluteDeltaMs": 6.705940499999997,
+      "pairs": [
+        {
+          "AMs": 149.913895,
+          "BMs": 180.601907,
+          "pair": 1
+        },
+        {
+          "AMs": 163.881817,
+          "BMs": 151.062672,
+          "pair": 2
+        },
+        {
+          "AMs": 154.660603,
+          "BMs": 168.243113,
+          "pair": 3
+        },
+        {
+          "AMs": 152.412368,
+          "BMs": 198.365804,
+          "pair": 4
+        },
+        {
+          "AMs": 162.558702,
+          "BMs": 151.41526,
+          "pair": 5
+        },
+        {
+          "AMs": 148.082769,
+          "BMs": 150.731526,
+          "pair": 6
+        },
+        {
+          "AMs": 149.119141,
+          "BMs": 149.747859,
+          "pair": 7
+        },
+        {
+          "AMs": 146.846945,
+          "BMs": 152.085624,
+          "pair": 8
+        },
+        {
+          "AMs": 146.978164,
+          "BMs": 148.243461,
+          "pair": 9
+        },
+        {
+          "AMs": 149.464266,
+          "BMs": 148.325765,
+          "pair": 10
+        },
+        {
+          "AMs": 147.914585,
+          "BMs": 151.78479,
+          "pair": 11
+        },
+        {
+          "AMs": 170.86037,
+          "BMs": 149.208712,
+          "pair": 12
+        },
+        {
+          "AMs": 152.96493,
+          "BMs": 186.125444,
+          "pair": 13
+        },
+        {
+          "AMs": 147.859713,
+          "BMs": 158.096366,
+          "pair": 14
+        },
+        {
+          "AMs": 147.604968,
+          "BMs": 148.63738,
+          "pair": 15
+        },
+        {
+          "AMs": 149.709802,
+          "BMs": 157.883004,
+          "pair": 16
+        },
+        {
+          "AMs": 150.870202,
+          "BMs": 159.563603,
+          "pair": 17
+        },
+        {
+          "AMs": 156.110277,
+          "BMs": 159.939014,
+          "pair": 18
+        },
+        {
+          "AMs": 148.823311,
+          "BMs": 147.975585,
+          "pair": 19
+        },
+        {
+          "AMs": 148.302944,
+          "BMs": 148.391503,
+          "pair": 20
+        }
+      ]
+    }
+  },
+  "pairedSamples": 20,
+  "phase": "golden-aa",
+  "physicalWslcJourneyLatencyClaimed": false,
+  "scope": "artifact-sha256-readback-only",
+  "status": "PASS"
+}

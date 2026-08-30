@@ -6,7 +6,19 @@ import autoload 'lsp/util.vim' as lsputil
 import autoload 'lsp/offset.vim' as lspoffset
 import autoload 'lsp/textedit.vim' as lsptextedit
 
-var serverName = 'hq-lsp'
+var serverName = 'edits-service'
+
+def PreferredGlobal(primary: string, legacy: string, fallback: string = ''): string
+  var selected = get(g:, primary, '')
+  if selected->type() == v:t_string && !selected->empty()
+    return selected
+  endif
+  selected = get(g:, legacy, '')
+  if selected->type() == v:t_string && !selected->empty()
+    return selected
+  endif
+  return fallback
+enddef
 
 def InstallCompletionUndoBoundary()
   augroup hq_vim_completion
@@ -57,14 +69,15 @@ def CompletionUndoResume()
 enddef
 
 export def Doctor(): dict<any>
-  var hq = get(g:, 'hq_bin', '')
+  var hq = PreferredGlobal('edits_service_bin', 'hq_bin')
   return {
     vim9_lsp: exists('*g:LspAddServer') == 1,
     hq_bin: hq,
     hq_bin_explicit: !hq->empty(),
     hq_bin_absolute: IsAbsolute(hq),
     hq_bin_ok: executable(hq) == 1,
-    profile: get(g:, 'hq_profile', 'local'),
+    profile: PreferredGlobal('edits_profile', 'hq_profile', 'local'),
+    server_name: PreferredGlobal('edits_server_name', 'hq_server_name', 'edits-service'),
     negotiated_position_support: has('patch-9.0.1629'),
   }
 enddef
@@ -84,8 +97,8 @@ export def Start(profileArg: string = ''): number
     throw 'hq.vim requires yegappan/lsp on runtimepath'
   endif
 
-  var profile = !profileArg->empty() ? profileArg : get(g:, 'hq_profile', 'local')
-  var hq = get(g:, 'hq_bin', '')
+  var profile = !profileArg->empty() ? profileArg : PreferredGlobal('edits_profile', 'hq_profile', 'local')
+  var hq = PreferredGlobal('edits_service_bin', 'hq_bin')
   if !IsAbsolute(hq)
     throw 'hq.vim requires g:hq_bin to be an explicit absolute path'
   endif
@@ -96,7 +109,7 @@ export def Start(profileArg: string = ''): number
     throw 'hq.vim requires a non-empty hq profile'
   endif
 
-  serverName = get(g:, 'hq_server_name', 'hq-lsp')
+  serverName = PreferredGlobal('edits_server_name', 'hq_server_name', 'edits-service')
   g:LspOptionsSet({
     autoComplete: true,
     autoHighlightDiags: true,

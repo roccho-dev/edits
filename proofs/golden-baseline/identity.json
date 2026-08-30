@@ -1,0 +1,16 @@
+{
+  "claimCeiling": "historical WSLC Golden only; successor candidate not built by this receipt",
+  "dockerTar": "edits-interactive-dirty-e4614cc36968.docker.tar",
+  "dockerTarSha256": "fba9c3bb803d9269c32d15b27910c4ff2a77eba44a13afa343d8e2e9815b9022",
+  "exposedPorts": 0,
+  "gitBundleSha256": "aabf0a0b57e591d3619a926b999837b1ee61ff4c21cf0a66da99faba3fbe3cde",
+  "homeVolume": "dev-home:/home/dev",
+  "image": "roccho/edits:dirty-e4614cc36968",
+  "imageId": "sha256:ba3e136d7bf01f94433b91c5eebb632f70c5c25f745b5e793d735e3da393e32e",
+  "kind": "edits.goldenIdentity.v1",
+  "lockedEditsSource": "77e1861554bc5c55da6103bac0278e63e97614f1",
+  "sourceNar": "sha256-iTH9pQY/mAYX/0QkQHjOrnTsD58ByNTd1erYMw/OBIQ=",
+  "status": "PASS",
+  "workVolume": "repos:/work/repos",
+  "workdir": "/work/repos"
+}

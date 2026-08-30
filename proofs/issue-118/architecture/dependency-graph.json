@@ -1,0 +1,16 @@
+{
+  "kind": "edits.dependencyGraph.v1",
+  "nodes": ["core", "client", "service", "mux", "ops-adapter", "provider-vim", "provider-hq", "provider-herdr"],
+  "edges": [
+    {"from": "client", "to": "core"},
+    {"from": "service", "to": "core"},
+    {"from": "service", "to": "ops-adapter"},
+    {"from": "mux", "to": "core"},
+    {"from": "provider-vim", "to": "client"},
+    {"from": "provider-hq", "to": "service"},
+    {"from": "provider-herdr", "to": "mux"}
+  ],
+  "unknownEdges": 0,
+  "cycleCount": 0,
+  "status": "PASS"
+}

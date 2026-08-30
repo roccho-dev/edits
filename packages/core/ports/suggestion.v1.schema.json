@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roccho.dev/edits/suggestion.v1.schema.json",
+  "title": "edits.suggestion.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "suggestion_id", "label", "edit", "provenance"],
+  "properties": {
+    "kind": {"const": "edits.suggestion.v1"},
+    "suggestion_id": {"type": "string", "minLength": 1},
+    "label": {"type": "string", "minLength": 1},
+    "detail": {"type": "string"},
+    "documentation": {"type": "string"},
+    "edit": {"$ref": "edit-plan.v1.schema.json"},
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog_digest", "operation_id", "operation_version"],
+      "properties": {
+        "catalog_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "operation_id": {"type": "string", "minLength": 1},
+        "operation_version": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

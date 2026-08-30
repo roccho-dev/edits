@@ -1,0 +1,23 @@
+{
+  "schema": "edits.issue118.canonTdd.v1",
+  "issue": "roccho-dev/edits#118",
+  "lane": "WT-02-naming-compatibility",
+  "baseCommit": "576a701507eb1d1ceb6a64bf0aa450cda3e1ad30",
+  "purpose": "Introduce stable edits product roles while preserving every legacy hq surface and wire contract.",
+  "mergeCondition": "Every new and legacy surface exists, resolves deterministically to the same semantics, and all Golden legacy surfaces remain covered.",
+  "requiredTests": [
+    "TestNamingCompatibility.test_product_role_entrypoints_exist_and_are_executable",
+    "TestNamingCompatibility.test_edits_start_and_hq_start_share_one_implementation",
+    "TestNamingCompatibility.test_edits_submit_and_hq_submit_share_one_implementation",
+    "TestNamingCompatibility.test_edits_doctor_and_hq_doctor_share_one_implementation",
+    "TestNamingCompatibility.test_new_globals_are_preferred_and_legacy_globals_remain_supported",
+    "TestNamingCompatibility.test_configuration_precedence_is_explicit_and_deterministic",
+    "TestNamingCompatibility.test_edits_remains_the_normal_product_entrypoint",
+    "TestNamingCompatibility.test_persisted_hq_wire_kinds_are_not_bulk_renamed",
+    "TestNamingCompatibility.test_help_distinguishes_product_roles_from_providers",
+    "TestNamingCompatibility.test_old_and_new_aliases_have_semantically_equal_e2e_receipts",
+    "TestNamingCompatibility.test_every_golden_legacy_surface_has_a_compatibility_mapping",
+    "TestNamingCompatibility.test_no_required_journey_is_new_name_only"
+  ],
+  "forbiddenGreenMechanisms": ["skip", "xfail", "waiver", "delete-test", "weaken-assertion", "change-expected-output"]
+}

@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+provider=${EDITS_HERDR_BIN:-/bin/herdr}
+case "$provider" in
+  /*) ;;
+  *) echo "edits-mux: exact Herdr provider path must be absolute: $provider" >&2; exit 64 ;;
+esac
+[ -x "$provider" ] || { echo "edits-mux: exact Herdr provider is not executable: $provider" >&2; exit 69; }
+exec "$provider" "$@"

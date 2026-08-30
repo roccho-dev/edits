@@ -1,0 +1,11 @@
+{
+  "claimCeiling": "finite historical Golden contract inventory complete; successor candidate and physical new-head parity not claimed",
+  "coveragePercent": 100,
+  "failed": 0,
+  "kind": "edits.goldenBaselineVerdict.v1",
+  "nativeLinuxPortableReplay": "PENDING",
+  "skippedMandatory": 0,
+  "status": "PASS",
+  "unknown": 0,
+  "waivers": 0
+}

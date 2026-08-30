@@ -1,0 +1,30 @@
+{
+  "schema": "edits.issue118.canonTdd.v1",
+  "issue": "roccho-dev/edits#118",
+  "lane": "wt05a-ci-release",
+  "baseCommit": "4e9fd82f61b796792aa55f132effb1ce0c5a63d8",
+  "purpose": "Build and retain one exact candidate OCI release through one Nix-backed Python entrypoint and mandatory pytest E2E.",
+  "mergeCondition": "All fixed assertions pass, the candidate GitHub CI run is Green on the exact head, and no runtime test is skipped, xfailed, waived, deleted, or weakened.",
+  "requiredTests": [
+    "TestCandidateCiRelease.test_candidate_build_entrypoint_exists",
+    "TestCandidateCiRelease.test_flake_exposes_one_candidate_app",
+    "TestCandidateCiRelease.test_nix_exposes_all_release_materializations",
+    "TestCandidateCiRelease.test_orchestration_is_python_and_invokes_pytest",
+    "TestCandidateCiRelease.test_candidate_pytest_has_no_skip_or_xfail",
+    "TestCandidateCiRelease.test_pytest_covers_interactive_pty_smoke",
+    "TestCandidateCiRelease.test_pytest_covers_runtime_and_history",
+    "TestCandidateCiRelease.test_pytest_covers_persistence_and_mutation_rejection",
+    "TestCandidateCiRelease.test_windows_kit_hashes_and_inspects_before_run",
+    "TestCandidateCiRelease.test_workflow_calls_one_entrypoint_once",
+    "TestCandidateCiRelease.test_workflow_releases_oci_and_windows_assets",
+    "TestCandidateCiRelease.test_workflow_does_not_concatenate_legacy_shell_ci"
+  ],
+  "forbiddenGreenMechanisms": [
+    "skip",
+    "xfail",
+    "waiver",
+    "delete-test",
+    "weaken-assertion",
+    "change-expected-output"
+  ]
+}

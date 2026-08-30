@@ -1,0 +1,7 @@
+{"kind":"vim-command","must_preserve":true,"source_evidence":"packages/hq-vim/plugin/hq.vim","surface_id":"command:HqStart"}
+{"kind":"vim-command","must_preserve":true,"source_evidence":"packages/hq-vim/plugin/hq.vim","surface_id":"command:HqSubmit"}
+{"kind":"vim-command","must_preserve":true,"source_evidence":"packages/hq-vim/plugin/hq.vim","surface_id":"command:HqDoctor"}
+{"kind":"vim-global","must_preserve":true,"source_evidence":"packages/hq-vim/autoload/hq.vim","surface_id":"global:g:hq_bin"}
+{"kind":"vim-global","must_preserve":true,"source_evidence":"packages/hq-vim/autoload/hq.vim","surface_id":"global:g:hq_profile"}
+{"kind":"vim-global","must_preserve":true,"source_evidence":"packages/hq-vim/autoload/hq.vim","surface_id":"global:g:hq_server_name"}
+{"kind":"product-entrypoint","must_preserve":true,"source_evidence":"HANDOFF.md#Windows load and launch","surface_id":"entrypoint:edits"}

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roccho.dev/edits/edit-context.v1.schema.json",
+  "title": "edits.editContext.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "document_id",
+    "version",
+    "text",
+    "cursor"
+  ],
+  "properties": {
+    "kind": {
+      "const": "edits.editContext.v1"
+    },
+    "document_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "text": {
+      "type": "string"
+    },
+    "cursor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "line",
+        "character"
+      ],
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "character": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "line",
+        "character"
+      ],
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "character": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

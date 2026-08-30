@@ -1,0 +1,24 @@
+{
+  "doctor": {
+    "durableWriteDelta": 0,
+    "legacySemanticDigest": "0be77e0d2156b648e1a54617e8013821870422dfc0e4579c0677da063bb75f28",
+    "newSemanticDigest": "0be77e0d2156b648e1a54617e8013821870422dfc0e4579c0677da063bb75f28",
+    "physicalE2EPending": "WT-05",
+    "proofKind": "same-command-target source readback"
+  },
+  "start": {
+    "durableWriteDelta": 0,
+    "legacySemanticDigest": "15f5ea10af0739fd0a4f815303acbdf85938156b54325b57728b14a828d41260",
+    "newSemanticDigest": "15f5ea10af0739fd0a4f815303acbdf85938156b54325b57728b14a828d41260",
+    "physicalE2EPending": "WT-05",
+    "proofKind": "same-command-target source readback"
+  },
+  "status": "PASS",
+  "submit": {
+    "durableWriteDelta": 1,
+    "legacySemanticDigest": "bc236a919898d72a8d01e533d391066c5d71b0aaa4a599bd673863c46acac94a",
+    "newSemanticDigest": "bc236a919898d72a8d01e533d391066c5d71b0aaa4a599bd673863c46acac94a",
+    "physicalE2EPending": "WT-05",
+    "proofKind": "same-command-target source readback"
+  }
+}

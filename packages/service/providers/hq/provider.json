@@ -1,0 +1,10 @@
+{
+  "kind": "edits.providerReference.v1",
+  "role": "service",
+  "provider": "hq",
+  "sourceMode": "exact-reference",
+  "sourceAuthority": "github:roccho-dev/hq",
+  "sourceRevision": "779a298f4efcff8df60205aaf973cb224388a82b",
+  "artifactSha256": "243f3a7de6e38cd61a98168bb7ee06536cfe46c7f1b69ef9b2462221a9bcc5d3",
+  "vendoredSourceFiles": 0
+}

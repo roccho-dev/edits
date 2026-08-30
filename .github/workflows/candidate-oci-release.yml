@@ -1,0 +1,133 @@
+name: build and release edits candidate OCI
+
+"on":
+  pull_request:
+    branches:
+      - proposals
+  push:
+    branches:
+      - proposals
+      - proposal/issue-118-candidate-oci-ci
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Create the exact-commit candidate prerelease after every gate passes
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: edits-candidate-oci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-e2e-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      RELEASE_DIR: ${{ runner.temp }}/edits-candidate-release
+      RELEASE_TAG: edits-candidate-${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            always-allow-substitutes = true
+
+      - name: Build every artifact and run Docker plus OCI pytest E2E through one entrypoint
+        run: >-
+          nix run ./proofs/vim-nix#candidate --
+          --repo-root "$GITHUB_WORKSPACE"
+          --output "$RELEASE_DIR"
+          --release-tag "$RELEASE_TAG"
+
+      - name: Upload exact CI evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: edits-candidate-${{ github.sha }}
+          path: ${{ runner.temp }}/edits-candidate-release
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Create or verify immutable exact-commit candidate prerelease
+        if: >-
+          success() &&
+          (github.event_name == 'push' ||
+           (github.event_name == 'workflow_dispatch' && inputs.publish_release))
+        shell: bash
+        run: |
+          set -euo pipefail
+          compgen -G "$RELEASE_DIR/*.oci.tar" >/dev/null
+          compgen -G "$RELEASE_DIR/*.windows.zip" >/dev/null
+          mapfile -t assets < <(find "$RELEASE_DIR" -maxdepth 1 -type f -print | sort)
+          compgen -G "$RELEASE_DIR/*.docker.tar" >/dev/null
+          compgen -G "$RELEASE_DIR/*.git.bundle" >/dev/null
+          compgen -G "$RELEASE_DIR/*.evidence.zip" >/dev/null
+          test -f "$RELEASE_DIR/build-manifest.json"
+          test -f "$RELEASE_DIR/e2e-report.json"
+          test -f "$RELEASE_DIR/release-manifest.json"
+          test -f "$RELEASE_DIR/RELEASE.md"
+          test -f "$RELEASE_DIR/SHA256SUMS"
+          (cd "$RELEASE_DIR" && sha256sum --check SHA256SUMS)
+
+          find "$RELEASE_DIR" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/local-assets.txt"
+          verify_release() {
+            local verify_dir="$RUNNER_TEMP/existing-release"
+            rm -rf "$verify_dir"
+            mkdir -p "$verify_dir"
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$verify_dir"
+            test -f "$verify_dir/SHA256SUMS"
+            (cd "$verify_dir" && sha256sum --check SHA256SUMS)
+            find "$verify_dir" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/remote-assets.txt"
+            diff -u "$RUNNER_TEMP/local-assets.txt" "$RUNNER_TEMP/remote-assets.txt"
+            while IFS= read -r name; do
+              cmp "$RELEASE_DIR/$name" "$verify_dir/$name"
+            done < "$RUNNER_TEMP/local-assets.txt"
+            target="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)"
+            test "$target" = "$GITHUB_SHA"
+          }
+
+          verify_release() {
+            local verify_dir="$RUNNER_TEMP/release-readback"
+            rm -rf "$verify_dir"
+            mkdir -p "$verify_dir"
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$verify_dir"
+            test -f "$verify_dir/SHA256SUMS"
+            (cd "$verify_dir" && sha256sum --check SHA256SUMS)
+            find "$RELEASE_DIR" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/local-assets.txt"
+            find "$verify_dir" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/remote-assets.txt"
+            diff -u "$RUNNER_TEMP/local-assets.txt" "$RUNNER_TEMP/remote-assets.txt"
+            while IFS= read -r name; do
+              cmp "$RELEASE_DIR/$name" "$verify_dir/$name"
+            done < "$RUNNER_TEMP/local-assets.txt"
+            target="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)"
+            test "$target" = "$GITHUB_SHA"
+          }
+
+          existing="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)"
+          if test -n "$existing"; then
+            verify_release
+            echo "exact candidate prerelease already exists and is byte-identical: $RELEASE_TAG"
+            exit 0
+          fi
+
+          gh release create "$RELEASE_TAG" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Edits operator-console candidate ${GITHUB_SHA:0:12}" \
+            --notes-file "$RELEASE_DIR/RELEASE.md"
+          verify_release

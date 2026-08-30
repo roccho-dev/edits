@@ -1,0 +1,14 @@
+{
+  "roles": {
+    "edits-client": {
+      "provider": "vim"
+    },
+    "edits-mux": {
+      "provider": "herdr"
+    },
+    "edits-service": {
+      "provider": "hq"
+    }
+  },
+  "status": "PASS"
+}

@@ -1,0 +1,5 @@
+[
+  {"candidate_id":"operation.proof.echo@1","label":"proof.echo","detail":"Emit a harmless deterministic proof token","edit_plan":"@proof.echo","operation_id":"operation.proof.echo","operation_version":"1"},
+  {"candidate_id":"operation.model.addSchema@1","label":"model.addSchema","detail":"Propose a schema addition for later validation","edit_plan":"@model.addSchema\ntarget_ref=","operation_id":"operation.model.addSchema","operation_version":"1"},
+  {"candidate_id":"operation.agent.inspect@1","label":"agent.inspect","detail":"Request bounded investigation before model change","edit_plan":"@agent.inspect\ntarget_ref=","operation_id":"operation.agent.inspect","operation_version":"1"}
+]

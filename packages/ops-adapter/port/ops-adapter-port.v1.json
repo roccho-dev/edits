@@ -1,0 +1,9 @@
+{
+  "kind": "edits.opsAdapterPort.v1",
+  "version": "1",
+  "inputs": ["ops.operationCatalog.v1", "ops.resultProjection.v1", "ops.viewPlan.v1"],
+  "outputs": ["ops.intent.submit.v1"],
+  "runtime_source_import": false,
+  "repository_head_read": false,
+  "effect_authority": false
+}

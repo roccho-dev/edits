@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roccho.dev/edits/acceptance.v1.schema.json",
+  "title": "edits.acceptance.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "request_id", "document_id", "document_version", "operation"],
+  "properties": {
+    "kind": {"const": "edits.acceptance.v1"},
+    "request_id": {"type": "string", "minLength": 1},
+    "document_id": {"type": "string", "minLength": 1},
+    "document_version": {"type": "integer", "minimum": 0},
+    "idempotency_key": {"type": "string", "minLength": 1},
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog_digest", "operation_id", "operation_version", "input"],
+      "properties": {
+        "catalog_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "operation_id": {"type": "string", "minLength": 1},
+        "operation_version": {"type": "string", "minLength": 1},
+        "input": {"type": "object"}
+      }
+    }
+  }
+}

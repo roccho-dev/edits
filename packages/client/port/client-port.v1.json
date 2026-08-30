@@ -1,0 +1,8 @@
+{
+  "kind": "edits.clientPort.v1",
+  "version": "1",
+  "input": ["edits.suggestion.v1", "edits.editPlan.v1", "edits.diagnostic.v1", "edits.resultView.v1"],
+  "output": ["edits.editContext.v1", "edits.acceptance.v1"],
+  "durable_write_operations": ["explicit_accept"],
+  "view_only_operations": ["open", "complete", "preview", "select", "undo", "focus", "read"]
+}

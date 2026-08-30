@@ -4,24 +4,15 @@ on:
   push:
     branches:
       - carry/proposals-head-576a7015-20260830
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: read
-
-concurrency:
-  group: carry-proposals-head-576a7015-20260830
-  cancel-in-progress: true
 
 jobs:
   bundle:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    env:
-      TARGET_SHA: 576a701507eb1d1ceb6a64bf0aa450cda3e1ad30
-      TARGET_TREE: 1bc42500e8d11f229c98bcff5983c0cf7da1a563
-      ARTIFACT_DIR: ${{ runner.temp }}/edits-proposals-head
-      BUNDLE_NAME: 260830095448.wslc-oci.bundle
     steps:
       - name: Checkout carrier branch with complete history
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -31,44 +22,49 @@ jobs:
 
       - name: Materialize and verify exact proposals bundle
         shell: bash
+        env:
+          TARGET_SHA: 576a701507eb1d1ceb6a64bf0aa450cda3e1ad30
+          TARGET_TREE: 1bc42500e8d11f229c98bcff5983c0cf7da1a563
+          BUNDLE_NAME: 260830095448.wslc-oci.bundle
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$TARGET_SHA"
+          artifact_dir="$RUNNER_TEMP/edits-proposals-head"
+          clone_dir="$RUNNER_TEMP/verify-clone"
+
+          git cat-file -e "$TARGET_SHA^{commit}"
           test "$(git rev-parse "$TARGET_SHA^{tree}")" = "$TARGET_TREE"
           test -z "$(git status --porcelain=v1)"
 
-          mkdir -p "$ARTIFACT_DIR"
+          mkdir -p "$artifact_dir"
           git update-ref refs/heads/proposals "$TARGET_SHA"
-          git bundle create "$ARTIFACT_DIR/$BUNDLE_NAME" refs/heads/proposals
-          git bundle verify "$ARTIFACT_DIR/$BUNDLE_NAME" | tee "$ARTIFACT_DIR/bundle.verify.txt"
-          git bundle list-heads "$ARTIFACT_DIR/$BUNDLE_NAME" | tee "$ARTIFACT_DIR/bundle.heads.txt"
-          grep -Fx "$TARGET_SHA refs/heads/proposals" "$ARTIFACT_DIR/bundle.heads.txt"
+          git bundle create "$artifact_dir/$BUNDLE_NAME" refs/heads/proposals
+          git bundle verify "$artifact_dir/$BUNDLE_NAME" | tee "$artifact_dir/bundle.verify.txt"
+          git bundle list-heads "$artifact_dir/$BUNDLE_NAME" | tee "$artifact_dir/bundle.heads.txt"
+          grep -Fx "$TARGET_SHA refs/heads/proposals" "$artifact_dir/bundle.heads.txt"
 
-          clone_dir="$RUNNER_TEMP/verify-clone"
-          git clone --quiet "$ARTIFACT_DIR/$BUNDLE_NAME" "$clone_dir"
+          git clone --quiet "$artifact_dir/$BUNDLE_NAME" "$clone_dir"
           test "$(git -C "$clone_dir" rev-parse HEAD)" = "$TARGET_SHA"
           test "$(git -C "$clone_dir" rev-parse 'HEAD^{tree}')" = "$TARGET_TREE"
           test -z "$(git -C "$clone_dir" status --porcelain=v1)"
           git -C "$clone_dir" fsck --strict --no-dangling
 
           commit_count="$(git -C "$clone_dir" rev-list --count HEAD)"
-          bundle_sha="$(sha256sum "$ARTIFACT_DIR/$BUNDLE_NAME" | awk '{print $1}')"
-          cat > "$ARTIFACT_DIR/head.json" <<EOF
-          {
-            "schema": "edits.exactHeadCarry.v1",
-            "repository": "roccho-dev/edits",
-            "branch": "proposals",
-            "commit": "$TARGET_SHA",
-            "tree": "$TARGET_TREE",
-            "commitCount": $commit_count,
-            "bundle": "$BUNDLE_NAME",
-            "bundleSha256": "$bundle_sha",
-            "bundleVerify": "pass",
-            "cloneVerify": "pass",
-            "fsck": "pass"
-          }
-          EOF
-          sha256sum "$ARTIFACT_DIR/$BUNDLE_NAME" "$ARTIFACT_DIR/head.json" > "$ARTIFACT_DIR/SHA256SUMS"
+          bundle_sha="$(sha256sum "$artifact_dir/$BUNDLE_NAME" | awk '{print $1}')"
+          printf '%s\n' \
+            '{' \
+            '  "schema": "edits.exactHeadCarry.v1",' \
+            '  "repository": "roccho-dev/edits",' \
+            '  "branch": "proposals",' \
+            "  \"commit\": \"$TARGET_SHA\"," \
+            "  \"tree\": \"$TARGET_TREE\"," \
+            "  \"commitCount\": $commit_count," \
+            "  \"bundle\": \"$BUNDLE_NAME\"," \
+            "  \"bundleSha256\": \"$bundle_sha\"," \
+            '  "bundleVerify": "pass",' \
+            '  "cloneVerify": "pass",' \
+            '  "fsck": "pass"' \
+            '}' > "$artifact_dir/head.json"
+          sha256sum "$artifact_dir/$BUNDLE_NAME" "$artifact_dir/head.json" > "$artifact_dir/SHA256SUMS"
 
       - name: Upload exact head carry
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -1,0 +1,13 @@
+name: actions runner probe
+
+on:
+  push:
+    branches:
+      - proof/actions-runner-probe-20260830
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Prove a job can start
+        run: echo ACTIONS_RUNNER_PROBE_PASS

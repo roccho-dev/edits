@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: edits-candidate-oci-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-e2e:

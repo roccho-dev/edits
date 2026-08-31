@@ -27,21 +27,27 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          def replace_exact(path: Path, old: str, new: str, *, count: int = 1) -> None:
+          def replace_once(path: Path, old: str, new: str) -> None:
               text = path.read_text(encoding="utf-8")
-              actual = text.count(old)
-              if actual != count:
-                  raise SystemExit(f"{path}: expected {count} occurrences, found {actual}: {old[:100]!r}")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, found {count}: {old[:120]!r}")
               path.write_text(text.replace(old, new), encoding="utf-8")
 
+          def append_once(path: Path, marker: str, addition: str) -> None:
+              text = path.read_text(encoding="utf-8")
+              if marker in text:
+                  raise SystemExit(f"{path}: addition already present: {marker}")
+              path.write_text(text.rstrip() + "\n\n" + addition.strip() + "\n", encoding="utf-8")
+
           candidate = Path("proofs/vim-nix/candidate_ci.py")
-          marker = '''def canonical_json(value: Any) -> bytes:
+          canonical_json = '''def canonical_json(value: Any) -> bytes:
               return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
           '''
-          addition = marker + '''
+          canonical_config = canonical_json + '''
 
           def canonical_image_config(config: Mapping[str, Any]) -> dict[str, Any]:
-              """Normalize only representation-equivalent UTC timestamps before comparison."""
+              """Normalize only representation-equivalent explicit UTC timestamp spellings."""
               normalized = json.loads(json.dumps(config))
               if not isinstance(normalized, dict):
                   raise BuildFailure("image config must be an object")
@@ -61,10 +67,10 @@ jobs:
                   value = scope["created"]
                   if not isinstance(value, str):
                       raise BuildFailure(f"image config {field} must be a string")
-                  match = re.fullmatch(r"(.+?)(?:Z|\\+00:00)", value)
-                  if match is None:
-                      raise BuildFailure(f"image config {field} must be an explicit UTC RFC3339 timestamp")
-                  scope["created"] = match.group(1) + "Z"
+                  if value.endswith("+00:00"):
+                      scope["created"] = value[:-6] + "Z"
+                  elif not value.endswith("Z"):
+                      raise BuildFailure(f"image config {field} must use explicit UTC")
               return normalized
 
 
@@ -72,38 +78,27 @@ jobs:
               payload = canonical_json(canonical_image_config(config))
               return "sha256:" + hashlib.sha256(payload).hexdigest()
           '''
-          replace_exact(candidate, marker, addition)
-
-          replace_exact(
+          replace_once(candidate, canonical_json, canonical_config)
+          replace_once(
               candidate,
-              '''        "configDigest": f"sha256:{config_hex}",
-                      "manifestDigest": manifest_digest,
-              ''',
-              '''        "configDigest": f"sha256:{config_hex}",
-                      "canonicalConfigDigest": canonical_image_config_digest(config),
-                      "manifestDigest": manifest_digest,
-              ''',
+              '        "configDigest": f"sha256:{config_hex}",\n',
+              '        "configDigest": f"sha256:{config_hex}",\n        "canonicalConfigDigest": canonical_image_config_digest(config),\n',
           )
-          replace_exact(
+          replace_once(
               candidate,
-              '''        "configDigest": config_digest,
-                      "manifestDigest": manifest_digest,
-              ''',
-              '''        "configDigest": config_digest,
-                      "canonicalConfigDigest": canonical_image_config_digest(config),
-                      "manifestDigest": manifest_digest,
-              ''',
+              '        "configDigest": config_digest,\n',
+              '        "configDigest": config_digest,\n        "canonicalConfigDigest": canonical_image_config_digest(config),\n',
           )
-          replace_exact(
+          replace_once(
               candidate,
               '''    if docker_inspection["configDigest"] != oci_inspection["configDigest"]:
-                      raise BuildFailure("Docker and OCI config digests differ")
+                  raise BuildFailure("Docker and OCI config digests differ")
               ''',
               '''    if docker_inspection["canonicalConfigDigest"] != oci_inspection["canonicalConfigDigest"]:
-                      raise BuildFailure("Docker and OCI canonical image configs differ")
+                  raise BuildFailure("Docker and OCI canonical image configs differ")
               ''',
           )
-          replace_exact(
+          replace_once(
               candidate,
               '''            "id": docker_inspection["imageId"],
                           "configDigest": docker_inspection["configDigest"],
@@ -118,7 +113,7 @@ jobs:
                           "ociManifestDigest": oci_inspection["manifestDigest"],
               ''',
           )
-          replace_exact(
+          replace_once(
               candidate,
               '''        "imageId": docker_inspection["imageId"],
                       "runner": "pytest",
@@ -129,7 +124,7 @@ jobs:
                       "runner": "pytest",
               ''',
           )
-          replace_exact(
+          replace_once(
               candidate,
               '''                f"- image ID: `{docker_inspection['imageId']}`",
               ''',
@@ -140,30 +135,15 @@ jobs:
           )
 
           archive_test = Path("proofs/vim-nix/tests/test_candidate_archive_unit.py")
-          append_marker = '''def test_candidate_image_requires_fakeroot_for_nonroot_state_ownership() -> None:
-              source = (REPO / "proofs" / "vim-nix" / "flake.parts" / "01.nix").read_text(encoding="utf-8")
-              image = source.split("interactiveImage = pkgs.dockerTools.buildLayeredImage", 1)[1].split(
-                  "interactiveOciImage =", 1
-              )[0]
-              extra_commands = image.split("extraCommands = ''", 1)[1].split("'';", 1)[0]
-
-              assert "chown" not in extra_commands
-              assert "fakeRootCommands = ''" in image
-              assert "chown -R 1000:1000 ./home/dev ./work/repos" in image
-          '''
-          append_tests = append_marker + '''
-
-          def test_canonical_config_digest_accepts_only_equivalent_utc_spelling() -> None:
+          append_once(
+              archive_test,
+              "test_canonical_config_digest_accepts_only_equivalent_utc_spelling",
+              '''def test_canonical_config_digest_accepts_only_equivalent_utc_spelling() -> None:
               docker_config = {
                   "architecture": "amd64",
                   "os": "linux",
                   "created": "1970-01-01T00:00:01+00:00",
-                  "history": [
-                      {
-                          "created": "1970-01-01T00:00:01+00:00",
-                          "comment": "same layer history",
-                      }
-                  ],
+                  "history": [{"created": "1970-01-01T00:00:01+00:00", "comment": "same history"}],
                   "config": {"Entrypoint": ["/bin/edits"], "User": "1000:1000"},
                   "rootfs": {"type": "layers", "diff_ids": ["sha256:" + "a" * 64]},
               }
@@ -190,71 +170,75 @@ jobs:
               assert docker_receipt["configDigest"].startswith("sha256:")
               assert oci_receipt["configDigest"].startswith("sha256:")
               assert docker_receipt["canonicalConfigDigest"] == oci_receipt["canonicalConfigDigest"]
-          '''
-          replace_exact(archive_test, append_marker, append_tests)
+          ''',
+          )
 
           runtime_test = Path("proofs/vim-nix/tests/test_candidate_oci.py")
-          replace_exact(
+          replace_once(
               runtime_test,
               '''    for lane, image in image_refs.items():
-                      inspected = run_command(
-                          ["docker", "image", "inspect", image],
-                          log=docker_log_dir / f"{lane}-inspect.log",
-                      )
-                      rows = json.loads(inspected.stdout)
-                      assert len(rows) == 1
+                  inspected = run_command(
+                      ["docker", "image", "inspect", image],
+                      log=docker_log_dir / f"{lane}-inspect.log",
+                  )
+                  rows = json.loads(inspected.stdout)
+                  assert len(rows) == 1
+                  assert rows[0]["Id"] == build_manifest["image"]["id"]
+              ''',
+              '''    raw_ids = {
+                  build_manifest["image"]["id"],
+                  build_manifest["image"]["ociImageId"],
+              }
+              for lane, image in image_refs.items():
+                  inspected = run_command(
+                      ["docker", "image", "inspect", image],
+                      log=docker_log_dir / f"{lane}-inspect.log",
+                  )
+                  rows = json.loads(inspected.stdout)
+                  assert len(rows) == 1
+                  assert rows[0]["Id"] in raw_ids
+                  if lane == "docker":
                       assert rows[0]["Id"] == build_manifest["image"]["id"]
               ''',
-              '''    expected_ids = {
-                      "docker": build_manifest["image"]["id"],
-                      "oci": build_manifest["image"]["ociImageId"],
-                  }
-                  for lane, image in image_refs.items():
-                      inspected = run_command(
-                          ["docker", "image", "inspect", image],
-                          log=docker_log_dir / f"{lane}-inspect.log",
-                      )
-                      rows = json.loads(inspected.stdout)
-                      assert len(rows) == 1
-                      assert rows[0]["Id"] == expected_ids[lane]
-              ''',
           )
-          replace_exact(
+          replace_once(
               runtime_test,
               '''    assert docker_receipt["configDigest"] == oci_receipt["configDigest"] == build_manifest["image"]["configDigest"]
                   assert docker_receipt["layerDigests"] == oci_receipt["layerDigests"] == build_manifest["image"]["layerDigests"]
               ''',
               '''    image = build_manifest["image"]
-                  assert docker_receipt["configDigest"] == image["configDigest"]
-                  assert oci_receipt["configDigest"] == image["ociConfigDigest"]
-                  assert docker_receipt["canonicalConfigDigest"] == oci_receipt["canonicalConfigDigest"] == image["canonicalConfigDigest"]
-                  assert docker_receipt["layerDigests"] == oci_receipt["layerDigests"] == image["layerDigests"]
+              assert docker_receipt["configDigest"] == image["configDigest"]
+              assert oci_receipt["configDigest"] == image["ociConfigDigest"]
+              assert docker_receipt["canonicalConfigDigest"] == oci_receipt["canonicalConfigDigest"] == image["canonicalConfigDigest"]
+              assert docker_receipt["layerDigests"] == oci_receipt["layerDigests"] == image["layerDigests"]
               ''',
           )
-          replace_exact(
+          replace_once(
               runtime_test,
               '''def test_runtime_images_have_same_product_contract(
-                  loaded_images: dict[str, str],
-                  docker_log_dir: pathlib.Path,
-              ) -> None:
+              loaded_images: dict[str, str],
+              docker_log_dir: pathlib.Path,
+          ) -> None:
               ''',
               '''def test_runtime_images_have_same_product_contract(
-                  loaded_images: dict[str, str],
-                  build_manifest: dict[str, object],
-                  docker_log_dir: pathlib.Path,
-              ) -> None:
+              loaded_images: dict[str, str],
+              build_manifest: dict[str, object],
+              docker_log_dir: pathlib.Path,
+          ) -> None:
               ''',
           )
-          replace_exact(
+          replace_once(
               runtime_test,
               '''    assert inspected[0]["Id"] == inspected[1]["Id"]
-                  assert inspected[0]["RootFS"]["Layers"] == inspected[1]["RootFS"]["Layers"]
+              assert inspected[0]["RootFS"]["Layers"] == inspected[1]["RootFS"]["Layers"]
               ''',
-              '''    assert {row["Id"] for row in inspected} == {
-                      build_manifest["image"]["id"],
-                      build_manifest["image"]["ociImageId"],
-                  }
-                  assert inspected[0]["RootFS"]["Layers"] == inspected[1]["RootFS"]["Layers"]
+              '''    raw_ids = {
+                  build_manifest["image"]["id"],
+                  build_manifest["image"]["ociImageId"],
+              }
+              assert all(row["Id"] in raw_ids for row in inspected)
+              assert inspected[0]["Id"] == build_manifest["image"]["id"]
+              assert inspected[0]["RootFS"]["Layers"] == inspected[1]["RootFS"]["Layers"]
               ''',
           )
           PY

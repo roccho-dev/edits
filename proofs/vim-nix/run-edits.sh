@@ -188,6 +188,7 @@ set nomodeline
 set noswapfile
 set encoding=utf-8
 set completeopt=menuone,noinsert,noselect,popup
+set nomore
 set runtimepath^=/share/yegappan-lsp
 set runtimepath^=/share/hq-vim
 let g:edits_service_bin = '/bin/edits-service'

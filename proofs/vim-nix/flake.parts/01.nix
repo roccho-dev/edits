@@ -168,10 +168,12 @@
         contents = [ interactiveImageRoot pkgs.dockerTools.fakeNss ];
         extraCommands = ''
           mkdir -p home/dev work/repos tmp
-          chown -R 1000:1000 home/dev work/repos
           chmod 0700 home/dev
           chmod 0755 work work/repos
           chmod 1777 tmp
+        '';
+        fakeRootCommands = ''
+          chown -R 1000:1000 ./home/dev ./work/repos
         '';
         config = {
           Entrypoint = [ "/bin/edits" ];
@@ -209,12 +211,30 @@
       };
 
       interactiveOciImage = pkgs.runCommand "edits-operator-console-${interactiveTag}.oci.tar" {
-        nativeBuildInputs = [ pkgs.skopeo ];
+        nativeBuildInputs = [ pkgs.gnutar pkgs.skopeo ];
       } ''
-        rm -rf "$out"
-        skopeo --insecure-policy copy \
+        layout="$TMPDIR/oci-layout"
+        rm -rf "$layout" "$out"
+        mkdir -p "$layout"
+
+        skopeo --insecure-policy --tmpdir "$TMPDIR" copy \
           "docker-archive:${interactiveImage}" \
-          "oci-archive:$out:roccho/edits:${interactiveTag}"
+          "oci:$layout:${interactiveTag}"
+
+        ${candidatePython}/bin/python ${root + "/normalize_oci_layout.py"} \
+          --docker-archive ${interactiveImage} \
+          --oci-layout "$layout"
+
+        LC_ALL=C ${pkgs.gnutar}/bin/tar \
+          --sort=name \
+          --mtime=@1 \
+          --owner=0 \
+          --group=0 \
+          --numeric-owner \
+          --format=ustar \
+          -C "$layout" \
+          -cf "$out" \
+          oci-layout index.json blobs
       '';
 
       interactiveImageRef = pkgs.writeText "edits-operator-console-image-ref-${interactiveTag}" "roccho/edits:${interactiveTag}\n";

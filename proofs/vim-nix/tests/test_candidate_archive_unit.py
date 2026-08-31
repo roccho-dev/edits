@@ -168,3 +168,15 @@ def test_candidate_ci_collects_pytest_outcomes_in_memory() -> None:
     assert "PytestOutcomeCollector" in source
     assert ".xml" not in source
     assert "ElementTree" not in source
+
+
+def test_candidate_image_requires_fakeroot_for_nonroot_state_ownership() -> None:
+    source = (REPO / "proofs" / "vim-nix" / "flake.parts" / "01.nix").read_text(encoding="utf-8")
+    image = source.split("interactiveImage = pkgs.dockerTools.buildLayeredImage", 1)[1].split(
+        "interactiveOciImage =", 1
+    )[0]
+    extra_commands = image.split("extraCommands = ''", 1)[1].split("'';", 1)[0]
+
+    assert "chown" not in extra_commands
+    assert "fakeRootCommands = ''" in image
+    assert "chown -R 1000:1000 ./home/dev ./work/repos" in image

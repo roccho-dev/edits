@@ -154,8 +154,12 @@ def tar_json(archive: tarfile.TarFile, name: str) -> Any:
 def inspect_docker_archive(path: pathlib.Path) -> dict[str, Any]:
     mismatches: list[str] = []
     with tarfile.open(path, "r:*") as archive:
-        docker_manifest = tar_json(archive, "manifest.json")
-        index = tar_json(archive, "index.json")
+        manifest_member = archive.getmember("manifest.json")
+        manifest_stream = archive.extractfile(manifest_member)
+        if manifest_stream is None:
+            raise BuildFailure("Docker archive manifest is missing")
+        docker_manifest_bytes = manifest_stream.read()
+        docker_manifest = json.loads(docker_manifest_bytes)
         if not isinstance(docker_manifest, list) or len(docker_manifest) != 1:
             raise BuildFailure("Docker archive must contain exactly one image")
         row = docker_manifest[0]
@@ -164,68 +168,115 @@ def inspect_docker_archive(path: pathlib.Path) -> dict[str, Any]:
             raise BuildFailure("Docker archive must contain exactly one repository tag")
 
         config_path = row.get("Config")
-        if not isinstance(config_path, str) or not config_path.startswith("blobs/sha256/"):
+        if not isinstance(config_path, str):
             raise BuildFailure("Docker archive config path is invalid")
-        config_member = archive.getmember(config_path)
+        if config_path.startswith("blobs/sha256/"):
+            config_hex_expected = pathlib.PurePosixPath(config_path).name
+            archive_format = "docker-archive+oci-descriptors"
+        elif re.fullmatch(r"[0-9a-f]{64}\.json", config_path):
+            config_hex_expected = config_path.removesuffix(".json")
+            archive_format = "docker-save"
+        else:
+            raise BuildFailure("Docker archive config path is invalid")
+
+        try:
+            config_member = archive.getmember(config_path)
+        except KeyError as exc:
+            raise BuildFailure("Docker config blob is missing") from exc
         config_stream = archive.extractfile(config_member)
         if config_stream is None:
             raise BuildFailure("Docker config blob is missing")
         config_bytes = config_stream.read()
         config_hex = hashlib.sha256(config_bytes).hexdigest()
-        if pathlib.PurePosixPath(config_path).name != config_hex:
+        if config_hex != config_hex_expected:
             mismatches.append(config_path)
         config = json.loads(config_bytes)
-
-        descriptors = index.get("manifests") or []
-        if len(descriptors) != 1:
-            raise BuildFailure("Docker archive OCI index must contain exactly one manifest")
-        descriptor = descriptors[0]
-        manifest_digest = descriptor.get("digest")
-        if not isinstance(manifest_digest, str) or not manifest_digest.startswith("sha256:"):
-            raise BuildFailure("Docker archive manifest digest is invalid")
-        manifest_hex = manifest_digest.split(":", 1)[1]
-        manifest_path = f"blobs/sha256/{manifest_hex}"
-        manifest_stream = archive.extractfile(manifest_path)
-        if manifest_stream is None:
-            raise BuildFailure("Docker archive OCI manifest is missing")
-        manifest_bytes = manifest_stream.read()
-        if hashlib.sha256(manifest_bytes).hexdigest() != manifest_hex:
-            mismatches.append(manifest_path)
-        manifest = json.loads(manifest_bytes)
+        rootfs_diff_ids = (config.get("rootfs") or {}).get("diff_ids") or []
+        if not isinstance(rootfs_diff_ids, list) or any(
+            not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)
+            for value in rootfs_diff_ids
+        ):
+            mismatches.append("config:rootfs.diff_ids")
+            rootfs_diff_ids = []
 
         layers: list[str] = []
-        for layer in manifest.get("layers") or []:
-            digest = layer.get("digest")
-            size = layer.get("size")
-            if not isinstance(digest, str) or not digest.startswith("sha256:") or not isinstance(size, int):
-                mismatches.append("manifest:invalid-layer-descriptor")
-                continue
-            layers.append(digest)
-            member_name = f"blobs/sha256/{digest.split(':', 1)[1]}"
-            try:
-                member = archive.getmember(member_name)
-            except KeyError:
-                mismatches.append(member_name)
-                continue
-            layer_stream = archive.extractfile(member)
-            if layer_stream is None:
-                mismatches.append(member_name)
-                continue
-            h = hashlib.sha256()
-            for chunk in iter(lambda: layer_stream.read(1024 * 1024), b""):
-                h.update(chunk)
-            if f"sha256:{h.hexdigest()}" != digest or member.size != size:
-                mismatches.append(member_name)
+        if archive_format == "docker-save":
+            layer_paths = row.get("Layers") or []
+            if not isinstance(layer_paths, list) or any(not isinstance(value, str) for value in layer_paths):
+                raise BuildFailure("Docker archive layer list is invalid")
+            if len(layer_paths) != len(rootfs_diff_ids):
+                mismatches.append("manifest.json:Layers")
+            for index, member_name in enumerate(layer_paths):
+                try:
+                    member = archive.getmember(member_name)
+                except KeyError:
+                    mismatches.append(member_name)
+                    continue
+                layer_stream = archive.extractfile(member)
+                if layer_stream is None:
+                    mismatches.append(member_name)
+                    continue
+                digest = hashlib.sha256()
+                for chunk in iter(lambda: layer_stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+                value = f"sha256:{digest.hexdigest()}"
+                layers.append(value)
+                if index >= len(rootfs_diff_ids) or value != rootfs_diff_ids[index]:
+                    mismatches.append(member_name)
+            manifest_digest = "sha256:" + hashlib.sha256(docker_manifest_bytes).hexdigest()
+        else:
+            index = tar_json(archive, "index.json")
+            descriptors = index.get("manifests") or []
+            if len(descriptors) != 1:
+                raise BuildFailure("Docker archive OCI index must contain exactly one manifest")
+            descriptor = descriptors[0]
+            manifest_digest = descriptor.get("digest")
+            if not isinstance(manifest_digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", manifest_digest):
+                raise BuildFailure("Docker archive manifest digest is invalid")
+            manifest_hex = manifest_digest.split(":", 1)[1]
+            manifest_path = f"blobs/sha256/{manifest_hex}"
+            manifest_stream = archive.extractfile(manifest_path)
+            if manifest_stream is None:
+                raise BuildFailure("Docker archive OCI manifest is missing")
+            manifest_bytes = manifest_stream.read()
+            if hashlib.sha256(manifest_bytes).hexdigest() != manifest_hex:
+                mismatches.append(manifest_path)
+            manifest = json.loads(manifest_bytes)
 
-        expected_layers = [f"blobs/sha256/{value.split(':', 1)[1]}" for value in layers]
-        if row.get("Layers") != expected_layers:
-            mismatches.append("manifest.json:Layers")
+            for layer in manifest.get("layers") or []:
+                digest = layer.get("digest")
+                size = layer.get("size")
+                if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest) or not isinstance(size, int):
+                    mismatches.append("manifest:invalid-layer-descriptor")
+                    continue
+                layers.append(digest)
+                member_name = f"blobs/sha256/{digest.split(':', 1)[1]}"
+                try:
+                    member = archive.getmember(member_name)
+                except KeyError:
+                    mismatches.append(member_name)
+                    continue
+                layer_stream = archive.extractfile(member)
+                if layer_stream is None:
+                    mismatches.append(member_name)
+                    continue
+                value = hashlib.sha256()
+                for chunk in iter(lambda: layer_stream.read(1024 * 1024), b""):
+                    value.update(chunk)
+                if f"sha256:{value.hexdigest()}" != digest or member.size != size:
+                    mismatches.append(member_name)
+
+            expected_layers = [f"blobs/sha256/{value.split(':', 1)[1]}" for value in layers]
+            if row.get("Layers") != expected_layers:
+                mismatches.append("manifest.json:Layers")
+            if len(rootfs_diff_ids) != len(layers):
+                mismatches.append("config:rootfs.diff_ids")
 
     runtime = config.get("config") or {}
     labels = runtime.get("Labels") or {}
     return {
         "schema": "edits.ociArchiveInspection.v1",
-        "format": "docker-archive+oci-descriptors",
+        "format": archive_format,
         "archive": path.name,
         "archiveSha256": "sha256:" + sha256_file(path),
         "archiveBytes": path.stat().st_size,
@@ -233,7 +284,9 @@ def inspect_docker_archive(path: pathlib.Path) -> dict[str, Any]:
         "imageId": f"sha256:{config_hex}",
         "configDigest": f"sha256:{config_hex}",
         "manifestDigest": manifest_digest,
-        "layerDigests": layers,
+        "layerDigests": rootfs_diff_ids,
+        "archiveLayerDigests": layers,
+        "rootfsDiffIds": rootfs_diff_ids,
         "entrypoint": runtime.get("Entrypoint"),
         "workingDir": runtime.get("WorkingDir"),
         "user": runtime.get("User"),
@@ -304,6 +357,16 @@ def inspect_oci_archive(path: pathlib.Path) -> dict[str, Any]:
             if f"sha256:{h.hexdigest()}" != digest or member.size != size:
                 mismatches.append(member_name)
 
+    rootfs_diff_ids = (config.get("rootfs") or {}).get("diff_ids") or []
+    if not isinstance(rootfs_diff_ids, list) or any(
+        not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)
+        for value in rootfs_diff_ids
+    ):
+        mismatches.append("config:rootfs.diff_ids")
+        rootfs_diff_ids = []
+    if len(rootfs_diff_ids) != len(layers):
+        mismatches.append("config:rootfs.diff_ids")
+
     runtime = config.get("config") or {}
     annotations = descriptor.get("annotations") or {}
     return {
@@ -316,7 +379,9 @@ def inspect_oci_archive(path: pathlib.Path) -> dict[str, Any]:
         "imageId": config_digest,
         "configDigest": config_digest,
         "manifestDigest": manifest_digest,
-        "layerDigests": layers,
+        "layerDigests": rootfs_diff_ids,
+        "archiveLayerDigests": layers,
+        "rootfsDiffIds": rootfs_diff_ids,
         "entrypoint": runtime.get("Entrypoint"),
         "workingDir": runtime.get("WorkingDir"),
         "user": runtime.get("User"),
@@ -531,8 +596,20 @@ def main() -> int:
     tests = flake / "tests"
     canon_tests = repo / "proofs/issue-118/wt05a-ci-release/tests/test_candidate_ci_release.py"
     unit_tests = tests / "test_candidate_archive_unit.py"
-    if not (flake / "flake.nix").is_file() or not tests.is_dir() or not canon_tests.is_file() or not unit_tests.is_file():
-        raise BuildFailure("candidate flake, Canon RED, or pytest suite is missing")
+    canon_runner = repo / "proofs/issue-118/canon_runner.py"
+    completion_lanes = [
+        repo / "proofs/issue-118/completion",
+        repo / "proofs/issue-118/workflow-evaluation",
+    ]
+    required_inputs = [
+        flake / "flake.nix",
+        canon_tests,
+        unit_tests,
+        canon_runner,
+        *(lane / "canon.json" for lane in completion_lanes),
+    ]
+    if not tests.is_dir() or any(not path.is_file() for path in required_inputs):
+        raise BuildFailure("candidate flake, Canon contract, or pytest suite is missing")
 
     identity = source_identity(repo)
     if output.exists():
@@ -553,6 +630,23 @@ def main() -> int:
         },
     )
 
+    canon_status: dict[str, str] = {}
+    for lane in completion_lanes:
+        run(
+            [
+                sys.executable,
+                str(canon_runner),
+                str(lane),
+                "--expect-green",
+                "--result",
+                str(evidence_dir / f"{lane.name}-canon.json"),
+            ],
+            cwd=repo,
+            log_dir=log_dir,
+            label=f"canon-{lane.name}",
+        )
+        canon_status[lane.name] = "PASS"
+
     plan_counts = run_pytest(
         repo=repo,
         paths=[canon_tests, unit_tests],
@@ -570,6 +664,7 @@ def main() -> int:
                 "clean": True,
             },
             "buildEntrypoint": "nix run ./proofs/vim-nix#candidate",
+            "canon": canon_status,
             "pytest": plan_counts,
         }
         write_json(output / "release-manifest.json", manifest)
@@ -641,7 +736,7 @@ def main() -> int:
     if docker_inspection["configDigest"] != oci_inspection["configDigest"]:
         raise BuildFailure("Docker and OCI config digests differ")
     if docker_inspection["layerDigests"] != oci_inspection["layerDigests"]:
-        raise BuildFailure("Docker and OCI layer digests differ")
+        raise BuildFailure("Docker and OCI uncompressed layer identities differ")
     write_json(evidence_dir / "docker-archive.json", docker_inspection)
     write_json(evidence_dir / "oci-archive.json", oci_inspection)
 
@@ -701,6 +796,11 @@ def main() -> int:
             "configDigest": docker_inspection["configDigest"],
             "manifestDigest": docker_inspection["manifestDigest"],
             "layerDigests": docker_inspection["layerDigests"],
+            "archiveLayerDigests": {
+                "docker": docker_inspection["archiveLayerDigests"],
+                "oci": oci_inspection["archiveLayerDigests"],
+            },
+            "rootfsDiffIds": docker_inspection["rootfsDiffIds"],
             "user": docker_inspection["user"],
             "entrypoint": docker_inspection["entrypoint"],
             "workingDir": docker_inspection["workingDir"],
@@ -735,7 +835,7 @@ def main() -> int:
     bundle = source_bundle(repo, output, identity.commit, suffix, log_dir)
     e2e_report = {
         "schema": "edits.candidateE2E.v1",
-        "status": "PASS",
+        "status": "CI_PASS",
         "sourceCommit": identity.commit,
         "sourceTree": identity.tree,
         "dockerImageRef": image_ref,
@@ -763,7 +863,7 @@ def main() -> int:
 
     release_manifest = {
         "schema": "edits.candidateRelease.v1",
-        "status": "PASS",
+        "status": "CI_PASS",
         "releaseTag": args.release_tag or None,
         "buildEntrypoint": "nix run ./proofs/vim-nix#candidate",
         "source": build_manifest["source"],
@@ -779,6 +879,8 @@ def main() -> int:
         ],
         "gates": {
             "canonRedFixedGreen": "PASS",
+            "completionCanon": canon_status["completion"],
+            "workflowEvaluationCanon": canon_status["workflow-evaluation"],
             "nixNormalOfflineSameOutputs": "PASS",
             "nixRebuild": "PASS",
             "dockerArchiveIntegrity": "PASS",
@@ -799,6 +901,8 @@ def main() -> int:
             "falseSuccess": 0,
         },
         "productionPromotion": False,
+        "issue118Closure": False,
+        "finalAssertion": "CI_COMPLETE_WINDOWS_PHYSICAL_READBACK_OPEN",
     }
     write_json(output / "release-manifest.json", release_manifest)
     (output / "RELEASE.md").write_text(

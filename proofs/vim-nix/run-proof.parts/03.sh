@@ -22,22 +22,22 @@ if test -n "${PTY_CAPTURE_READY:-}"; then
   summary_script="$RUNTIME/show-runtime-e2e.sh"
   cat > "$summary_script" <<EOF_SUMMARY
 #!/bin/sh
-printf '\\033[2J\\033[H'
-printf '%s\\n' 'HQ runtime lifecycle E2E'
-printf '%s\\n' '------------------------'
-printf 'accepted rows : 1\\n'
-printf 'run id        : %s\\n' '$run_id'
-printf 'instruction id: %s\\n' '$instruction_id'
-printf '%s\\n' 'lifecycle     : accepted -> started -> stdout -> completed'
-printf '%s\\n' 'stdout/final  : hq-vim-e2e-ok'
-printf '%s\\n' 'worker        : configured_ready'
-printf '%s\\n' 'PTY panes     : exactly 2'
-printf '%s\\n' '__HQ_RUNTIME_E2E_CAPTURE_READY__'
-printf '%s\\n' '{"session":"$SESSION","workspaceId":"$WORKSPACE_ID","rootPaneId":"$ROOT_PANE_ID","taskPaneId":"$TASK_PANE_ID"}' > '$PTY_CAPTURE_READY'
+printf '\033[2J\033[H'
+printf '%s\n' 'HQ runtime lifecycle E2E'
+printf '%s\n' '------------------------'
+printf 'accepted rows : 1\n'
+printf 'run id        : %s\n' '$run_id'
+printf 'instruction id: %s\n' '$instruction_id'
+printf '%s\n' 'lifecycle     : accepted -> started -> stdout -> completed'
+printf '%s\n' 'stdout/final  : hq-vim-e2e-ok'
+printf '%s\n' 'worker        : configured_ready'
+printf '%s\n' 'PTY panes     : exactly 2'
+printf '%s\n' '__HQ_RUNTIME_E2E_CAPTURE_READY__'
+printf '%s\n' '{"session":"$SESSION","workspaceId":"$WORKSPACE_ID","rootPaneId":"$ROOT_PANE_ID","taskPaneId":"$TASK_PANE_ID"}' > '$PTY_CAPTURE_READY'
 while test ! -e '$PTY_CAPTURE_DONE'; do
   sleep 0.05
 done
-printf '%s\\n' '__HQ_RUNTIME_E2E_CAPTURE_DONE__'
+printf '%s\n' '__HQ_RUNTIME_E2E_CAPTURE_DONE__'
 exit 0
 EOF_SUMMARY
   chmod 700 "$summary_script"
@@ -142,9 +142,16 @@ manifest_tmp="$RUNTIME/runtime-SHA256SUMS.tmp"
   sha256sum --check SHA256SUMS
 )
 
+# Evidence is a release artifact, not private runtime state. Make only the
+# completed evidence contents readable by the host that packages them; the
+# host-owned bind mount itself and RUNTIME keep their existing permissions.
+find "$OUT" -mindepth 1 -type d -exec chmod u=rwx,go=rx {} +
+find "$OUT" -mindepth 1 -type f -exec chmod u=rw,go=r {} +
+
 trap - EXIT INT TERM
 printf 'VIM_NIX_RUNTIME_E2E_PASS\n'
 if test "$RUN_EDITOR" -eq 1; then
   jq -e '.status == "PASS" and .gates.testCount == 8' "$OUT/editor-receipt.json" >/dev/null
+  printf 'VIM_NIX_EDITOR_E2E_PASS\n'
   printf 'VIM_NIX_FULL_E2E_PASS\n'
 fi

@@ -1,0 +1,72 @@
+name: apply PR 120 ephemeral runtime E2E fix
+
+"on":
+  push:
+    branches:
+      - proposal/issue-118-complete-ci-release-20260830
+    paths:
+      - .github/workflows/pr120-ephemeral-runtime.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: proposal/issue-118-complete-ci-release-20260830
+          fetch-depth: 0
+
+      - name: Keep private runtime inside the disposable container
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("proofs/vim-nix/tests/test_candidate_oci.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''    evidence = release_dir / "evidence" / "runtime" / lane / unique / "evidence"
+              runtime = release_dir / "evidence" / "runtime" / lane / unique / "runtime"
+              evidence.mkdir(parents=True)
+              runtime.mkdir(parents=True)
+              evidence.chmod(0o777)
+              runtime.chmod(0o777)
+          '''
+          new = '''    evidence = release_dir / "evidence" / "runtime" / lane / unique / "evidence"
+              evidence.mkdir(parents=True)
+              evidence.chmod(0o777)
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one runtime directory block, found {text.count(old)}")
+          text = text.replace(old, new)
+
+          old_args = '''            "--volume", f"{evidence}:/work/evidence",
+                      "--volume", f"{runtime}:/work/runtime",
+                      "--env", "PROOF_OUTPUT_DIR=/work/evidence",
+                      "--env", "PROOF_RUNTIME_DIR=/work/runtime",
+          '''
+          new_args = '''            "--volume", f"{evidence}:/work/evidence",
+                      "--env", "PROOF_OUTPUT_DIR=/work/evidence",
+                      "--env", "PROOF_RUNTIME_DIR=/tmp/proof-runtime",
+          '''
+          if text.count(old_args) != 1:
+              raise SystemExit(f"expected one runtime mount block, found {text.count(old_args)}")
+          path.write_text(text.replace(old_args, new_args), encoding="utf-8")
+          PY
+
+          python -m py_compile proofs/vim-nix/tests/test_candidate_oci.py
+          git diff --check
+
+      - name: Commit product-test fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name roccho
+          git config user.email 40359643+roccho-dev@users.noreply.github.com
+          git add proofs/vim-nix/tests/test_candidate_oci.py
+          git commit -m "fix(ci): keep runtime state ephemeral during E2E"
+          git push origin HEAD:proposal/issue-118-complete-ci-release-20260830

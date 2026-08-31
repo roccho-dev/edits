@@ -132,6 +132,7 @@ def test_restores_exact_docker_config_after_equivalent_utc_rewrite(tmp_path: Pat
 
     restored_config_bytes, manifest, index = indexed_config(layout)
     assert restored_config_bytes == docker_config_bytes
+    assert sha256(restored_config_bytes) == result["configDigest"].split(":", 1)[1]
     assert result["configDigest"] == "sha256:" + sha256(docker_config_bytes)
     assert manifest["config"]["digest"] == result["configDigest"]
     assert index["manifests"][0]["digest"] == result["manifestDigest"]

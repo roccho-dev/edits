@@ -282,6 +282,8 @@ def test_full_runtime_e2e_matches_golden(
             "--name", f"edits-e2e-{lane}-{unique[:8]}",
             "--volume", f"{evidence}:/work/evidence",
             "--volume", f"{runtime}:/work/runtime",
+            "--env", "PROOF_OUTPUT_DIR=/work/evidence",
+            "--env", "PROOF_RUNTIME_DIR=/work/runtime",
             "--entrypoint", "/bin/vim-nix-proof",
             image, "all",
         ],

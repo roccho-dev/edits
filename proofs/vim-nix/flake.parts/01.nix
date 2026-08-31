@@ -221,6 +221,10 @@
           "docker-archive:${interactiveImage}" \
           "oci:$layout:${interactiveTag}"
 
+        ${candidatePython}/bin/python ${root + "/normalize_oci_layout.py"} \
+          --docker-archive ${interactiveImage} \
+          --oci-layout "$layout"
+
         LC_ALL=C ${pkgs.gnutar}/bin/tar \
           --sort=name \
           --mtime=@1 \

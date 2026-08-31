@@ -1,0 +1,95 @@
+name: apply PR 120 final E2E contract fix
+
+"on":
+  push:
+    branches:
+      - proposal/issue-118-complete-ci-release-20260830
+    paths:
+      - .github/workflows/pr120-fix-final-e2e.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: proposal/issue-118-complete-ci-release-20260830
+          fetch-depth: 0
+
+      - name: Make interactive startup and editor evidence deterministic
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              text = path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              path.write_text(text.replace(old, new), encoding="utf-8")
+
+          launcher = Path("proofs/vim-nix/run-edits.sh")
+          replace_once(
+              launcher,
+              "set completeopt=menuone,noinsert,noselect,popup\nset runtimepath^=/share/yegappan-lsp\n",
+              "set completeopt=menuone,noinsert,noselect,popup\nset nomore\nset runtimepath^=/share/yegappan-lsp\n",
+          )
+
+          runtime_test = Path("proofs/vim-nix/tests/test_candidate_oci.py")
+          replace_once(
+              runtime_test,
+              '''    assert "VIM_NIX_EDITOR_E2E_PASS" in result.stdout
+              assert "VIM_NIX_RUNTIME_E2E_PASS" in result.stdout
+              assert "VIM_NIX_FULL_E2E_PASS" in result.stdout
+              receipt = json.loads((evidence / "receipt.json").read_text(encoding="utf-8"))
+              ''',
+              '''    assert "VIM_NIX_RUNTIME_E2E_PASS" in result.stdout
+              assert "VIM_NIX_FULL_E2E_PASS" in result.stdout
+              editor_receipt = json.loads((evidence / "editor-receipt.json").read_text(encoding="utf-8"))
+              assert editor_receipt["status"] == "PASS"
+              assert editor_receipt["gates"]["testCount"] == 8
+              receipt = json.loads((evidence / "receipt.json").read_text(encoding="utf-8"))
+              ''',
+          )
+
+          unit_test = Path("proofs/vim-nix/tests/test_candidate_archive_unit.py")
+          text = unit_test.read_text(encoding="utf-8")
+          marker = "def test_interactive_launcher_disables_vim_pager_before_hq_start"
+          if marker in text:
+              raise SystemExit("launcher regression test already exists")
+          text = text.rstrip() + '''
+
+
+          def test_interactive_launcher_disables_vim_pager_before_hq_start() -> None:
+              source = (REPO / "proofs" / "vim-nix" / "run-edits.sh").read_text(encoding="utf-8")
+              vimrc = source.split("cat > \"$vimrc\" <<'EOF_VIMRC'", 1)[1].split("EOF_VIMRC", 1)[0]
+
+              assert "set nomore" in vimrc
+              assert vimrc.index("set nomore") < vimrc.index("let g:edits_service_bin")
+              assert 'args: [\"lsp\", \"--profile\", profile]' not in source
+          '''.replace('args: [\\"lsp\\", \\"--profile\\", profile]', 'args: ["lsp", "--profile", profile]') + "\n"
+          unit_test.write_text(text, encoding="utf-8")
+          PY
+
+          rm .github/workflows/pr120-fix-final-e2e.yml
+          python -m py_compile proofs/vim-nix/tests/test_candidate_archive_unit.py proofs/vim-nix/tests/test_candidate_oci.py
+          git diff --check
+
+      - name: Commit final E2E fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name roccho
+          git config user.email 40359643+roccho-dev@users.noreply.github.com
+          git add proofs/vim-nix/run-edits.sh \
+                  proofs/vim-nix/tests/test_candidate_oci.py \
+                  proofs/vim-nix/tests/test_candidate_archive_unit.py \
+                  .github/workflows/pr120-fix-final-e2e.yml
+          git commit -m "fix(ci): make final interactive E2E deterministic"
+          git push origin HEAD:proposal/issue-118-complete-ci-release-20260830

@@ -168,10 +168,12 @@
         contents = [ interactiveImageRoot pkgs.dockerTools.fakeNss ];
         extraCommands = ''
           mkdir -p home/dev work/repos tmp
-          chown -R 1000:1000 home/dev work/repos
           chmod 0700 home/dev
           chmod 0755 work work/repos
           chmod 1777 tmp
+        '';
+        fakeRootCommands = ''
+          chown -R 1000:1000 ./home/dev ./work/repos
         '';
         config = {
           Entrypoint = [ "/bin/edits" ];

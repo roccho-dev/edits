@@ -1,0 +1,11 @@
+             raise SystemExit("Docker archive config identity is invalid")
+         if not isinstance(tags, list) or len(tags) != 1 or not isinstance(tags[0], str):
+             raise SystemExit("Docker archive must contain exactly one repository tag")
+@@ -43,7 +51,6 @@ def docker_identity(archive: pathlib.Path) -> tuple[str, dict[str, object]]:
+         if config_stream is None:
+             raise SystemExit("Docker archive config is missing")
+         config_raw = config_stream.read()
+-        expected = config_name.rsplit("/", 1)[-1]
+         if sha256_bytes(config_raw) != expected:
+             raise SystemExit("Docker archive config digest mismatch")
+         config = json.loads(config_raw)

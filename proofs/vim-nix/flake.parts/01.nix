@@ -214,7 +214,7 @@
         nativeBuildInputs = [ pkgs.skopeo ];
       } ''
         rm -rf "$out"
-        skopeo --insecure-policy copy \
+        skopeo --insecure-policy --tmpdir "$TMPDIR" copy \
           "docker-archive:${interactiveImage}" \
           "oci-archive:$out:roccho/edits:${interactiveTag}"
       '';

@@ -142,6 +142,11 @@ manifest_tmp="$RUNTIME/runtime-SHA256SUMS.tmp"
   sha256sum --check SHA256SUMS
 )
 
+# Evidence is a release artifact, not private runtime state. Make only the
+# completed evidence tree readable by the host that packages it; keep RUNTIME
+# under the original restrictive umask.
+chmod -R u=rwX,go=rX "$OUT"
+
 trap - EXIT INT TERM
 printf 'VIM_NIX_RUNTIME_E2E_PASS\n'
 if test "$RUN_EDITOR" -eq 1; then

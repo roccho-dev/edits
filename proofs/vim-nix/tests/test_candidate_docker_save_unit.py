@@ -39,6 +39,7 @@ def make_docker_save(
     *,
     corrupt_config: bool = False,
     corrupt_layer: bool = False,
+    config_name: str | None = None,
 ) -> tuple[str, str]:
     layer = b"standard-docker-save-layer"
     layer_digest = hashlib.sha256(layer).hexdigest()
@@ -57,16 +58,17 @@ def make_docker_save(
     if corrupt_config:
         config_payload[len(config_payload) // 2] ^= 1
     layer_payload = b"tampered-layer" if corrupt_layer else layer
+    selected_config_name = config_name or f"{config_digest}.json"
     manifest = [
         {
-            "Config": f"{config_digest}.json",
+            "Config": selected_config_name,
             "RepoTags": ["roccho/edits:test"],
             "Layers": [f"{layer_digest}/layer.tar"],
         }
     ]
     with tarfile.open(path, "w") as archive:
         add(archive, "manifest.json", CANDIDATE.canonical_json(manifest))
-        add(archive, f"{config_digest}.json", bytes(config_payload))
+        add(archive, selected_config_name, bytes(config_payload))
         add(archive, f"{layer_digest}/layer.tar", layer_payload)
     return config_digest, layer_digest
 
@@ -107,6 +109,18 @@ def test_windows_kit_rejects_tampered_config(tmp_path: Path) -> None:
         assert "config digest mismatch" in str(exc)
     else:
         raise AssertionError("tampered Docker config must be rejected")
+
+
+def test_windows_kit_rejects_ambiguous_config_name(tmp_path: Path) -> None:
+    archive = tmp_path / "candidate.docker.tar"
+    make_docker_save(archive, config_name="config.json")
+
+    try:
+        WINDOWS.docker_identity(archive)
+    except SystemExit as exc:
+        assert "config identity is invalid" in str(exc)
+    else:
+        raise AssertionError("Docker config identity must be its exact SHA-256 name")
 
 
 def test_candidate_rejects_tampered_layer(tmp_path: Path) -> None:

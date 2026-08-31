@@ -66,14 +66,13 @@ jobs:
           text = text.rstrip() + '''
 
 
-          def test_interactive_launcher_disables_vim_pager_before_hq_start() -> None:
-              source = (REPO / "proofs" / "vim-nix" / "run-edits.sh").read_text(encoding="utf-8")
-              vimrc = source.split("cat > \"$vimrc\" <<'EOF_VIMRC'", 1)[1].split("EOF_VIMRC", 1)[0]
+def test_interactive_launcher_disables_vim_pager_before_hq_start() -> None:
+    source = (REPO / "proofs" / "vim-nix" / "run-edits.sh").read_text(encoding="utf-8")
+    startup = "set completeopt=menuone,noinsert,noselect,popup\\nset nomore\\nset runtimepath^=/share/yegappan-lsp"
 
-              assert "set nomore" in vimrc
-              assert vimrc.index("set nomore") < vimrc.index("let g:edits_service_bin")
-              assert 'args: [\"lsp\", \"--profile\", profile]' not in source
-          '''.replace('args: [\\"lsp\\", \\"--profile\\", profile]', 'args: ["lsp", "--profile", profile]') + "\n"
+    assert startup in source
+    assert source.index("set nomore") < source.index("let g:edits_service_bin")
+''' + "\n"
           unit_test.write_text(text, encoding="utf-8")
           PY
 

@@ -211,12 +211,26 @@
       };
 
       interactiveOciImage = pkgs.runCommand "edits-operator-console-${interactiveTag}.oci.tar" {
-        nativeBuildInputs = [ pkgs.skopeo ];
+        nativeBuildInputs = [ pkgs.gnutar pkgs.skopeo ];
       } ''
-        rm -rf "$out"
+        layout="$TMPDIR/oci-layout"
+        rm -rf "$layout" "$out"
+        mkdir -p "$layout"
+
         skopeo --insecure-policy --tmpdir "$TMPDIR" copy \
           "docker-archive:${interactiveImage}" \
-          "oci-archive:$out:roccho/edits:${interactiveTag}"
+          "oci:$layout:${interactiveTag}"
+
+        LC_ALL=C ${pkgs.gnutar}/bin/tar \
+          --sort=name \
+          --mtime=@1 \
+          --owner=0 \
+          --group=0 \
+          --numeric-owner \
+          --format=ustar \
+          -C "$layout" \
+          -cf "$out" \
+          oci-layout index.json blobs
       '';
 
       interactiveImageRef = pkgs.writeText "edits-operator-console-image-ref-${interactiveTag}" "roccho/edits:${interactiveTag}\n";

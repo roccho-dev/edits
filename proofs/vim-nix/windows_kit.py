@@ -35,7 +35,15 @@ def docker_identity(archive: pathlib.Path) -> tuple[str, dict[str, object]]:
         row = manifest[0]
         config_name = row.get("Config")
         tags = row.get("RepoTags")
-        if not isinstance(config_name, str) or not config_name.startswith("blobs/sha256/"):
+        if not isinstance(config_name, str):
+            raise SystemExit("Docker archive config identity is invalid")
+        if config_name.startswith("blobs/sha256/"):
+            expected = pathlib.PurePosixPath(config_name).name
+        elif len(config_name) == 69 and config_name.endswith(".json") and all(
+            character in "0123456789abcdef" for character in config_name[:-5]
+        ):
+            expected = config_name[:-5]
+        else:
             raise SystemExit("Docker archive config identity is invalid")
         if not isinstance(tags, list) or len(tags) != 1 or not isinstance(tags[0], str):
             raise SystemExit("Docker archive must contain exactly one repository tag")
@@ -43,7 +51,6 @@ def docker_identity(archive: pathlib.Path) -> tuple[str, dict[str, object]]:
         if config_stream is None:
             raise SystemExit("Docker archive config is missing")
         config_raw = config_stream.read()
-        expected = config_name.rsplit("/", 1)[-1]
         if sha256_bytes(config_raw) != expected:
             raise SystemExit("Docker archive config digest mismatch")
         config = json.loads(config_raw)

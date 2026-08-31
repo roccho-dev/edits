@@ -1,0 +1,52 @@
+name: apply PR 120 Docker-save compatibility
+
+"on":
+  push:
+    branches:
+      - proposal/issue-118-complete-ci-release-20260830
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr120-apply-docker-save
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact PR branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Apply, validate, and remove the one-shot carrier
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/pr120-apply/part-*.patch > "$RUNNER_TEMP/pr120.patch"
+          git apply --check "$RUNNER_TEMP/pr120.patch"
+          git apply "$RUNNER_TEMP/pr120.patch"
+          rm -rf .github/pr120-apply
+          rm .github/workflows/pr120-apply-docker-save.yml
+
+          python3 -m py_compile \
+            proofs/vim-nix/candidate_ci.py \
+            proofs/vim-nix/windows_kit.py
+          python3 -m pip install --disable-pip-version-check --quiet pytest
+          python3 -m pytest -q \
+            proofs/vim-nix/tests/test_candidate_archive_unit.py \
+            proofs/vim-nix/tests/test_candidate_docker_save_unit.py
+          git diff --check
+
+      - name: Commit exact validated fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "roccho"
+          git config user.email "40359643+roccho-dev@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(oci): accept Nixpkgs Docker-save archives"
+          git push origin HEAD:proposal/issue-118-complete-ci-release-20260830

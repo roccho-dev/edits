@@ -1,0 +1,66 @@
+name: apply PR 120 exact OCI config restoration
+
+"on":
+  push:
+    branches:
+      - proposal/issue-118-complete-ci-release-20260830
+    paths:
+      - .github/workflows/pr120-restore-exact-config.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: proposal/issue-118-complete-ci-release-20260830
+          fetch-depth: 0
+
+      - name: Wire exact config restoration into the OCI materializer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("proofs/vim-nix/flake.parts/01.nix")
+          text = path.read_text(encoding="utf-8")
+          old = '''        skopeo --insecure-policy --tmpdir "$TMPDIR" copy \\
+                    "docker-archive:${interactiveImage}" \\
+                    "oci:$layout:${interactiveTag}"
+
+                  LC_ALL=C ${pkgs.gnutar}/bin/tar \\
+          '''
+          new = '''        skopeo --insecure-policy --tmpdir "$TMPDIR" copy \\
+                    "docker-archive:${interactiveImage}" \\
+                    "oci:$layout:${interactiveTag}"
+
+                  ${candidatePython}/bin/python ${root + "/normalize_oci_layout.py"} \\
+                    --docker-archive ${interactiveImage} \\
+                    --oci-layout "$layout"
+
+                  LC_ALL=C ${pkgs.gnutar}/bin/tar \\
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f"expected exactly one OCI conversion block, found {text.count(old)}")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+
+          rm .github/workflows/pr120-restore-exact-config.yml
+          python -m py_compile proofs/vim-nix/normalize_oci_layout.py proofs/vim-nix/tests/test_normalize_oci_layout.py
+          git diff --check
+
+      - name: Commit exact materializer patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name roccho
+          git config user.email 40359643+roccho-dev@users.noreply.github.com
+          git add proofs/vim-nix/flake.parts/01.nix \
+                  .github/workflows/pr120-restore-exact-config.yml
+          git commit -m "fix(oci): preserve exact image config across transports"
+          git push origin HEAD:proposal/issue-118-complete-ci-release-20260830

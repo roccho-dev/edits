@@ -1,0 +1,21 @@
+{
+  "schema": "decision-completion.view/1",
+  "contexts": [
+    {
+      "current": "fixture:1",
+      "context": "色",
+      "items": [
+        {"handle": "fixture:A1", "label": "青", "provenance": "例 A1", "text": ["あお"]},
+        {"handle": {"proposal": "fixture:A2", "origin": ["表示例", 2]}, "label": "青", "provenance": "例 A2", "text": ["あお"]}
+      ]
+    },
+    {
+      "current": "fixture:1",
+      "context": "位置",
+      "items": [
+        {"handle": ["fixture:B1", {"origin": "表示例"}], "label": "上と下", "provenance": "例 B1", "text": ["うえ", "した"]},
+        {"handle": "fixture:B2", "label": "見送る", "provenance": "例 B2", "text": []}
+      ]
+    }
+  ]
+}

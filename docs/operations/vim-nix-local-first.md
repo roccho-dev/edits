@@ -120,3 +120,27 @@ tools/vim-nix-local/vim-nix doctor
 tools/vim-nix-local/vim-nix verify
 tools/vim-nix-local/vim-nix pack --herdr /absolute/path/to/herdr
 ```
+
+## Native Decision Completion fixture
+
+This checkpoint projects an ordered `decision-completion.view/1` fixture into
+Vim's native completion. Candidate handles stay opaque; label, short provenance
+and insertion text are display data, not semantic authority.
+
+From a fresh Vim session in the current OCI, use the actual paths of these files:
+
+```sh
+EDITS_COMPLETION_SOURCE=/path/to/candidates.json LANG=C.UTF-8 TERM=xterm-256color \
+  vim -Nu NONE -i NONE -n -S /path/to/surface.vim
+```
+
+Use `i`, `Ctrl-X Ctrl-U`, `Ctrl-N/P`, then `Ctrl-Y` to accept the selection or `Ctrl-E`
+to cancel. Use `Esc`, then `:bnext` to switch fixture contexts. `:write` saves
+only a temporary example file. Native completion cancellation can leave a
+text-neutral Undo step: one `u` reverses that step, a second reverses the preceding edit.
+
+Independent native TTY controls prove fixture projection, selection and Working
+preservation. Human UX, real shared proposals, admission and durable saving are
+separate gates under [ADRS #481](https://github.com/roccho-dev/adrs/issues/481)
+and [#484](https://github.com/roccho-dev/adrs/issues/484). The HQ instructions
+above remain legacy evidence for the later retirement phase.

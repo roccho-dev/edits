@@ -120,3 +120,23 @@ tools/vim-nix-local/vim-nix doctor
 tools/vim-nix-local/vim-nix verify
 tools/vim-nix-local/vim-nix pack --herdr /absolute/path/to/herdr
 ```
+
+## Decision Completion: current OCI checkpoint
+
+On 2026-10-03, the existing `proofs/vim-nix#vim` closure (Vim 9.2.0478)
+was materialized in the running `windows-own` OCI, hostname `3354087a020f`.
+Noctty 1.3.131 launched `ssh.exe -tt g6i3-own vim`; guest readback found
+Vim PID 39490 executing that closure with descriptors 0/1/2 on `/dev/pts/0`.
+Native Ex assertions confirmed Vim9, job, channel, timer, popup and insert
+completion capability flags, with both Python features disabled. Runtime presence
+and terminal launch are proved; visible rendering and human editing remain unverified.
+The closure is in the container writable layer; recreation is not implemented.
+
+[ADRS #481](https://github.com/roccho-dev/adrs/issues/481) and
+[ADRS #484](https://github.com/roccho-dev/adrs/issues/484) require shared ranked
+proposals, Vim human selection, and explicit Commit through external admission
+and authoritative current readback. Their usable proposal/admission/current
+bindings are not provided to this checkpoint, so common Decision UX and Commit
+remain unproved.
+The HQ adapter evidence above does not prove this Decision contract. No
+Candidate/Jev implementation, accepted ledger or protocol was added inside Vim.

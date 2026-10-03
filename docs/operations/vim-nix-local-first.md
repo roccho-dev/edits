@@ -121,22 +121,26 @@ tools/vim-nix-local/vim-nix verify
 tools/vim-nix-local/vim-nix pack --herdr /absolute/path/to/herdr
 ```
 
-## Decision Completion: current OCI checkpoint
+## Native Decision Completion fixture
 
-On 2026-10-03, the existing `proofs/vim-nix#vim` closure (Vim 9.2.0478)
-was materialized in the running `windows-own` OCI, hostname `3354087a020f`.
-Noctty 1.3.131 launched `ssh.exe -tt g6i3-own vim`; guest readback found
-Vim PID 39490 executing that closure with descriptors 0/1/2 on `/dev/pts/0`.
-Native Ex assertions confirmed Vim9, job, channel, timer, popup and insert
-completion capability flags, with both Python features disabled. Runtime presence
-and terminal launch are proved; visible rendering and human editing remain unverified.
-The closure is in the container writable layer; recreation is not implemented.
+This checkpoint projects an ordered `decision-completion.view/1` fixture into
+Vim's native completion. Candidate handles stay opaque; label, short provenance
+and insertion text are display data, not semantic authority.
 
-[ADRS #481](https://github.com/roccho-dev/adrs/issues/481) and
-[ADRS #484](https://github.com/roccho-dev/adrs/issues/484) require shared ranked
-proposals, Vim human selection, and explicit Commit through external admission
-and authoritative current readback. Their usable proposal/admission/current
-bindings are not provided to this checkpoint, so common Decision UX and Commit
-remain unproved.
-The HQ adapter evidence above does not prove this Decision contract. No
-Candidate/Jev implementation, accepted ledger or protocol was added inside Vim.
+From a fresh Vim session in the current OCI, use the actual paths of these files:
+
+```sh
+EDITS_COMPLETION_SOURCE=/path/to/candidates.json LANG=C.UTF-8 TERM=xterm-256color \
+  vim -Nu NONE -i NONE -n -S /path/to/surface.vim
+```
+
+Use `i`, `Ctrl-X Ctrl-U`, `Ctrl-N/P`, then `Ctrl-Y` to accept the selection or `Ctrl-E`
+to cancel. Use `Esc`, then `:bnext` to switch fixture contexts. `:write` saves
+only a temporary example file. Native completion cancellation can leave a
+text-neutral Undo step: one `u` reverses that step, a second reverses the preceding edit.
+
+Independent native TTY controls prove fixture projection, selection and Working
+preservation. Human UX, real shared proposals, admission and durable saving are
+separate gates under [ADRS #481](https://github.com/roccho-dev/adrs/issues/481)
+and [#484](https://github.com/roccho-dev/adrs/issues/484). The HQ instructions
+above remain legacy evidence for the later retirement phase.

@@ -1,8 +1,0 @@
-{
-  "kind": "edits.muxPort.v1",
-  "version": "1",
-  "operations": ["attach", "focus", "resize", "snapshot", "close"],
-  "authority": false,
-  "canonical_result_writer": false,
-  "raw_input_injection": false
-}

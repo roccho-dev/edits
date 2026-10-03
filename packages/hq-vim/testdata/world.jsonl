@@ -1,1 +1,0 @@
-{"kind":"hq.command.v1","name":"queue.create","description":"queue one context file","instruction":{"version":"instruction.v1","op":"queue.create","target":"ctx","payload":{}},"fields":[{"name":"path","type":"path","required":true,"description":"context JSONL path","bind":"payload.path"}]}

@@ -1,93 +1,25 @@
 # edits
 
-Editor surface and queue-writer boundary for local modeling workflows.
+Native Vim UI preparation for [ADRS #481](https://github.com/roccho-dev/adrs/issues/481)
+and [#484](https://github.com/roccho-dev/adrs/issues/484).
 
-This repository owns the human operation surface for:
+The current surface reads a configured, non-authoritative
+`decision-completion.view/1` fixture and projects ordered candidates into
+standard Vim completion. It preserves opaque handles and uses native editing,
+cancellation and Undo. Candidate generation, evaluation, admission and durable
+current remain outside Vim; real shared proposals are not connected yet.
 
-- Vim/hq command vocabulary and completion
-- explicit human confirmation
-- targetRef interpretation from UI metadata
-- append-only local queue row writing
+The former HQ plugins, ports, queues, workers and distribution paths have been
+removed from this repository. Their source remains in Git history. This does
+not modify the hq repository or existing User environments.
 
-It does not own:
+[Try the fixture](docs/operations/vim-nix-local-first.md).
+The stock Vim definition remains pinned to 9.2.0478:
 
-- worker runtime
-- admission gates
-- accepted ledger state
-- projection authority
-- UI rendering
-- source extraction runtime
-- contract authority
-
-## Boundary declaration
-
-```text
-edits = editor surface
-      + pure command/targetRef interpretation
-      + queue writer adapter
-      - worker
-      - admission
-      - accepted ledger
-      - projection authority
-      - UI renderer
+```sh
+nix build ./proofs/vim-nix#vim --no-link --no-write-lock-file
+nix flake check ./proofs/vim-nix --no-write-lock-file
 ```
 
-## Authority boundary
-
-`edits` may write local queue intent. It must not treat local files as accepted model authority.
-
-| path | role | commit |
-|---|---|---:|
-| `.local/queue.jsonl` | local intent queue | no |
-| `.local/current-target.json` | current UI targetRef cache | no |
-| `examples/*.jsonl` | sample queue/receipt data | yes |
-| `docs/**` | editor/queue-writer boundary docs | yes |
-| `packages/hq-modeling-queue/` | command vocabulary and queue-row construction | yes |
-| `packages/hq-local-worker/` | legacy/proof-only local vertical-slice evidence after ops runtime/receipt/projection ownership | yes |
-| `adapters/ui/` | targetRef handoff recipes | yes |
-
-Queue append means intent was recorded. It does not mean the model was accepted. Accepted model authority belongs after an ops-owned admission gate.
-
-Receipts, local projections, previews, and generated HTML are evidence only. They are not accepted model authority.
-
-## Dependency direction
-
-Allowed:
-
-```text
-ui targetRef metadata -> edits queue writer
-edits queue rows -> ops queue runtime
-ops projection artifacts -> ui projection reader
-```
-
-Forbidden:
-
-```text
-edits must not own canonical worker runtime
-edits must not own admission ownership
-edits must not own accepted ledger authority
-edits must not own projection authority ownership
-edits must not own UI renderer ownership
-```
-
-## Package map
-
-| path | role |
-|---|---|
-| `packages/hq-pty-vim-rsc/` | lower-level Vim/RSC completion base |
-| `packages/hq-modeling-queue/` | editor command vocabulary, pure command-to-queue conversion, local queue writer tools |
-| `packages/hq-local-worker/` | legacy/proof-only vertical-slice evidence; not canonical runtime |
-| `adapters/ui/` | ui targetRef handoff recipes |
-
-## Local modeling loop
-
-```text
-localhost UI targetRef
-  -> Vim/hq completion
-  -> human confirm
-  -> .local/queue.jsonl append
-  -> ops-owned runtime/receipt/projection path
-  -> ui projection preview
-```
-
-The in-repo local worker proof remains only as legacy local/dev evidence. Ops owns canonical runtime, receipt, and projection responsibilities.
+The check builds that Vim and tests the current fixture's loading and ordered
+display projection. It does not prove interactive Human UX or shared admission.

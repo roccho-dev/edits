@@ -41,13 +41,13 @@
           call assert_equal(s:group.current, b:surface_current)
           call assert_equal(s:group.context, b:surface_context)
           let s:Complete = eval(&l:completefunc)
-          let s:items = call(s:Complete, [0, ''])
+          let s:items = call(s:Complete, [0, ""])
           call assert_equal(map(copy(s:group.items), 'v:val.handle'), map(copy(s:items), 'v:val.user_data'))
           call assert_equal(map(copy(s:group.items), 'join(v:val.text, "\n")'), map(copy(s:items), 'v:val.word'))
           call assert_equal(map(copy(s:group.items), 'v:val.label'), map(copy(s:items), 'v:val.abbr'))
           call assert_equal(map(copy(s:group.items), 'v:val.provenance'), map(copy(s:items), 'v:val.menu'))
         endfor
-        call assert_equal('', v:errmsg)
+        call assert_equal("", v:errmsg)
         if !empty(v:errors)
           call writefile(v:errors, '/dev/stderr')
           cquit 1

@@ -1,0 +1,30 @@
+name: Vim fixture
+
+on:
+  pull_request:
+    branches: [proposals]
+  push:
+    branches: [proposals]
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+        with:
+          extra_nix_config: experimental-features = nix-command flakes
+      - run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          nix flake check ./proofs/vim-nix --no-write-lock-file --print-build-logs
+          vim=$(nix eval ./proofs/vim-nix#vim.outPath --raw --no-write-lock-file)
+          test "$vim" = /nix/store/nqaldvn7ld01f2a337y8hp8qq8nhsb43-vim-9.2.0478
+          nix path-info --recursive "$vim"

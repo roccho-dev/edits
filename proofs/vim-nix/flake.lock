@@ -1,55 +1,5 @@
 {
   "nodes": {
-    "editsSource": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1787529608,
-        "narHash": "sha256-0RPv1dXCeq/ckVpThu7PeeA9mUCBOLVx0JLD7hc2ons=",
-        "owner": "roccho-dev",
-        "repo": "edits",
-        "rev": "bfdac8df95ec435ed8aad7042fa1fc9bc1082f6a",
-        "type": "github"
-      },
-      "original": {
-        "owner": "roccho-dev",
-        "repo": "edits",
-        "rev": "bfdac8df95ec435ed8aad7042fa1fc9bc1082f6a",
-        "type": "github"
-      }
-    },
-    "go-nixpkgs": {
-      "locked": {
-        "lastModified": 1754549714,
-        "narHash": "sha256-4/6DW/5Qz2G2tOuPCJuXdkprmtir+ZAOTS+z4nMPFiI=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "cbb826608f7d081948eeb4ea0211b0cbd867b9d1",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "cbb826608f7d081948eeb4ea0211b0cbd867b9d1",
-        "type": "github"
-      }
-    },
-    "hq": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1787365479,
-        "narHash": "sha256-mPSW7L1nyu1j9j/ts+HUcn7CTFT69DnKCy+oNo1H7N0=",
-        "owner": "roccho-dev",
-        "repo": "hq",
-        "rev": "779a298f4efcff8df60205aaf973cb224388a82b",
-        "type": "github"
-      },
-      "original": {
-        "owner": "roccho-dev",
-        "repo": "hq",
-        "rev": "779a298f4efcff8df60205aaf973cb224388a82b",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1787070829,
@@ -68,12 +18,8 @@
     },
     "root": {
       "inputs": {
-        "editsSource": "editsSource",
-        "go-nixpkgs": "go-nixpkgs",
-        "hq": "hq",
         "nixpkgs": "nixpkgs",
-        "vim-src": "vim-src",
-        "yegappan-lsp": "yegappan-lsp"
+        "vim-src": "vim-src"
       }
     },
     "vim-src": {
@@ -90,23 +36,6 @@
         "owner": "vim",
         "ref": "v9.2.0478",
         "repo": "vim",
-        "type": "github"
-      }
-    },
-    "yegappan-lsp": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1782141145,
-        "narHash": "sha256-HLyMC0PoONJuOJyiuNXj44/77HMQEBSnxHlBiRw03co=",
-        "owner": "yegappan",
-        "repo": "lsp",
-        "rev": "989016ae2ae4cbf304a9ca29478f47fec794493f",
-        "type": "github"
-      },
-      "original": {
-        "owner": "yegappan",
-        "repo": "lsp",
-        "rev": "989016ae2ae4cbf304a9ca29478f47fec794493f",
         "type": "github"
       }
     }

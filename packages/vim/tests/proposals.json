@@ -1,0 +1,5 @@
+[
+  {"id":"p1","meaning":{"kind":"relation","from":"API","to":"DB"},"representation":"API → DB"},
+  {"id":"p2","meaning":{"kind":"relation","from":"DB","to":"API"},"representation":"DB → API"},
+  {"id":"p3","meaning":{"kind":"text","text":"APIとDB"},"representation":"APIとDB（方向を決めない）"}
+]

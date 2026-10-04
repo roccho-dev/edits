@@ -27,10 +27,12 @@ In Insert mode use `Ctrl-X Ctrl-U`, `Ctrl-N/P`, `Ctrl-Y` or `Ctrl-E`. After
 rewriting, explicitly complete again. Menu movement is temporary preview;
 cancellation restores the input and preserves the previous selection's origin.
 
-The native information popup shows the supplied meaning and evaluation evidence
-separately from insertion text. With `Ctrl-N/P`, compare this information before
+The native information popup shows the full insertion representation, followed
+by the supplied meaning and evaluation evidence. With `Ctrl-N/P`, compare before
 accepting: equal labels and scores can belong to different meanings. These are
 the owner's JSON values, not a generated explanation or an executed action.
+Equal first lines can also hide different later insertion lines; the popup keeps
+those full lines independently of temporary preview. Only representation is inserted.
 An accepted native selection keeps the full Proposal/evidence and raw query base
 in `b:surface_selection`. Relation representation is text only, with no effect.
 Edit and Undo remain native. `:write` and `:edit` save/read the local Working file;
@@ -89,7 +91,11 @@ Native TTY controls separately exercise prefix replacement, suffix/other-line
 preservation, preview/cancel/selection, Unicode editing/Undo and owned save/read.
 Controlled scores are not Jev semantic-quality evidence.
 Equal-text/equal-score controls verify distinct meaning information and unchanged
-order, text and handles. Human comprehension of the displayed data remains a
+order, text and handles. Same-meaning/equal-score/same-first-line controls also
+verify different multiline representations remain available before acceptance.
+Native multiline insertion can carry indentation from the remaining line into
+later lines; this is stock Vim behavior, not an exact-byte apply contract.
+Human comprehension of the displayed data remains a
 separate acceptance gate, including whether native wrapping makes differences readable.
 
 Real Jev access and the two-input ranking-quality trial await a permitted

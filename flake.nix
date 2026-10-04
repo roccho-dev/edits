@@ -357,7 +357,7 @@
           for s:item in s:items
             let s:original = filter(deepcopy(s:catalog), "v:val.id == s:item.user_data.id")[0]
             call assert_equal(s:original.representation, s:item.word)
-            call assert_equal("meaning: " . json_encode(s:item.user_data.meaning) . "\nevidence: " . json_encode(s:item.user_data.evidence), s:item.info)
+            call assert_equal("representation:\n" . s:item.word . "\n\nmeaning: " . json_encode(s:item.user_data.meaning) . "\nevidence: " . json_encode(s:item.user_data.evidence), s:item.info)
             call assert_equal("intent-fit", s:item.user_data.evidence.theme)
             call assert_equal(s:original.meaning.kind, s:item.user_data.meaning.kind)
             if s:item.user_data.id == "p1"
@@ -389,11 +389,36 @@
         call assert_notequal(s:items[1].info, s:items[2].info, "different types visible")
         for s:index in range(3)
           call assert_equal(s:collision[s:index].meaning, s:items[s:index].user_data.meaning)
-          call assert_equal("meaning: " . json_encode(s:collision[s:index].meaning) . "\nevidence: " . json_encode(s:items[s:index].user_data.evidence), s:items[s:index].info)
+          call assert_equal("representation:\n" . s:items[s:index].word . "\n\nmeaning: " . json_encode(s:collision[s:index].meaning) . "\nevidence: " . json_encode(s:items[s:index].user_data.evidence), s:items[s:index].info)
         endfor
         call assert_equal([" right suffix", "other row"], getline(1, "$"), "info not inserted")
         let $EDITS_TEST_FAULT = ""
         call add(s:phases, "equal text and score/different meanings")
+        let s:multiline = deepcopy(s:collision[:1])
+        let s:multiline[1].meaning = deepcopy(s:multiline[0].meaning)
+        let s:multiline[0].representation = "same first line\nfirst body"
+        let s:multiline[1].representation = "same first line\nsecond body"
+        call writefile([json_encode(s:multiline)], s:catalog_path)
+        let $EDITS_TEST_FAULT = "equal"
+        call setline(1, "api uses db right suffix")
+        call cursor(1, 12)
+        call assert_equal(0, call(s:Complete, [1, ""]))
+        call setline(1, " right suffix")
+        call cursor(1, 1)
+        let s:items = call(s:Complete, [0, "api uses db"])
+        call assert_equal(2, len(s:items))
+        call assert_equal(["same first line", "same first line"], map(copy(s:items), "v:val.abbr"))
+        call assert_equal(["intent-fit 0.5", "intent-fit 0.5"], map(copy(s:items), "v:val.menu"))
+        call assert_equal(s:items[0].user_data.meaning, s:items[1].user_data.meaning)
+        for s:index in range(2)
+          call assert_equal(s:multiline[s:index].id, s:items[s:index].user_data.id)
+          call assert_equal(s:multiline[s:index].representation, s:items[s:index].word)
+          call assert_equal("representation:\n" . s:multiline[s:index].representation . "\n\nmeaning: " . json_encode(s:items[s:index].user_data.meaning) . "\nevidence: " . json_encode(s:items[s:index].user_data.evidence), s:items[s:index].info)
+        endfor
+        call assert_notequal(s:items[0].info, s:items[1].info, "different full insertion text remains readable")
+        call assert_equal([" right suffix", "other row"], getline(1, "$"))
+        let $EDITS_TEST_FAULT = ""
+        call add(s:phases, "same meaning/different multiline text")
         let s:prior = {"handle": {"previous": "origin"}, "base": {"working": ["earlier"]}}
         let b:surface_selection = deepcopy(s:prior)
         let s:faults = ["nokey", "http", "model", "catalog", "json", "query", "duplicate", "meaning", "evidence", "numericstring", "catalogchange"]
@@ -416,7 +441,7 @@
           call assert_equal(["", "other row"], getline(1, "$"), s:fault . " native state")
           call add(s:phases, s:fault)
         endfor
-        call assert_equal(["attach", "api uses db", "db uses api", "equal text and score/different meanings"] + s:faults, s:phases)
+        call assert_equal(["attach", "api uses db", "db uses api", "equal text and score/different meanings", "same meaning/different multiline text"] + s:faults, s:phases)
         call assert_equal("", v:errmsg)
         call writefile([json_encode({"phases":s:phases,"errors":v:errors,"errmsg":v:errmsg})], "adapter-report.json")
         if !empty(v:errors)

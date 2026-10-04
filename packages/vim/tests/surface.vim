@@ -6,11 +6,15 @@ if argc() != 0 || bufname() != '' || &modified || getline(1, '$') != ['']
   throw 'surface example requires a fresh owned Vim session'
 endif
 
-def ReadSource(): dict<any>
-  if $EDITS_COMPLETION_SOURCE == ''
+def ReadSource(base: dict<any> = {}): any
+  var path = get(base, 'source', $EDITS_COMPLETION_SOURCE)
+  if path == ''
     throw 'EDITS_COMPLETION_SOURCE is required'
   endif
-  var data = json_decode(readfile($EDITS_COMPLETION_SOURCE)->join("\n"))
+  return json_decode(readfile(path)->join("\n"))
+enddef
+
+def ValidateView(data: any): dict<any>
   if type(data) != v:t_dict || sort(keys(data)) != ['contexts', 'schema']
       || data.schema != 'decision-completion.view/1' || type(data.contexts) != v:t_list
     throw 'invalid decision-completion.view/1 fixture'
@@ -42,14 +46,27 @@ def Complete(findstart: number, _base: string): any
   var base = {source: $EDITS_COMPLETION_SOURCE, buffer: bufnr(), tick: b:changedtick,
     working: getline(1, '$'), current: deepcopy(b:surface_current), context: deepcopy(b:surface_context)}
   b:surface_base = {}
-  var groups = ReadSource().contexts->filter((_, group) => Same(group.current, base.current) && Same(group.context, base.context))
+  var Acquire = get(b:, 'surface_acquire', ReadSource)
+  var data: dict<any>
+  try
+    if type(Acquire) != v:t_func
+      throw 'surface_acquire must be a Funcref'
+    endif
+    data = ValidateView(call(Acquire, [deepcopy(base)]))
+  catch
+    echo '例: 候補を取得できません。未採用の編集は保持します'
+    return []
+  endtry
+  var groups = copy(data.contexts)->filter((_, group) => Same(group.current, base.current) && Same(group.context, base.context))
   if len(groups) != 1 || base.source != $EDITS_COMPLETION_SOURCE || base.buffer != bufnr()
-      || base.tick != b:changedtick || !Same(base.current, b:surface_current) || !Same(base.context, b:surface_context)
+      || base.tick != b:changedtick || !Same(base.working, getline(1, '$'))
+      || !Same(base.current, b:surface_current) || !Same(base.context, b:surface_context)
+      || !Same(Acquire, get(b:, 'surface_acquire', ReadSource))
     echo '例: 文脈が変わりました。候補を再取得してください'
     return []
   endif
   b:surface_base = base
-  return groups[0].items->map((_, item) => ({word: join(item.text, "\n"), abbr: item.label,
+  return copy(groups[0].items)->map((_, item) => ({word: join(item.text, "\n"), abbr: item.label,
     menu: item.provenance, info: join(item.text, "\n"), user_data: deepcopy(item.handle), dup: 1, equal: 1, empty: 1}))
 enddef
 
@@ -65,7 +82,7 @@ def Completed()
   endif
 enddef
 
-const examples = ReadSource().contexts
+const examples = ValidateView(ReadSource()).contexts
 var buffers: list<number> = []
 for group in examples
   var bnr = bufadd(tempname())

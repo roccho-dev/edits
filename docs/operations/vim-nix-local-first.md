@@ -17,11 +17,20 @@ Use `i`, `Ctrl-X Ctrl-U`, `Ctrl-N/P`, then `Ctrl-Y` to accept the selection or
 can leave a text-neutral Undo step: one `u` reverses that step, a second reverses
 the preceding edit.
 
-The unchanged UI and fixture were independently verified in native TTY controls
-and launched through Noctty into the running OCI on 2026-10-03. That checkpoint
+The preceding UI and unchanged fixture were independently verified in native TTY
+controls and launched through Noctty into the running OCI on 2026-10-03. That checkpoint
 does not guarantee a later OCI's setup or prove the whole visible Human UX.
 
-The Nix check tests loading and ordered projection. Real shared proposals,
+An owned buffer may set `b:surface_acquire` to an acquisition Funcref. Each explicit
+completion passes it a deep copy of the latest Working, opaque context/current
+and local buffer/source snapshot. The function returns the same display view;
+an unset function uses the file above. Invalid settings, exceptions and invalid
+views do not fall back. Acquisition changes invalidate the active result while
+preserving Working and the last selection's original handle/base. This private
+composition boundary is not a shared owner's public wire or proof of evaluation.
+
+The Nix check tests loading, input delivery, failure preservation and ordered
+projection with a controlled acquisition function. Real shared proposals,
 admission and durable saving remain separate gates under
 [ADRS #481](https://github.com/roccho-dev/adrs/issues/481) and
 [#484](https://github.com/roccho-dev/adrs/issues/484).

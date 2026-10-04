@@ -81,7 +81,8 @@ def Acquire(binary: string, catalog: string, raw: dict<any>): dict<any>
     add(seen, proposal.id)
     var text = split(proposal.representation, "\n", 1)
     add(items, {handle: deepcopy(proposal), label: text[0],
-      provenance: $'intent-fit {proposal.evidence.noul}', text: text})
+      provenance: $'intent-fit {proposal.evidence.noul}', text: text,
+      info: 'meaning: ' .. json_encode(proposal.meaning) .. "\nevidence: " .. json_encode(proposal.evidence)})
   endfor
   return surface.ValidateView({schema: 'decision-completion.view/1',
     contexts: [{current: deepcopy(raw.current), context: deepcopy(raw.context), items: items}]})

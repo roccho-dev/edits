@@ -74,6 +74,28 @@
           let s:group.context = {"goal": {"text": [s:group.context]}}
         endfor
         let s:original = deepcopy(g:View)
+        let s:info_view = deepcopy(g:View)
+        let s:info_view.contexts[0].items[0].info = "meaning information only"
+        call assert_equal(s:info_view, s:surface.ValidateView(s:info_view))
+        for s:bad in [0, ["not a string"]]
+          let s:info_view.contexts[0].items[0].info = s:bad
+          let s:refused = 0
+          try
+            call s:surface.ValidateView(s:info_view)
+          catch /invalid view candidate/
+            let s:refused = 1
+          endtry
+          call assert_equal(1, s:refused, "invalid info refused")
+        endfor
+        let s:info_view = deepcopy(g:View)
+        let s:info_view.contexts[0].items[0].unknown = "not allowed"
+        let s:refused = 0
+        try
+          call s:surface.ValidateView(s:info_view)
+        catch /invalid view candidate/
+          let s:refused = 1
+        endtry
+        call assert_equal(1, s:refused, "unknown key refused")
         let g:Inputs = []
         let g:Fault = ""
         function g:Query(raw)
@@ -158,6 +180,7 @@
             call assert_equal(b:surface_context, g:Inputs[-1].context)
             call assert_equal(map(copy(s:group.items), "v:val.handle"), map(copy(s:items), "v:val.user_data"))
             call assert_equal(map(copy(s:group.items), 'join(v:val.text, "\n")'), map(copy(s:items), "v:val.word"))
+            call assert_equal(map(copy(s:group.items), 'join(v:val.text, "\n")'), map(copy(s:items), "v:val.info"), "old caller info")
             call assert_equal(s:original, g:View)
             call assert_equal([], call(eval(&l:completefunc), [0, ""]), "pending consumed once")
           endfor
@@ -257,6 +280,14 @@
         cat > preload.mjs <<'JS'
         import "${ops}/packages/semcmp/tests/cli.mjs";
         import { appendFileSync } from "node:fs";
+        const fetch = globalThis.fetch;
+        globalThis.fetch = async (...args) => {
+          const response = await fetch(...args);
+          if (process.env.EDITS_TEST_FAULT !== "equal") return response;
+          const result = await response.json();
+          for (const answer of Object.values(result.answers)) answer.noul = 0.5;
+          return { ok: true, json: async () => result };
+        };
         const original = process.stdout.write.bind(process.stdout);
         process.stdout.write = (chunk, ...args) => {
           const fault = process.env.EDITS_TEST_FAULT;
@@ -326,6 +357,7 @@
           for s:item in s:items
             let s:original = filter(deepcopy(s:catalog), "v:val.id == s:item.user_data.id")[0]
             call assert_equal(s:original.representation, s:item.word)
+            call assert_equal("meaning: " . json_encode(s:item.user_data.meaning) . "\nevidence: " . json_encode(s:item.user_data.evidence), s:item.info)
             call assert_equal("intent-fit", s:item.user_data.evidence.theme)
             call assert_equal(s:original.meaning.kind, s:item.user_data.meaning.kind)
             if s:item.user_data.id == "p1"
@@ -336,6 +368,32 @@
           call assert_equal([], call(s:Complete, [0, s:input]), "pending consumed")
           call add(s:phases, s:input)
         endfor
+        let s:collision = deepcopy(s:catalog)
+        call remove(s:collision[0].meaning, "nested")
+        for s:proposal in s:collision
+          let s:proposal.representation = "same inserted text"
+        endfor
+        call writefile([json_encode(s:collision)], s:catalog_path)
+        let $EDITS_TEST_FAULT = "equal"
+        call setline(1, "api uses db right suffix")
+        call cursor(1, 12)
+        let s:Complete = eval(&l:completefunc)
+        call assert_equal(0, call(s:Complete, [1, ""]))
+        call setline(1, " right suffix")
+        call cursor(1, 1)
+        let s:items = call(s:Complete, [0, "api uses db"])
+        call assert_equal(map(copy(s:collision), "v:val.id"), map(copy(s:items), "v:val.user_data.id"), "owner tie order")
+        call assert_equal(["same inserted text", "same inserted text", "same inserted text"], map(copy(s:items), "v:val.word"))
+        call assert_equal(["intent-fit 0.5", "intent-fit 0.5", "intent-fit 0.5"], map(copy(s:items), "v:val.menu"))
+        call assert_notequal(s:items[0].info, s:items[1].info, "different relation meanings visible")
+        call assert_notequal(s:items[1].info, s:items[2].info, "different types visible")
+        for s:index in range(3)
+          call assert_equal(s:collision[s:index].meaning, s:items[s:index].user_data.meaning)
+          call assert_equal("meaning: " . json_encode(s:collision[s:index].meaning) . "\nevidence: " . json_encode(s:items[s:index].user_data.evidence), s:items[s:index].info)
+        endfor
+        call assert_equal([" right suffix", "other row"], getline(1, "$"), "info not inserted")
+        let $EDITS_TEST_FAULT = ""
+        call add(s:phases, "equal text and score/different meanings")
         let s:prior = {"handle": {"previous": "origin"}, "base": {"working": ["earlier"]}}
         let b:surface_selection = deepcopy(s:prior)
         let s:faults = ["nokey", "http", "model", "catalog", "json", "query", "duplicate", "meaning", "evidence", "numericstring", "catalogchange"]
@@ -358,7 +416,7 @@
           call assert_equal(["", "other row"], getline(1, "$"), s:fault . " native state")
           call add(s:phases, s:fault)
         endfor
-        call assert_equal(["attach", "api uses db", "db uses api"] + s:faults, s:phases)
+        call assert_equal(["attach", "api uses db", "db uses api", "equal text and score/different meanings"] + s:faults, s:phases)
         call assert_equal("", v:errmsg)
         call writefile([json_encode({"phases":s:phases,"errors":v:errors,"errmsg":v:errmsg})], "adapter-report.json")
         if !empty(v:errors)

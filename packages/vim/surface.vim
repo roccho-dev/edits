@@ -12,9 +12,12 @@ export def ValidateView(data: any): dict<any>
       throw 'invalid view context'
     endif
     for item in group.items
-      if type(item) != v:t_dict || sort(keys(item)) != ['handle', 'label', 'provenance', 'text']
+      if type(item) != v:t_dict
+          || (sort(keys(item)) != ['handle', 'label', 'provenance', 'text']
+            && sort(keys(item)) != ['handle', 'info', 'label', 'provenance', 'text'])
           || type(item.label) != v:t_string || type(item.provenance) != v:t_string
           || type(item.text) != v:t_list || !empty(filter(copy(item.text), (_, line) => type(line) != v:t_string))
+          || (has_key(item, 'info') && type(item.info) != v:t_string)
         throw 'invalid view candidate'
       endif
     endfor
@@ -109,7 +112,7 @@ def Complete(findstart: number, prefix: string): any
   endif
   b:surface_base = raw
   return copy(groups[0].items)->map((_, item) => ({word: join(item.text, "\n"), abbr: item.label,
-    menu: item.provenance, info: join(item.text, "\n"), user_data: deepcopy(item.handle), dup: 1, equal: 1, empty: 1}))
+    menu: item.provenance, info: get(item, 'info', join(item.text, "\n")), user_data: deepcopy(item.handle), dup: 1, equal: 1, empty: 1}))
 enddef
 
 def Completed()

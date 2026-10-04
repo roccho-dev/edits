@@ -26,6 +26,13 @@ not an Input enum, meaning parser or definition that every unit is a line.
 In Insert mode use `Ctrl-X Ctrl-U`, `Ctrl-N/P`, `Ctrl-Y` or `Ctrl-E`. After
 rewriting, explicitly complete again. Menu movement is temporary preview;
 cancellation restores the input and preserves the previous selection's origin.
+
+The native information popup shows the full insertion representation, followed
+by the supplied meaning and evaluation evidence. With `Ctrl-N/P`, compare before
+accepting: equal labels and scores can belong to different meanings. These are
+the owner's JSON values, not a generated explanation or an executed action.
+Equal first lines can also hide different later insertion lines; the popup keeps
+those full lines independently of temporary preview. Only representation is inserted.
 An accepted native selection keeps the full Proposal/evidence and raw query base
 in `b:surface_selection`. Relation representation is text only, with no effect.
 Edit and Undo remain native. `:write` and `:edit` save/read the local Working file;
@@ -36,6 +43,8 @@ The adapter snapshots the configured catalog once and sends the private stdin
 Query contains opaque input, full Working/current/context, and cursor/start focus.
 It checks returned query, all candidate IDs, original meaning/representation and
 evidence before producing the private `decision-completion.view/1` display.
+That internal view permits an optional string `info` for reading only; callers
+without it retain their insertion-text information. It is not a shared wire type.
 Numeric JSON values may round-trip as Number/Float; strings remain distinct.
 A final catalog byte check rejects observed source changes, without claiming
 ABA or generation guarantees. Product native snapshot/guard checks remain in use.
@@ -81,6 +90,13 @@ failure/source-change refusal, and origin preservation without network calls.
 Native TTY controls separately exercise prefix replacement, suffix/other-line
 preservation, preview/cancel/selection, Unicode editing/Undo and owned save/read.
 Controlled scores are not Jev semantic-quality evidence.
+Equal-text/equal-score controls verify distinct meaning information and unchanged
+order, text and handles. Same-meaning/equal-score/same-first-line controls also
+verify different multiline representations remain available before acceptance.
+Native multiline insertion can carry indentation from the remaining line into
+later lines; this is stock Vim behavior, not an exact-byte apply contract.
+Human comprehension of the displayed data remains a
+separate acceptance gate, including whether native wrapping makes differences readable.
 
 Real Jev access and the two-input ranking-quality trial await a permitted
 credential entry. Actual Voice integration, Human Readline acceptance, general

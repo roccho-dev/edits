@@ -1,12 +1,13 @@
 {
-  description = "Pinned Vim and native Decision Completion fixture";
+  description = "Pinned Vim with installed semcmp completion";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/0ae2bc1419c3f345984c2629e72e7a631820fa4d";
+    ops.url = "github:roccho-dev/ops/012346897c2b88b67808476ef99637445ff5a77e";
     vim-src = { url = "github:vim/vim/v9.2.0478"; flake = false; };
   };
 
-  outputs = { nixpkgs, vim-src, ... }:
+  outputs = { nixpkgs, vim-src, ops, ... }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
@@ -21,11 +22,23 @@
             '+quitall!'
         '';
       });
+      semcmp = ops.packages.${system}.semcmp;
+      edits = pkgs.runCommand "edits" { nativeBuildInputs = [ pkgs.makeWrapper ]; } ''
+        mkdir -p "$out/share/edits/vim" "$out/share/edits/examples" "$out/bin"
+        cp ${./packages/vim/surface.vim} "$out/share/edits/vim/surface.vim"
+        cp ${./packages/vim/semcmp.vim} "$out/share/edits/vim/semcmp.vim"
+        cp ${./packages/vim/entry.vim} "$out/share/edits/vim/entry.vim"
+        cp ${./packages/vim/tests/proposals.json} "$out/share/edits/examples/proposals.json"
+        makeWrapper ${vim}/bin/vim "$out/bin/edits" \
+          --set EDITS_SEMCMP_BIN "${semcmp}/bin/semcmp" \
+          --add-flags "-S $out/share/edits/vim/entry.vim"
+      '';
     in {
-      packages.${system}.vim = vim;
-      checks.${system}.fixture = pkgs.runCommand "native-completion-fixture" {
+      packages.${system} = { inherit vim edits; default = edits; };
+      checks.${system} = {
+      fixture = pkgs.runCommand "native-completion-fixture" {
         nativeBuildInputs = [ vim ];
-        EDITS_VIM_TREE = ../../packages/vim;
+        EDITS_VIM_TREE = ./packages/vim;
         LANG = "C.UTF-8";
       } ''
         # Keep the real import relationship for both fixture and product.
@@ -229,5 +242,135 @@
         fi
         test ! -e invalid-loaded
       '';
+      semcmp-installed = pkgs.runCommand "edits-semcmp-package-connection" {
+        nativeBuildInputs = [ edits ];
+        EDITS_VIM_TREE = ./packages/vim;
+        EDITS_SEMCMP_CATALOG = ./packages/vim/tests/proposals.json;
+        JEV_API_KEY = "test-only-placeholder";
+        JEV_API_URL = "https://invalid.test/never-contacted";
+        SEMCMP_TEST_CASE = "ok";
+        LANG = "C.UTF-8";
+      } ''
+        cp -r "$EDITS_VIM_TREE" vim-tree
+        chmod -R u+w vim-tree
+        export SEMCMP_TEST_TRACE="$PWD/trace.json"
+        cat > preload.mjs <<'JS'
+        import "${ops}/packages/semcmp/tests/cli.mjs";
+        import { appendFileSync } from "node:fs";
+        const original = process.stdout.write.bind(process.stdout);
+        process.stdout.write = (chunk, ...args) => {
+          const fault = process.env.EDITS_TEST_FAULT;
+          if (!fault) return original(chunk, ...args);
+          if (fault === "json") return original("{invalid", ...args);
+          const result = JSON.parse(String(chunk));
+          if (fault === "query") result.query.input = "unrelated";
+          if (fault === "duplicate") result.proposals[1] = result.proposals[0];
+          if (fault === "meaning") result.proposals[0].meaning = "unrelated";
+          if (fault === "evidence") result.proposals[0].evidence.noul = 2;
+          if (fault === "numericstring") result.query.state.current.opaque[0] = "1";
+          if (fault === "catalogchange") appendFileSync(process.env.EDITS_TEST_CATALOG, " ");
+          return original(JSON.stringify(result), ...args);
+        };
+        JS
+        export NODE_OPTIONS="--import=$PWD/preload.mjs"
+        cat > vim-tree/tests/check-adapter.vim <<'VIM'
+        set nomore hidden
+        setlocal virtualedit=onemore
+        call setline(1, ["existing dirty", "other row"])
+        file owned-installed-buffer
+        let s:body = getline(1, "$")
+        let s:undo = undotree()
+        let s:global = [&g:completeopt, &g:completefunc]
+        import "${edits}/share/edits/vim/semcmp.vim" as semcmp
+        call assert_equal(s:body, getline(1, "$"))
+        call assert_equal(s:undo, undotree())
+        let b:surface_current = {"opaque": [1.0, {"n": 2.0, "s": "1"}]}
+        let b:surface_context = ["caller context"]
+        call s:semcmp.Attach($EDITS_SEMCMP_BIN, $EDITS_SEMCMP_CATALOG)
+        let s:Query = b:surface_query
+        call s:semcmp.Attach($EDITS_SEMCMP_BIN, $EDITS_SEMCMP_CATALOG)
+        call assert_equal(s:body, getline(1, "$"))
+        call assert_equal(s:undo, undotree())
+        call assert_equal(s:Query, b:surface_query)
+        call assert_equal({"opaque": [1.0, {"n": 2.0, "s": "1"}]}, b:surface_current)
+        call assert_equal(["caller context"], b:surface_context)
+        call assert_equal(s:global, [&g:completeopt, &g:completefunc])
+        call assert_equal(1, len(autocmd_get({"group": "edits_surface", "event": "CompleteDonePre", "pattern": "<buffer=" . bufnr() . ">"})))
+        let s:catalog = json_decode(join(readfile($EDITS_SEMCMP_CATALOG), "\n"))
+        let s:catalog[0].meaning.nested = [1.0, {"n": 2.0, "s": "1"}]
+        let s:catalog_path = getcwd() . "/catalog.json"
+        call writefile([json_encode(s:catalog)], s:catalog_path)
+        let s:phases = ["attach"]
+        for s:input in ["api uses db", "db uses api"]
+          call s:semcmp.Attach($EDITS_SEMCMP_BIN, s:catalog_path)
+          call setline(1, s:input . " right suffix")
+          call cursor(1, strlen(s:input) + 1)
+          let s:raw = getline(1, "$")
+          let s:Complete = eval(&l:completefunc)
+          call assert_equal(0, call(s:Complete, [1, ""]))
+          call setline(1, " right suffix")
+          call cursor(1, 1)
+          let s:items = call(s:Complete, [0, s:input])
+          call assert_equal(3, len(s:items))
+          call assert_equal(s:input == "api uses db" ? "p1" : "p2", s:items[0].user_data.id)
+          call assert_equal(s:raw, b:surface_base.working)
+          call assert_equal(s:input, b:surface_base.input)
+          call assert_equal([" right suffix", "other row"], getline(1, "$"))
+          let s:q = json_decode(join(readfile($SEMCMP_TEST_TRACE), "\n")).payload.state.query
+          call assert_equal(s:input, s:q.input)
+          call assert_equal(s:raw, s:q.state.working)
+          call assert_equal("1", s:q.state.current.opaque[1].s)
+          call assert_equal(1, s:q.state.current.opaque[0])
+          call assert_equal(["caller context"], s:q.state.context)
+          call assert_equal({"line": 1, "column": strlen(s:input) + 1, "start": 0}, s:q.focus)
+          for s:item in s:items
+            let s:original = filter(deepcopy(s:catalog), "v:val.id == s:item.user_data.id")[0]
+            call assert_equal(s:original.representation, s:item.word)
+            call assert_equal("intent-fit", s:item.user_data.evidence.theme)
+            call assert_equal(s:original.meaning.kind, s:item.user_data.meaning.kind)
+            if s:item.user_data.id == "p1"
+              call assert_equal(1, s:item.user_data.meaning.nested[0])
+              call assert_equal("1", s:item.user_data.meaning.nested[1].s)
+            endif
+          endfor
+          call assert_equal([], call(s:Complete, [0, s:input]), "pending consumed")
+          call add(s:phases, s:input)
+        endfor
+        let s:prior = {"handle": {"previous": "origin"}, "base": {"working": ["earlier"]}}
+        let b:surface_selection = deepcopy(s:prior)
+        let s:faults = ["nokey", "http", "model", "catalog", "json", "query", "duplicate", "meaning", "evidence", "numericstring", "catalogchange"]
+        for s:fault in s:faults
+          let $JEV_API_KEY = s:fault == "nokey" ? "" : "test-only-placeholder"
+          let $SEMCMP_TEST_CASE = index(["http", "model"], s:fault) >= 0 ? s:fault : "ok"
+          let $EDITS_TEST_FAULT = s:fault
+          let $EDITS_TEST_CATALOG = s:catalog_path
+          call writefile([json_encode(s:catalog)], s:catalog_path)
+          call s:semcmp.Attach($EDITS_SEMCMP_BIN, s:fault == "catalog" ? "" : s:catalog_path)
+          call setline(1, "api uses db")
+          call cursor(1, 12)
+          let s:Complete = eval(&l:completefunc)
+          call assert_equal(0, call(s:Complete, [1, ""]))
+          call setline(1, "")
+          call cursor(1, 1)
+          call assert_equal([], call(s:Complete, [0, "api uses db"]), s:fault)
+          call assert_equal({}, b:surface_base, s:fault . " inactive")
+          call assert_equal(s:prior, b:surface_selection, s:fault . " origin")
+          call assert_equal(["", "other row"], getline(1, "$"), s:fault . " native state")
+          call add(s:phases, s:fault)
+        endfor
+        call assert_equal(["attach", "api uses db", "db uses api"] + s:faults, s:phases)
+        call assert_equal("", v:errmsg)
+        call writefile([json_encode({"phases":s:phases,"errors":v:errors,"errmsg":v:errmsg})], "adapter-report.json")
+        if !empty(v:errors)
+          call writefile(v:errors, "/dev/stderr")
+          cquit 1
+        endif
+        call writefile(["edits semcmp installed"], $out)
+        qa!
+        VIM
+        edits -Nu NONE -i NONE -n -es -S vim-tree/tests/check-adapter.vim
+        test "$(cat "$out")" = "edits semcmp installed"
+      '';
+      };
     };
 }

@@ -3,41 +3,51 @@
 A native Vim Human surface for [ADRS #481](https://github.com/roccho-dev/adrs/issues/481),
 [#484](https://github.com/roccho-dev/adrs/issues/484) and [edits #125](https://github.com/roccho-dev/edits/issues/125).
 
-Import `packages/vim/surface.vim` and explicitly attach the current buffer.
-Importing does not read IO, create buffers or change text. In a legacy Vim script:
+`nix build .#edits` (also the default package) installs pinned Vim, the surface,
+and the pinned ops semcmp CLI with its Node/JS dependencies. No second checkout
+or separate Node installation is required. Stock `#vim` remains unchanged.
 
-```vim
-import "/actual/path/packages/vim/surface.vim" as surface
-" Set b:surface_query, b:surface_acquire, b:surface_source,
-" b:surface_current and b:surface_context in this buffer first.
-call s:surface.Attach()
-```
-
-In Vim9script use `surface.Attach()`. Query and acquisition are buffer-local
-Funcrefs, supplied by the caller. Query receives the full pre-completion Working
-snapshot and returns `{start, input}`: a UTF-8 byte boundary before the cursor,
-and opaque input material. Acquisition receives that raw snapshot plus start/input.
-The surface separately checks native completion's temporary text removal and
-changes during callbacks. It preserves candidate order and opaque handles.
-The current private display view is `decision-completion.view/1`; it is not a
-shared owner's public wire. Neither callback's internal mutable state nor a
-remote owner's evaluation guarantees are established by these local guards.
-
-Use native completion, editing, cancellation and Undo. Selection changes
-unadopted Working and records the original handle/raw input; it does not admit
-meaning or execute a shared action. Candidate generation, evaluation, ranking,
-semantic application, admission and confirmed current remain external.
-The public shared acquisition connection and whole Human UX are still TODO.
-
-[Run the owned fixture and see the private composition contract](docs/operations/vim-nix-local-first.md).
-The former HQ implementation and distribution dependencies are retired;
-Git history and existing User environments remain intact.
+Supply a proposal catalog explicitly and open your ordinary file:
 
 ```sh
-nix build ./proofs/vim-nix#vim --no-link --no-write-lock-file
-nix flake check ./proofs/vim-nix --no-write-lock-file
+EDITS_SEMCMP_CATALOG=/absolute/path/proposals.json \
+  LANG=C.UTF-8 TERM=xterm-256color result/bin/edits -Nu NONE -i NONE -n notes.txt
 ```
 
-Stock Vim remains pinned to 9.2.0478. The check exercises the actual product and
-fixture tree's loading, snapshot delivery, guards and projection. Headless
-integration is separate from native TTY selection and Human evaluation.
+The installed example is `result/share/edits/examples/proposals.json`. It is
+hand-authored input, never an implicit fallback. Semcmp uses the existing
+`JEV_API_KEY`, optional `JEV_API_URL` and `JEV_TIMEOUT_MS` process environment.
+An artifact's capability declaration does not provide credentials; fixed
+voice-ui/ops-jev launchers do not authorize arbitrary semcmp programs.
+
+Write, use `Ctrl-X Ctrl-U`, compare with `Ctrl-N/P`, accept with `Ctrl-Y` or cancel
+with `Ctrl-E`, then edit and complete again. The initial query replaces only the
+current line's prefix before the cursor; right-hand text and other lines remain.
+The caller may supply another `b:surface_query`; this example does not define
+all Input types or make a semantic unit equal to a line.
+
+Each explicit completion sends the latest full Working/current/context and
+opaque input/focus to semcmp. The response must match the query and supplied
+candidate identities, meaning and representation. Order is preserved; the
+original Proposal and evaluation evidence remain in the opaque handle.
+Selection is an unadopted Working edit, not a relation effect or Admit.
+
+The underlying `packages/vim/surface.vim` remains independently usable with
+caller-supplied buffer-local Query and Acquire Funcrefs. Importing has no IO or
+buffer effects; explicitly call its `Attach()`. The installed semcmp entry
+attaches the current buffer without example bootstrap or invented current.
+
+```sh
+nix flake check . --no-write-lock-file --print-build-logs
+nix build .#vim --no-link --no-write-lock-file
+```
+
+The checks retain the product/fixture guards and exercise the installed
+`edits-semcmp-package-connection` with test-only transport responses. They do
+not prove real Jev quality, actual Voice sharing or Human UX. Real-provider
+access through an authorized target-native credential entry, Human comparison,
+and Commit/Prove/Admit/persistence remain separate gates.
+
+[Operations and private composition](docs/operations/vim-nix-local-first.md).
+HQ implementation/distribution dependencies are retired; Git history and
+existing User environments remain intact.

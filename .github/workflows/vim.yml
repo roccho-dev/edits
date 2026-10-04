@@ -1,4 +1,4 @@
-name: Vim fixture
+name: Vim semcmp connection
 
 on:
   pull_request:
@@ -24,7 +24,9 @@ jobs:
       - run: |
           set -euo pipefail
           git rev-parse HEAD
-          nix flake check ./proofs/vim-nix --no-write-lock-file --print-build-logs
-          vim=$(nix eval ./proofs/vim-nix#vim.outPath --raw --no-write-lock-file)
+          nix flake check . --no-write-lock-file --print-build-logs
+          vim=$(nix eval .#vim.outPath --raw --no-write-lock-file)
           test "$vim" = /nix/store/nqaldvn7ld01f2a337y8hp8qq8nhsb43-vim-9.2.0478
           nix path-info --recursive "$vim"
+          edits=$(nix eval .#edits.outPath --raw --no-write-lock-file)
+          nix path-info --recursive "$edits"

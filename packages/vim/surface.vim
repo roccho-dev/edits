@@ -124,15 +124,6 @@ def Completed()
   b:surface_done = {item: deepcopy(v:completed_item), base: deepcopy(b:surface_base)}
 enddef
 
-def Replace(first: number, count: number, lines: list<string>)
-  if count > len(lines)
-    deletebufline(bufnr(), first + len(lines), first + count - 1)
-  elseif count < len(lines)
-    append(first + count - 1, repeat([''], len(lines) - count))
-  endif
-  setline(first, lines)
-enddef
-
 # Native insertion may reshape multiline text. Only its own lines, ending at the
 # cursor, become prefix + selection + suffix, or the original line if the rest changed.
 def Apply()
@@ -151,15 +142,20 @@ def Apply()
   if first < 1 || !Same(getline(1, first - 1), slice(raw.working, 0, row))
       || !Same(getline(last + 1, '$'), slice(raw.working, row + 1))
       || strpart(getline('.'), col('.') - 1) !=# suffix
-    if first >= 1
-      Replace(first, len(lines), [text])
-      cursor(first, raw.cursor.column)
+    if first < 1
+      echo '文脈が変わりました。選択は記録しません'
+      return
     endif
+    if last > first
+      deletebufline(bufnr(), first + 1, last)
+    endif
+    setline(first, text)
+    cursor(first, raw.cursor.column)
     echo '文脈が変わりました。挿入を取り消し、選択は記録しません'
     return
   endif
   if !Same(getline(first, last), lines)
-    Replace(first, len(lines), lines)
+    setline(first, lines)
   endif
   cursor(last, strlen(lines[-1]) - strlen(suffix) + 1)
   b:surface_selection = {handle: deepcopy(done.item.user_data), base: raw,

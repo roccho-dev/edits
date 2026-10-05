@@ -35,8 +35,10 @@ Equal first lines can also hide different later insertion lines; the popup keeps
 those full lines independently of temporary preview. Only representation is inserted.
 On acceptance, by `Ctrl-Y` or by continuing to type, Working becomes exactly the
 prefix, the full representation and the original suffix; native reshaping of
-multiline text is replaced by that composition within the same Undo step. If it
-cannot be written exactly, the selection is refused and not recorded.
+multiline text is replaced by that composition within the same Undo step. Only the
+inserted lines are rewritten. If other Working lines changed during completion,
+those lines return to the original line, the selection is not recorded and other
+changes are kept.
 An accepted native selection keeps the full Proposal/evidence, raw query base and
 the information it was chosen with in `b:surface_selection`. `:SurfaceSelection`
 rereads that selection-time, unadopted information; it is history of the choice,
@@ -96,8 +98,8 @@ query delivery/order changes, original typed records, numeric round-trips,
 failure/source-change refusal, and origin preservation without network calls.
 The same check also drives the installed `edits` with real native keys on a
 screen (`--not-a-term`): compare/cancel, accept, reread, Undo, rewrite and requery,
-exact multiline-with-suffix insertion, edit/Undo, reselection, accept by typing and
-failure origin preservation. Native TTY controls separately exercise Unicode
+exact multiline insertion with a suffix and at line end, edit/Undo, reselection,
+accept by typing, changed-context refusal/Undo and failure origin preservation. Native TTY controls separately exercise Unicode
 editing and owned save/read. Controlled scores are not Jev semantic-quality evidence.
 Equal-text/equal-score controls verify distinct meaning information and unchanged
 order, text and handles. Same-meaning/equal-score/same-first-line controls also

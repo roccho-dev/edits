@@ -124,7 +124,17 @@ def Completed()
   b:surface_done = {item: deepcopy(v:completed_item), base: deepcopy(b:surface_base)}
 enddef
 
-# Native insertion may reshape multiline text; Working must be prefix + selection + suffix.
+def Replace(first: number, count: number, lines: list<string>)
+  if count > len(lines)
+    deletebufline(bufnr(), first + len(lines), first + count - 1)
+  elseif count < len(lines)
+    append(first + count - 1, repeat([''], len(lines) - count))
+  endif
+  setline(first, lines)
+enddef
+
+# Native insertion may reshape multiline text. Only its own lines, ending at the
+# cursor, become prefix + selection + suffix, or the original line if the rest changed.
 def Apply()
   var done = get(b:, 'surface_done', {})
   b:surface_done = {}
@@ -133,23 +143,25 @@ def Apply()
   endif
   var raw = done.base
   var row = raw.cursor.line - 1
-  var suffix = strpart(raw.working[row], raw.cursor.column - 1)
-  var lines = split(strpart(raw.working[row], 0, raw.start) .. done.item.word .. suffix, "\n", 1)
-  var expected = slice(raw.working, 0, row) + lines + slice(raw.working, row + 1)
-  try
-    if !Same(getline(1, '$'), expected)
-      setline(1, expected)
-      if line('$') > len(expected)
-        deletebufline(bufnr(), len(expected) + 1, '$')
-      endif
+  var text = raw.working[row]
+  var suffix = strpart(text, raw.cursor.column - 1)
+  var lines = split(strpart(text, 0, raw.start) .. done.item.word .. suffix, "\n", 1)
+  var last = line('.')
+  var first = last - len(lines) + 1
+  if first < 1 || !Same(getline(1, first - 1), slice(raw.working, 0, row))
+      || !Same(getline(last + 1, '$'), slice(raw.working, row + 1))
+      || strpart(getline('.'), col('.') - 1) !=# suffix
+    if first >= 1
+      Replace(first, len(lines), [text])
+      cursor(first, raw.cursor.column)
     endif
-    cursor(row + len(lines), strlen(lines[-1]) - strlen(suffix) + 1)
-  catch
-  endtry
-  if !Same(getline(1, '$'), expected)
-    echo '選択を本文へ正確に反映できません。選択は記録しません'
+    echo '文脈が変わりました。挿入を取り消し、選択は記録しません'
     return
   endif
+  if !Same(getline(first, last), lines)
+    Replace(first, len(lines), lines)
+  endif
+  cursor(last, strlen(lines[-1]) - strlen(suffix) + 1)
   b:surface_selection = {handle: deepcopy(done.item.user_data), base: raw,
     label: done.item.abbr, provenance: done.item.menu, info: done.item.info}
   echo $'{done.item.abbr}・{done.item.menu}（選択時・未採用 :SurfaceSelection）'

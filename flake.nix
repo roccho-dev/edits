@@ -502,7 +502,22 @@
         call assert_equal(["DB → API", "depends onz right suffix", "other row"], getline(1, "$"), "native implicit accept")
         call assert_equal("p2", b:surface_selection.handle.id)
         undo
+        call setline(1, "db uses api")
+        call cursor(1, 12)
+        call feedkeys("A\<C-X>\<C-U>\<C-N>\<C-Y>\<Esc>", "xt")
+        call assert_equal(["DB → API", "depends on", "other row"], getline(1, "$"), "end-of-line multiline")
+        undo
+        call setline(1, s:rewritten)
         let s:origin = deepcopy(b:surface_selection)
+        augroup native_outside
+          autocmd CompleteDonePre <buffer> ++once call setline(line("$"), "outside edit")
+        augroup END
+        call cursor(1, 12)
+        call feedkeys("i\<C-X>\<C-U>\<C-N>\<C-Y>\<Esc>", "xt")
+        call assert_equal(["db uses api right suffix", "outside edit"], getline(1, "$"), "changed context refuses only its own insertion")
+        call assert_equal(s:origin, b:surface_selection, "refusal keeps origin")
+        undo
+        call assert_equal(s:rewritten, getline(1, "$"), "refusal undo")
         let $JEV_API_KEY = ""
         call cursor(1, 12)
         call feedkeys("i\<C-X>\<C-U>\<Esc>", "xt")

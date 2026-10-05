@@ -131,17 +131,17 @@
         "ops-build-defs": "ops-build-defs"
       },
       "locked": {
-        "lastModified": 1791105183,
-        "narHash": "sha256-CPA1bZ+AWjUBi87zS95qNkdUieCvufeTP4OIqjXW07g=",
+        "lastModified": 1791234392,
+        "narHash": "sha256-DWm6D8BYe5PEJpN7H7hRaFJeiYeUmN5a/HErhVZ8bVw=",
         "owner": "roccho-dev",
         "repo": "ops",
-        "rev": "012346897c2b88b67808476ef99637445ff5a77e",
+        "rev": "91cdb00316602c88da217502e368f19e90647330",
         "type": "github"
       },
       "original": {
         "owner": "roccho-dev",
         "repo": "ops",
-        "rev": "012346897c2b88b67808476ef99637445ff5a77e",
+        "rev": "91cdb00316602c88da217502e368f19e90647330",
         "type": "github"
       }
     },

@@ -43,85 +43,152 @@ def Unchanged(base: dict<any>, Query: any, Acquire: any): bool
     && Same(Acquire, get(b:, 'surface_acquire', v:null))
 enddef
 
-def Complete(findstart: number, prefix: string): any
-  if findstart
-    b:surface_base = {}
-    b:surface_pending = {}
-    var raw = Snapshot()
-    var Query = get(b:, 'surface_query', v:null)
-    var Acquire = get(b:, 'surface_acquire', v:null)
-    try
-      if type(Query) != v:t_func || type(Acquire) != v:t_func
-        throw 'surface_query and surface_acquire must be Funcrefs'
-      endif
-      var query = call(Query, [deepcopy(raw)])
-      var end = raw.cursor.column - 1
-      var text = raw.working[raw.cursor.line - 1]
-      if !Unchanged(raw, Query, Acquire) || type(query) != v:t_dict
-          || sort(keys(query)) != ['input', 'start'] || type(query.start) != v:t_number
-          || query.start < 0 || query.start > end
-          || byteidx(text, charidx(text, query.start)) != query.start
-        throw 'invalid or stale query'
-      endif
-      raw.start = query.start
-      raw.input = deepcopy(query.input)
-      b:surface_pending = {raw: raw, Query: Query, Acquire: Acquire}
-      return query.start
-    catch
-      echo '補完を取得できません。編集は保持します'
-      return -3
-    endtry
-  endif
+def Key(): dict<any>
+  return {buffer: bufnr(), working: getline(1, '$'), cursor: [line('.'), col('.')]}
+enddef
 
-  var pending = get(b:, 'surface_pending', {})
-  b:surface_pending = {}
-  b:surface_base = {}
-  if empty(pending)
-    return []
+def Fail(code: string)
+  if code !=# b:surface_error
+    echomsg $'候補を取得できません（{code}）。編集は保持します'
   endif
-  var raw = pending.raw
-  var native = Snapshot()
-  var expected = copy(raw.working)
-  var row = raw.cursor.line - 1
-  var end = raw.cursor.column - 1
-  var text = expected[row]
-  expected[row] = strpart(text, 0, raw.start) .. strpart(text, end)
-  if native.buffer != raw.buffer || native.cursor.line != raw.cursor.line
-      || native.cursor.column != raw.start + 1
-      || !Same(native.working, expected) || prefix != strpart(text, raw.start, end - raw.start)
-      || !Same(raw.source, native.source) || !Same(raw.current, native.current)
-      || !Same(raw.context, native.context)
-      || !Same(pending.Query, get(b:, 'surface_query', v:null))
-      || !Same(pending.Acquire, get(b:, 'surface_acquire', v:null))
-    return []
+  b:surface_error = code
+enddef
+
+# Human edits ask for proposals. Native preview, a foreign menu, the last asked state
+# and a state just ended by this menu do not; Ctrl-X Ctrl-U asks explicitly.
+def Request(explicit = false)
+  if (!explicit && mode() !~# '^i') || (pumvisible() && empty(b:surface_shown))
+      || complete_info(['selected']).selected >= 0
+    return
+  endif
+  var key = Key()
+  if !explicit && (Same(key, b:surface_asked) || Same(key, b:surface_dismissed))
+    return
+  endif
+  if pumvisible()
+    b:surface_shown = {}
+    complete(col('.'), [])
+  endif
+  b:surface_asked = key
+  b:surface_dismissed = {}
+  b:surface_serial += 1
+  if b:surface_busy
+    b:surface_again = true
+  else
+    Ask()
+  endif
+enddef
+
+# One acquisition is in flight; a result may show only for the latest unchanged request.
+def Ask()
+  b:surface_again = false
+  var base = Snapshot()
+  var Query = get(b:, 'surface_query', v:null)
+  var Acquire = get(b:, 'surface_acquire', v:null)
+  if type(Query) != v:t_func || type(Acquire) != v:t_func
+    Fail('SETUP')
+    return
+  endif
+  var raw: dict<any>
+  try
+    var query = call(Query, [deepcopy(base)])
+    var end = base.cursor.column - 1
+    var text = base.working[base.cursor.line - 1]
+    if !Unchanged(base, Query, Acquire) || type(query) != v:t_dict
+        || sort(keys(query)) != ['input', 'start'] || type(query.start) != v:t_number
+        || query.start < 0 || query.start > end
+        || byteidx(text, charidx(text, query.start)) != query.start
+      throw 'invalid or stale query'
+    endif
+    raw = extend(deepcopy(base), {start: query.start, input: deepcopy(query.input)})
+  catch
+    Fail('QUERY')
+    return
+  endtry
+  b:surface_busy = true
+  b:surface_asking = true
+  try
+    call(Acquire, [deepcopy(raw), function(Receive, [b:surface_serial, base, raw, Query, Acquire, win_getid()])])
+  catch
+    b:surface_busy = false
+    Fail('ACQUIRE')
+  finally
+    b:surface_asking = false
+  endtry
+enddef
+
+def Receive(serial: number, base: dict<any>, raw: dict<any>, Query: func, Acquire: func, window: number, result: any)
+  if getbufvar(base.buffer, 'surface_asking', false)
+    timer_start(0, (_) => Receive(serial, base, raw, Query, Acquire, window, result))
+    return
+  endif
+  setbufvar(base.buffer, 'surface_busy', false)
+  if bufnr() != base.buffer || win_getid() != window
+    return
+  endif
+  if serial != b:surface_serial
+    if b:surface_again && mode() =~# '^i'
+      Ask()
+    endif
+    return
+  endif
+  if type(result) == v:t_string
+    Fail(result)
+    return
   endif
   var data: dict<any>
   try
-    data = ValidateView(call(pending.Acquire, [deepcopy(raw)]))
+    data = ValidateView(result)
   catch
-    echo '候補を取得できません。編集は保持します'
-    return []
+    Fail('VIEW')
+    return
   endtry
-  if !Unchanged(native, pending.Query, pending.Acquire)
-    echo '文脈が変わりました。再補完してください'
-    return []
+  b:surface_error = ''
+  if mode() !~# '^i' || !Unchanged(base, Query, Acquire) || pumvisible()
+    return
   endif
   var groups = copy(data.contexts)->filter((_, group) => Same(group.current, raw.current) && Same(group.context, raw.context))
   if len(groups) != 1
-    return []
-  endif
-  b:surface_base = raw
-  return copy(groups[0].items)->map((_, item) => ({word: join(item.text, "\n"), abbr: item.label,
-    menu: item.provenance, info: get(item, 'info', join(item.text, "\n")), user_data: deepcopy(item.handle), dup: 1, equal: 1, empty: 1}))
-enddef
-
-def Completed()
-  b:surface_done = {}
-  if complete_info(['mode']).mode != 'function' || empty(get(b:, 'surface_base', {}))
-      || !Same(&l:completefunc, string(Complete)) || empty(v:completed_item)
     return
   endif
-  b:surface_done = {item: deepcopy(v:completed_item), base: deepcopy(b:surface_base)}
+  var items = copy(groups[0].items)->map((_, item) => ({word: join(item.text, "\n"), abbr: item.label,
+    menu: item.provenance, info: get(item, 'info', join(item.text, "\n")), user_data: deepcopy(item.handle), dup: 1, equal: 1, empty: 1}))
+  if empty(items)
+    return
+  endif
+  # Replacing a menu ends the previous completion inside complete(); record this one after.
+  complete(raw.start + 1, items)
+  b:surface_shown = {raw: raw, handles: mapnew(items, (_, item) => item.user_data)}
+enddef
+
+def Complete(findstart: number, _: string): any
+  if findstart
+    Request(true)
+    return -3
+  endif
+  return []
+enddef
+
+def Forget()
+  b:surface_serial += 1
+  b:surface_again = false
+  b:surface_asked = {}
+enddef
+
+# Only this surface's visible menu is recorded; native keyword or other menus are not.
+def Completed()
+  b:surface_done = {}
+  var shown = b:surface_shown
+  b:surface_shown = {}
+  if empty(shown) || complete_info(['mode']).mode !=# 'eval'
+      || !Same(mapnew(complete_info(['items']).items, (_, item) => item.user_data), shown.handles)
+    return
+  endif
+  b:surface_done = {item: deepcopy(v:completed_item), base: shown.raw}
+enddef
+
+def Dismiss()
+  b:surface_dismissed = Key()
 enddef
 
 # Native insertion may reshape multiline text. Only its own lines, ending at the
@@ -130,6 +197,10 @@ def Apply()
   var done = get(b:, 'surface_done', {})
   b:surface_done = {}
   if empty(done)
+    return
+  endif
+  defer Dismiss()
+  if empty(done.item)
     return
   endif
   var raw = done.base
@@ -176,15 +247,23 @@ export def Attach()
   if !exists('b:surface_selection')
     b:surface_selection = {}
   endif
-  b:surface_base = {}
-  b:surface_pending = {}
+  b:surface_serial = get(b:, 'surface_serial', 0) + 1
+  b:surface_busy = get(b:, 'surface_busy', false)
+  b:surface_again = false
+  b:surface_asking = false
+  b:surface_asked = {}
+  b:surface_dismissed = {}
+  b:surface_shown = {}
   b:surface_done = {}
+  b:surface_error = ''
   setlocal completeopt=menuone,noselect,popup
   &l:completefunc = Complete
   augroup edits_surface
-    autocmd! CompleteDonePre,CompleteDone <buffer>
+    autocmd! CompleteDonePre,CompleteDone,TextChangedI,TextChangedP,InsertLeave,BufLeave,WinLeave <buffer>
     autocmd CompleteDonePre <buffer> Completed()
     autocmd CompleteDone <buffer> Apply()
+    autocmd TextChangedI,TextChangedP <buffer> Request()
+    autocmd InsertLeave,BufLeave,WinLeave <buffer> Forget()
   augroup END
   command! -buffer SurfaceSelection ShowSelection()
 enddef

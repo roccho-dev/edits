@@ -68,31 +68,42 @@ def View(output: string, query: dict<any>, raw: dict<any>): dict<any>
 enddef
 
 # One nonblocking semcmp process per request; Deliver gets a view or a bounded failure code.
-def Acquire(binary: string, proposer: string, raw: dict<any>, Deliver: func)
+# The process lives at most two owner timeouts (proposing, then evaluating); the
+# returned Funcref stops it earlier.
+def Acquire(binary: string, proposer: string, raw: dict<any>, Deliver: func): any
   if empty(binary) || empty(proposer)
     Deliver('NOT_CONFIGURED')
-    return
+    return v:null
   endif
   var query = Envelope(raw)
   var out: list<string> = []
   var err: list<string> = []
-  var ended = {closed: false, exited: false, status: 0}
+  var ended = {closed: false, exited: false, status: 0, late: false}
+  var run = {job: v:null, timer: 0}
+  var Stop = () => {
+    if job_status(run.job) ==# 'run'
+      job_stop(run.job, 'kill')
+    endif
+  }
   var Finish = () => {
     if !ended.closed || !ended.exited
       return
     endif
-    if ended.status != 0
+    timer_stop(run.timer)
+    if ended.late
+      Deliver('TIMEOUT')
+    elseif ended.status != 0
       var code = trim(join(err, ''))
       Deliver(code =~# '^[A-Z_]\+$' ? code : 'SEMCMP')
-      return
+    else
+      try
+        Deliver(View(join(out, ''), query, raw))
+      catch
+        Deliver('RESULT')
+      endtry
     endif
-    try
-      Deliver(View(join(out, ''), query, raw))
-    catch
-      Deliver('RESULT')
-    endtry
   }
-  var job = job_start([binary, '--propose', proposer], {in_io: 'pipe', out_mode: 'raw', err_mode: 'raw',
+  run.job = job_start([binary, '--propose', proposer], {in_io: 'pipe', out_mode: 'raw', err_mode: 'raw',
     out_cb: (_, chunk) => add(out, chunk), err_cb: (_, chunk) => add(err, chunk),
     close_cb: (_) => {
       ended.closed = true
@@ -103,12 +114,18 @@ def Acquire(binary: string, proposer: string, raw: dict<any>, Deliver: func)
       ended.status = status
       Finish()
     }})
-  if job_status(job) ==# 'fail'
+  if job_status(run.job) ==# 'fail'
     Deliver('START')
-    return
+    return v:null
   endif
-  ch_sendraw(job, json_encode({query: query}))
-  ch_close_in(job)
+  var limit = str2nr($JEV_TIMEOUT_MS) > 0 ? str2nr($JEV_TIMEOUT_MS) : 15000
+  run.timer = timer_start(2 * limit, (_) => {
+    ended.late = true
+    Stop()
+  })
+  ch_sendraw(run.job, json_encode({query: query}))
+  ch_close_in(run.job)
+  return Stop
 enddef
 
 export def Attach(binary: string, proposer: string)

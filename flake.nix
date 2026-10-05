@@ -248,6 +248,7 @@
         EDITS_PROPOSALS = ./packages/vim/tests/proposals.json;
         JEV_API_KEY = "test-only-placeholder";
         JEV_API_URL = "https://invalid.test/never-contacted";
+        JEV_TIMEOUT_MS = "3000";
         SEMCMP_TEST_CASE = "ok";
         LANG = "C.UTF-8";
       } ''
@@ -275,7 +276,8 @@
         export async function propose({ input }) {
           fs.appendFileSync(process.env.EDITS_TEST_LOG, JSON.stringify(input) + "\n");
           if (input === "boom") throw new Error("test proposer failure");
-          if (input.endsWith("s")) await new Promise((resolve) => setTimeout(resolve, 1500));
+          if (input === "hang") await new Promise(() => setInterval(() => {}, 1000));
+          if (input.endsWith("s")) await new Promise((resolve) => setTimeout(resolve, 3000));
           if (!input.startsWith("ux")) return [];
           if (input.includes("は") || input.endsWith("s")) return [byId.p3];
           if (input.endsWith("m")) return [{ ...byId.p2, representation: byId.p2.representation + "\ndepends on" }];
@@ -405,12 +407,20 @@
         def g:ChangeCurrent()
           b:surface_current = "changed during flight"
         enddef
+        def g:ChangeLater(ms: number)
+          timer_start(ms, (_) => {
+            b:surface_current = "changed while shown"
+          })
+        enddef
         autocmd CompleteDonePre <buffer> Outside()
         inoremap <buffer> <F9> <Cmd>call g:ChangeCurrent()<CR>
         def g:Dump(name: string)
+          const path = $EDITS_TEST_DIR .. "/" .. name .. ".json"
           writefile([json_encode({lines: getline(1, "$"), mode: mode(), selection: b:surface_selection,
             error: b:surface_error, job: has("job"), reread: execute("SurfaceSelection"),
-            messages: execute("messages")})], $EDITS_TEST_DIR .. "/" .. name .. ".json")
+            messages: execute("messages"), running: len(filter(job_info(), (_, j) => job_status(j) ==# "run"))})],
+            path .. ".part")
+          rename(path .. ".part", path)
         enddef
         VIM
         cat > native.vim <<'VIM'
@@ -451,7 +461,7 @@
           Keys(":call g:Dump('" .. name .. "')\r", 300)
           Until(() => filereadable(path), name)
           return filereadable(path) ? json_decode(join(readfile(path), "\n"))
-            : {lines: [], mode: "", selection: {}, error: "", job: 0, reread: "", messages: ""}
+            : {lines: [], mode: "", selection: {}, error: "", job: 0, reread: "", messages: "", running: -1}
         enddef
         def Picked(dump: dict<any>): list<string>
           return [get(get(dump.selection, "handle", {}), "id", ""), get(get(dump.selection, "base", {}), "input", "")]
@@ -521,15 +531,16 @@
         assert_equal(['"uxs"', '"uxs!"'], Requests()[-2 :])
         Keys("\<C-E>\<Esc>", 1100)
         Keys("u")
-        # Leaving Insert or changing current state invalidates the pending result.
+        # Leaving Insert drops the pending answer and stops its owned process before it ends.
         Keys("iuxs", 300)
-        Keys("\<Esc>", 2500)
-        assert_false(Menu(), "no menu after leaving Insert")
+        Keys("\<Esc>", 1100)
         d = Dump("leave")
-        assert_equal(["uxs right suffix", "n"], [d.lines[0], d.mode])
+        assert_equal(["uxs right suffix", "n", 0], [d.lines[0], d.mode, d.running])
+        term_wait(buf, 3000)
+        assert_false(Menu(), "no menu after leaving Insert")
         Keys("u")
         Keys("iuxs", 300)
-        Keys("\<F9>", 2500)
+        Keys("\<F9>", 4000)
         assert_false(Menu(), "no menu after current changed")
         Keys("\<Esc>", 1100)
         Keys("u")
@@ -550,6 +561,18 @@
         assert_equal([["ux right suffix", "outside edit"], "p2"], [d.lines, Picked(d)[0]])
         Keys("u")
         assert_equal([" right suffix", "other row"], Dump("outside-undo").lines)
+        # Current changed while the menu is shown: selection refuses its own insertion.
+        Keys(":call g:ChangeLater(2500)\r", 300)
+        Keys("gg0iux")
+        Until(Menu, "stale shown")
+        term_wait(buf, 2500)
+        Keys("\<C-N>\<C-Y>", 1200)
+        assert_false(Menu(), "stale view not shown again")
+        Keys("\<Esc>", 1100)
+        d = Dump("stale-shown")
+        assert_equal([["ux right suffix", "other row"], "p2"], [d.lines, Picked(d)[0]])
+        Keys("u")
+        assert_equal([" right suffix", "other row"], Dump("stale-undo").lines)
         # Failure is distinct from none, recorded once, and editing continues.
         Keys("Goboom")
         Until(() => Requests()[-1] == '"boom"', "failing request")
@@ -561,6 +584,11 @@
         Keys("\<Esc>", 1100)
         d = Dump("recovered")
         assert_equal(["boom!", ""], [d.lines[-1], d.error])
+        # A proposer that never answers is stopped at two owner timeouts.
+        Keys("ohang", 8000)
+        Keys("\<Esc>", 1100)
+        d = Dump("deadline")
+        assert_equal(["hang", "TIMEOUT", 0], [d.lines[-1], d.error, d.running])
         Keys(":qa!\r", 500)
         writefile(v:errors, dir .. "/native-errors")
         if !empty(v:errors)

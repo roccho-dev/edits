@@ -29,7 +29,9 @@ that the latest text must be asked next, so typing never waits. An answer is
 shown as the native menu only if it answers the newest request and the buffer,
 window, Working, cursor, source/current/context and Insert mode are unchanged and
 no other menu or preview is active. Otherwise it is dropped. No proposal shows
-nothing. Leaving Insert mode, the buffer or the window drops pending answers.
+nothing. Leaving Insert mode, the buffer or the window drops pending answers and
+stops their semcmp process. Every process is also stopped after two owner
+timeouts (`2 × JEV_TIMEOUT_MS`, default 15000 ms each), reported as `TIMEOUT`.
 Native preview (`Ctrl-N/P`), cancelling (`Ctrl-E`) and accepting this menu are not
 new requests; after cancel or accept nothing reappears until the Human edits again
 or asks with `Ctrl-X Ctrl-U`. Without this menu, `Ctrl-E`/`Ctrl-Y` keep their native
@@ -44,9 +46,10 @@ those full lines independently of temporary preview. Only representation is inse
 On acceptance, by `Ctrl-Y` or by continuing to type, Working becomes exactly the
 prefix, the full representation and the original suffix; native reshaping of
 multiline text is replaced by that composition within the same Undo step. Only the
-inserted lines are rewritten. If other Working lines changed during completion,
-those lines return to the original line, the selection is not recorded and other
-changes are kept.
+inserted lines are rewritten. If other Working lines, the buffer,
+source/current/context or the Query/Acquire binding changed since the menu was
+shown, those lines return to the original line, the selection is not recorded
+and other changes are kept.
 An accepted native selection keeps the full Proposal/evidence, raw query base and
 the information it was chosen with in `b:surface_selection`. `:SurfaceSelection`
 rereads that selection-time, unadopted information; it is history of the choice,
@@ -83,7 +86,8 @@ explicitly call `Attach()`. Buffer-local `surface_query` returns exactly
 while input may describe an opaque semantic unit spanning lines. Acquire
 receives a deep copy of the full raw snapshot plus start/input and a `Deliver`
 callback, which it calls once with a view or a bounded failure code; delivery may
-come later from a job or timer. Set opaque `surface_source`, `surface_current` and
+come later from a job or timer. It may return a Funcref that stops that work; the
+surface calls it when the request is dropped. Set opaque `surface_source`, `surface_current` and
 `surface_context` as applicable. Changing an IO binding requires changing its
 source marker.
 
@@ -113,9 +117,11 @@ types real keys: a first-character request, quiet none, a changed set, preview a
 back without a request, Japanese input replacing the old menu, cancel without
 revival, an explicit request, exact multiline insertion with a suffix, no request
 after acceptance, reread, one Undo step, accept by typing, an older slow answer
-refused while the latest is asked, answers dropped after leaving Insert or after
-current changes, a foreign keyword completion left unrecorded, changed-context
-refusal and an observable failure that later clears. Controlled scores are not Jev
+refused while the latest is asked, leaving Insert stopping the owned process,
+answers dropped after current changes, a foreign keyword completion left
+unrecorded, changed-context refusal, refusal when current changes while the menu
+is shown, an observable failure that later clears and a never-answering proposer
+stopped at the deadline with no owned process left. Controlled scores are not Jev
 semantic-quality evidence, and one answer at a time is the bound, not concurrency.
 Temporary preview is native and may still show reshaped multiline text; only the
 accepted Working is composed exactly. IME preedit and a private vimrc are not

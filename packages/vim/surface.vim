@@ -108,7 +108,8 @@ def Ask()
   b:surface_busy = true
   b:surface_asking = true
   try
-    call(Acquire, [deepcopy(raw), function(Receive, [b:surface_serial, base, raw, Query, Acquire, win_getid()])])
+    var Stop = call(Acquire, [deepcopy(raw), function(Receive, [b:surface_serial, base, raw, Query, Acquire, win_getid()])])
+    b:surface_stop = type(Stop) == v:t_func ? Stop : v:null
   catch
     b:surface_busy = false
     Fail('ACQUIRE')
@@ -123,6 +124,7 @@ def Receive(serial: number, base: dict<any>, raw: dict<any>, Query: func, Acquir
     return
   endif
   setbufvar(base.buffer, 'surface_busy', false)
+  setbufvar(base.buffer, 'surface_stop', v:null)
   if bufnr() != base.buffer || win_getid() != window
     return
   endif
@@ -158,7 +160,7 @@ def Receive(serial: number, base: dict<any>, raw: dict<any>, Query: func, Acquir
   endif
   # Replacing a menu ends the previous completion inside complete(); record this one after.
   complete(raw.start + 1, items)
-  b:surface_shown = {raw: raw, handles: mapnew(items, (_, item) => item.user_data)}
+  b:surface_shown = {raw: raw, Query: Query, Acquire: Acquire, handles: mapnew(items, (_, item) => item.user_data)}
 enddef
 
 def Complete(findstart: number, _: string): any
@@ -169,10 +171,14 @@ def Complete(findstart: number, _: string): any
   return []
 enddef
 
+# Leaving Insert mode, the buffer or the window drops the pending answer and stops its work.
 def Forget()
   b:surface_serial += 1
   b:surface_again = false
   b:surface_asked = {}
+  if type(b:surface_stop) == v:t_func
+    call(b:surface_stop, [])
+  endif
 enddef
 
 # Only this surface's visible menu is recorded; native keyword or other menus are not.
@@ -184,7 +190,7 @@ def Completed()
       || !Same(mapnew(complete_info(['items']).items, (_, item) => item.user_data), shown.handles)
     return
   endif
-  b:surface_done = {item: deepcopy(v:completed_item), base: shown.raw}
+  b:surface_done = {item: deepcopy(v:completed_item), base: shown.raw, Query: shown.Query, Acquire: shown.Acquire}
 enddef
 
 def Dismiss()
@@ -192,7 +198,8 @@ def Dismiss()
 enddef
 
 # Native insertion may reshape multiline text. Only its own lines, ending at the
-# cursor, become prefix + selection + suffix, or the original line if the rest changed.
+# cursor, become prefix + selection + suffix, or the original line if the rest,
+# the buffer, source/current/context or the Query/Acquire binding changed since shown.
 def Apply()
   var done = get(b:, 'surface_done', {})
   b:surface_done = {}
@@ -210,7 +217,11 @@ def Apply()
   var lines = split(strpart(text, 0, raw.start) .. done.item.word .. suffix, "\n", 1)
   var last = line('.')
   var first = last - len(lines) + 1
-  if first < 1 || !Same(getline(1, first - 1), slice(raw.working, 0, row))
+  var now = Snapshot()
+  if first < 1 || now.buffer != raw.buffer
+      || !Same([raw.source, raw.current, raw.context], [now.source, now.current, now.context])
+      || !Same([done.Query, done.Acquire], [get(b:, 'surface_query', v:null), get(b:, 'surface_acquire', v:null)])
+      || !Same(getline(1, first - 1), slice(raw.working, 0, row))
       || !Same(getline(last + 1, '$'), slice(raw.working, row + 1))
       || strpart(getline('.'), col('.') - 1) !=# suffix
     if first < 1
@@ -249,6 +260,7 @@ export def Attach()
   endif
   b:surface_serial = get(b:, 'surface_serial', 0) + 1
   b:surface_busy = get(b:, 'surface_busy', false)
+  b:surface_stop = get(b:, 'surface_stop', v:null)
   b:surface_again = false
   b:surface_asking = false
   b:surface_asked = {}

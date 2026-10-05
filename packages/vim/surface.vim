@@ -116,14 +116,52 @@ def Complete(findstart: number, prefix: string): any
 enddef
 
 def Completed()
+  b:surface_done = {}
   if complete_info(['mode']).mode != 'function' || empty(get(b:, 'surface_base', {}))
-      || !Same(&l:completefunc, string(Complete))
+      || !Same(&l:completefunc, string(Complete)) || empty(v:completed_item)
     return
   endif
-  if !empty(v:completed_item)
-    b:surface_selection = {handle: deepcopy(v:completed_item.user_data), base: deepcopy(b:surface_base)}
-    echo $'{v:completed_item.abbr}・{v:completed_item.menu}（未採用）'
+  b:surface_done = {item: deepcopy(v:completed_item), base: deepcopy(b:surface_base)}
+enddef
+
+# Native insertion may reshape multiline text; Working must be prefix + selection + suffix.
+def Apply()
+  var done = get(b:, 'surface_done', {})
+  b:surface_done = {}
+  if empty(done)
+    return
   endif
+  var raw = done.base
+  var row = raw.cursor.line - 1
+  var suffix = strpart(raw.working[row], raw.cursor.column - 1)
+  var lines = split(strpart(raw.working[row], 0, raw.start) .. done.item.word .. suffix, "\n", 1)
+  var expected = slice(raw.working, 0, row) + lines + slice(raw.working, row + 1)
+  try
+    if !Same(getline(1, '$'), expected)
+      setline(1, expected)
+      if line('$') > len(expected)
+        deletebufline(bufnr(), len(expected) + 1, '$')
+      endif
+    endif
+    cursor(row + len(lines), strlen(lines[-1]) - strlen(suffix) + 1)
+  catch
+  endtry
+  if !Same(getline(1, '$'), expected)
+    echo '選択を本文へ正確に反映できません。選択は記録しません'
+    return
+  endif
+  b:surface_selection = {handle: deepcopy(done.item.user_data), base: raw,
+    label: done.item.abbr, provenance: done.item.menu, info: done.item.info}
+  echo $'{done.item.abbr}・{done.item.menu}（選択時・未採用 :SurfaceSelection）'
+enddef
+
+def ShowSelection()
+  var selection = get(b:, 'surface_selection', {})
+  if !has_key(selection, 'info')
+    echo '読み返せる選択はありません'
+    return
+  endif
+  echo $"選択時・未採用（現在のWorkingやAcceptedではありません）\n{selection.label}・{selection.provenance}\n{selection.info}"
 enddef
 
 export def Attach()
@@ -132,10 +170,13 @@ export def Attach()
   endif
   b:surface_base = {}
   b:surface_pending = {}
+  b:surface_done = {}
   setlocal completeopt=menuone,noselect,popup
   &l:completefunc = Complete
   augroup edits_surface
-    autocmd! CompleteDonePre <buffer>
+    autocmd! CompleteDonePre,CompleteDone <buffer>
     autocmd CompleteDonePre <buffer> Completed()
+    autocmd CompleteDone <buffer> Apply()
   augroup END
+  command! -buffer SurfaceSelection ShowSelection()
 enddef

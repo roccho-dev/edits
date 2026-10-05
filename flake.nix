@@ -232,6 +232,7 @@
         call assert_equal(s:undo, undotree())
         call assert_equal(s:origin, b:surface_selection)
         call assert_equal(1, len(autocmd_get({"group": "edits_surface", "event": "CompleteDonePre", "pattern": "<buffer=" . bufnr() . ">"})))
+        call assert_equal(1, len(autocmd_get({"group": "edits_surface", "event": "CompleteDone", "pattern": "<buffer=" . bufnr() . ">"})))
         call assert_equal(s:global, [&g:completeopt, &g:completefunc])
         call assert_equal(s:original, g:View)
         call add(s:phases, "attach named dirty/repeat")
@@ -453,6 +454,72 @@
         VIM
         edits -Nu NONE -i NONE -n -es -S vim-tree/tests/check-adapter.vim
         test "$(cat "$out")" = "edits semcmp installed"
+
+        # Real native keys need a screen; the popup menu is absent in -es mode.
+        printf '%s\n' '[{"id":"p1","meaning":{"kind":"relation","from":"API","to":"DB"},"representation":"API → DB"},{"id":"p2","meaning":{"kind":"relation","from":"DB","to":"API"},"representation":"DB → API\ndepends on"},{"id":"p3","meaning":{"kind":"text","text":"APIとDB"},"representation":"APIとDB"}]' > native.json
+        cat > check-native.vim <<'VIM'
+        set nomore cmdheight=20
+        let s:start = ["api uses db right suffix", "other row"]
+        let s:prior = {"handle": {"previous": "origin"}, "base": {"working": ["earlier"]}}
+        call assert_equal(s:start, getline(1, "$"))
+        let b:surface_selection = deepcopy(s:prior)
+        call cursor(1, 12)
+        call feedkeys("i\<C-X>\<C-U>\<C-N>\<C-N>\<C-P>\<C-E>\<Esc>", "xt")
+        call assert_equal(s:start, getline(1, "$"), "compare and cancel")
+        call assert_equal(s:prior, b:surface_selection, "cancel keeps origin")
+        call assert_match("読み返せる選択はありません", execute("SurfaceSelection"))
+        call cursor(1, 12)
+        call feedkeys("i\<C-X>\<C-U>\<C-N>\<C-Y>\<Esc>", "xt")
+        call assert_equal(["API → DB right suffix", "other row"], getline(1, "$"), "first query")
+        call assert_equal(["p1", "api uses db"], [b:surface_selection.handle.id, b:surface_selection.base.input])
+        let s:reread = execute("SurfaceSelection")
+        call assert_match("選択時・未採用", s:reread)
+        call assert_match("API → DB・intent-fit 0.9", s:reread)
+        call assert_equal({"kind": "relation", "from": "API", "to": "DB"}, b:surface_selection.handle.meaning)
+        call assert_notequal(-1, stridx(s:reread, "representation:\nAPI → DB\n\nmeaning: " . json_encode(b:surface_selection.handle.meaning) . "\nevidence: " . json_encode(b:surface_selection.handle.evidence)))
+        undo
+        call assert_equal(s:start, getline(1, "$"), "undo selection")
+        call assert_equal("p1", b:surface_selection.handle.id, "origin is selection-time history")
+        call feedkeys("ccdb uses api right suffix\<Esc>", "xt")
+        let s:rewritten = getline(1, "$")
+        call cursor(1, 12)
+        call feedkeys("i\<C-X>\<C-U>\<C-N>\<C-Y>\<Esc>", "xt")
+        call assert_equal(["DB → API", "depends on right suffix", "other row"], getline(1, "$"), "requery and exact multiline suffix")
+        call assert_equal(["p2", "db uses api"], [b:surface_selection.handle.id, b:surface_selection.base.input])
+        call assert_notequal(-1, stridx(execute("SurfaceSelection"), "representation:\nDB → API\ndepends on\n\nmeaning: "))
+        call feedkeys("A!\<Esc>", "xt")
+        call assert_equal("depends on right suffix!", getline(2))
+        undo
+        undo
+        call assert_equal(s:rewritten, getline(1, "$"), "edit and multiline undo")
+        call cursor(1, 12)
+        call feedkeys("i\<C-X>\<C-U>\<C-N>\<C-N>\<C-Y>\<Esc>", "xt")
+        call assert_equal(["API → DB right suffix", "other row"], getline(1, "$"), "reselect")
+        call assert_equal(["p1", "db uses api"], [b:surface_selection.handle.id, b:surface_selection.base.input])
+        undo
+        call cursor(1, 12)
+        call feedkeys("i\<C-X>\<C-U>\<C-N>z\<Esc>", "xt")
+        call assert_equal(["DB → API", "depends onz right suffix", "other row"], getline(1, "$"), "native implicit accept")
+        call assert_equal("p2", b:surface_selection.handle.id)
+        undo
+        let s:origin = deepcopy(b:surface_selection)
+        let $JEV_API_KEY = ""
+        call cursor(1, 12)
+        call feedkeys("i\<C-X>\<C-U>\<Esc>", "xt")
+        call assert_equal(s:rewritten, getline(1, "$"), "failure keeps Working")
+        call assert_equal(s:origin, b:surface_selection, "failure keeps origin")
+        if !empty(v:errors)
+          call writefile(v:errors, "native-errors")
+          cquit 1
+        endif
+        call writefile(["native Readline loop"], "native-report")
+        qa!
+        VIM
+        printf '%s\n' 'api uses db right suffix' 'other row' > notes.txt
+        EDITS_SEMCMP_CATALOG="$PWD/native.json" TERM=xterm \
+          edits -Nu NONE -i NONE -n --not-a-term -S check-native.vim notes.txt </dev/null >/dev/null 2>&1 \
+          || { cat native-errors >&2 || true; exit 1; }
+        test "$(cat native-report)" = "native Readline loop"
       '';
       };
     };

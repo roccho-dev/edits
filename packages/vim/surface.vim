@@ -116,14 +116,60 @@ def Complete(findstart: number, prefix: string): any
 enddef
 
 def Completed()
+  b:surface_done = {}
   if complete_info(['mode']).mode != 'function' || empty(get(b:, 'surface_base', {}))
-      || !Same(&l:completefunc, string(Complete))
+      || !Same(&l:completefunc, string(Complete)) || empty(v:completed_item)
     return
   endif
-  if !empty(v:completed_item)
-    b:surface_selection = {handle: deepcopy(v:completed_item.user_data), base: deepcopy(b:surface_base)}
-    echo $'{v:completed_item.abbr}・{v:completed_item.menu}（未採用）'
+  b:surface_done = {item: deepcopy(v:completed_item), base: deepcopy(b:surface_base)}
+enddef
+
+# Native insertion may reshape multiline text. Only its own lines, ending at the
+# cursor, become prefix + selection + suffix, or the original line if the rest changed.
+def Apply()
+  var done = get(b:, 'surface_done', {})
+  b:surface_done = {}
+  if empty(done)
+    return
   endif
+  var raw = done.base
+  var row = raw.cursor.line - 1
+  var text = raw.working[row]
+  var suffix = strpart(text, raw.cursor.column - 1)
+  var lines = split(strpart(text, 0, raw.start) .. done.item.word .. suffix, "\n", 1)
+  var last = line('.')
+  var first = last - len(lines) + 1
+  if first < 1 || !Same(getline(1, first - 1), slice(raw.working, 0, row))
+      || !Same(getline(last + 1, '$'), slice(raw.working, row + 1))
+      || strpart(getline('.'), col('.') - 1) !=# suffix
+    if first < 1
+      echo '文脈が変わりました。選択は記録しません'
+      return
+    endif
+    if last > first
+      deletebufline(bufnr(), first + 1, last)
+    endif
+    setline(first, text)
+    cursor(first, raw.cursor.column)
+    echo '文脈が変わりました。挿入を取り消し、選択は記録しません'
+    return
+  endif
+  if !Same(getline(first, last), lines)
+    setline(first, lines)
+  endif
+  cursor(last, strlen(lines[-1]) - strlen(suffix) + 1)
+  b:surface_selection = {handle: deepcopy(done.item.user_data), base: raw,
+    label: done.item.abbr, provenance: done.item.menu, info: done.item.info}
+  echo $'{done.item.abbr}・{done.item.menu}（選択時・未採用 :SurfaceSelection）'
+enddef
+
+def ShowSelection()
+  var selection = get(b:, 'surface_selection', {})
+  if !has_key(selection, 'info')
+    echo '読み返せる選択はありません'
+    return
+  endif
+  echo $"選択時・未採用（現在のWorkingやAcceptedではありません）\n{selection.label}・{selection.provenance}\n{selection.info}"
 enddef
 
 export def Attach()
@@ -132,10 +178,13 @@ export def Attach()
   endif
   b:surface_base = {}
   b:surface_pending = {}
+  b:surface_done = {}
   setlocal completeopt=menuone,noselect,popup
   &l:completefunc = Complete
   augroup edits_surface
-    autocmd! CompleteDonePre <buffer>
+    autocmd! CompleteDonePre,CompleteDone <buffer>
     autocmd CompleteDonePre <buffer> Completed()
+    autocmd CompleteDone <buffer> Apply()
   augroup END
+  command! -buffer SurfaceSelection ShowSelection()
 enddef

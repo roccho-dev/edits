@@ -21,8 +21,10 @@ An artifact's capability declaration does not provide credentials; fixed
 voice-ui/ops-jev launchers do not authorize arbitrary semcmp programs.
 
 Write, use `Ctrl-X Ctrl-U`, compare with `Ctrl-N/P`, accept with `Ctrl-Y` or cancel
-with `Ctrl-E`, then edit and complete again. The initial query replaces only the
-current line's prefix before the cursor; right-hand text and other lines remain.
+with `Ctrl-E`, then edit and complete again. `:SurfaceSelection` rereads what the
+last accepted selection meant when it was chosen. The initial query replaces only
+the current line's prefix before the cursor; the full representation is inserted
+exactly, and right-hand text and other lines remain.
 The caller may supply another `b:surface_query`; this example does not define
 all Input types or make a semantic unit equal to a line.
 

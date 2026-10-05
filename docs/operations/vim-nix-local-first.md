@@ -33,8 +33,17 @@ accepting: equal labels and scores can belong to different meanings. These are
 the owner's JSON values, not a generated explanation or an executed action.
 Equal first lines can also hide different later insertion lines; the popup keeps
 those full lines independently of temporary preview. Only representation is inserted.
-An accepted native selection keeps the full Proposal/evidence and raw query base
-in `b:surface_selection`. Relation representation is text only, with no effect.
+On acceptance, by `Ctrl-Y` or by continuing to type, Working becomes exactly the
+prefix, the full representation and the original suffix; native reshaping of
+multiline text is replaced by that composition within the same Undo step. Only the
+inserted lines are rewritten. If other Working lines changed during completion,
+those lines return to the original line, the selection is not recorded and other
+changes are kept.
+An accepted native selection keeps the full Proposal/evidence, raw query base and
+the information it was chosen with in `b:surface_selection`. `:SurfaceSelection`
+rereads that selection-time, unadopted information; it is history of the choice,
+not the current Working after later edits or Undo. Cancellation and acquisition
+failure keep the previous origin. Relation representation is text only, with no effect.
 Edit and Undo remain native. `:write` and `:edit` save/read the local Working file;
 they do not Commit or Adopt it. Cancellation can leave a text-neutral Undo step.
 
@@ -87,14 +96,16 @@ The root flake checks the actual product/fixture tree and installed
 `edits-semcmp-package-connection`. Test-only transport replacement checks fresh
 query delivery/order changes, original typed records, numeric round-trips,
 failure/source-change refusal, and origin preservation without network calls.
-Native TTY controls separately exercise prefix replacement, suffix/other-line
-preservation, preview/cancel/selection, Unicode editing/Undo and owned save/read.
-Controlled scores are not Jev semantic-quality evidence.
+The same check also drives the installed `edits` with real native keys on a
+screen (`--not-a-term`): compare/cancel, accept, reread, Undo, rewrite and requery,
+exact multiline insertion with a suffix and at line end, edit/Undo, reselection,
+accept by typing, changed-context refusal/Undo and failure origin preservation. Native TTY controls separately exercise Unicode
+editing and owned save/read. Controlled scores are not Jev semantic-quality evidence.
 Equal-text/equal-score controls verify distinct meaning information and unchanged
 order, text and handles. Same-meaning/equal-score/same-first-line controls also
 verify different multiline representations remain available before acceptance.
-Native multiline insertion can carry indentation from the remaining line into
-later lines; this is stock Vim behavior, not an exact-byte apply contract.
+Temporary preview is native and may still show reshaped multiline text; only the
+accepted Working is composed exactly. A private vimrc is not certified.
 Human comprehension of the displayed data remains a
 separate acceptance gate, including whether native wrapping makes differences readable.
 

@@ -32,51 +32,29 @@ def Query(raw: dict<any>): dict<any>
   return {start: 0, input: strpart(raw.working[raw.cursor.line - 1], 0, raw.cursor.column - 1)}
 enddef
 
-def Acquire(binary: string, catalog: string, raw: dict<any>): dict<any>
-  if empty(binary) || empty(catalog)
-    throw 'semcmp executable and catalog must be configured'
-  endif
-  var bytes = readfile(catalog, 'b')
-  var supplied = json_decode(join(bytes, "\n"))
-  if type(supplied) != v:t_list
-    throw 'invalid semcmp catalog'
-  endif
-  var ids: list<string> = []
-  for item in supplied
-    if !Exact(item, ['id', 'meaning', 'representation']) || type(item.id) != v:t_string
-        || empty(trim(item.id)) || index(ids, item.id) >= 0
-        || type(item.representation) != v:t_string || empty(trim(item.representation))
-      throw 'invalid semcmp catalog item'
-    endif
-    add(ids, item.id)
-  endfor
-  var query = {input: deepcopy(raw.input),
+def Envelope(raw: dict<any>): dict<any>
+  return {input: deepcopy(raw.input),
     state: {current: deepcopy(raw.current), working: copy(raw.working), context: deepcopy(raw.context)},
     focus: {line: raw.cursor.line, column: raw.cursor.column, start: raw.start}}
-  silent var output = system([binary], json_encode({query: query, proposals: supplied}))
-  if v:shell_error != 0 || !Same(bytes, readfile(catalog, 'b'))
-    throw 'semcmp failed or catalog changed'
-  endif
+enddef
+
+# The owner answers this exact query; its proposals are kept whole in each handle.
+def View(output: string, query: dict<any>, raw: dict<any>): dict<any>
   var result = json_decode(output)
   if !Exact(result, ['query', 'proposals', 'evaluation']) || !Same(result.query, query)
-      || type(result.proposals) != v:t_list || len(result.proposals) != len(supplied)
-      || type(result.evaluation) != v:t_dict
+      || type(result.proposals) != v:t_list || type(result.evaluation) != v:t_dict
     throw 'invalid or unrelated semcmp result'
   endif
   var seen: list<string> = []
   var items: list<dict<any>> = []
   for proposal in result.proposals
     if !Exact(proposal, ['id', 'meaning', 'representation', 'evidence'])
-        || type(proposal.id) != v:t_string || index(seen, proposal.id) >= 0
-        || index(ids, proposal.id) < 0
-      throw 'invalid semcmp proposal identity'
-    endif
-    var original = supplied[index(ids, proposal.id)]
-    if !Same(proposal.meaning, original.meaning) || !Same(proposal.representation, original.representation)
+        || type(proposal.id) != v:t_string || empty(trim(proposal.id)) || index(seen, proposal.id) >= 0
+        || type(proposal.representation) != v:t_string || empty(trim(proposal.representation))
         || !Exact(proposal.evidence, ['theme', 'noul']) || proposal.evidence.theme != 'intent-fit'
         || index([v:t_number, v:t_float], type(proposal.evidence.noul)) < 0
         || !(proposal.evidence.noul >= 0 && proposal.evidence.noul <= 1)
-      throw 'invalid semcmp proposal correspondence'
+      throw 'invalid semcmp proposal'
     endif
     add(seen, proposal.id)
     var text = split(proposal.representation, "\n", 1)
@@ -89,11 +67,72 @@ def Acquire(binary: string, catalog: string, raw: dict<any>): dict<any>
     contexts: [{current: deepcopy(raw.current), context: deepcopy(raw.context), items: items}]})
 enddef
 
-export def Attach(binary: string, catalog: string)
+# One nonblocking semcmp process per request; Deliver gets a view or a bounded failure code.
+# The process lives at most two owner timeouts (proposing, then evaluating); the
+# returned Funcref stops it earlier.
+def Acquire(binary: string, proposer: string, raw: dict<any>, Deliver: func): any
+  if empty(binary) || empty(proposer)
+    Deliver('NOT_CONFIGURED')
+    return v:null
+  endif
+  var query = Envelope(raw)
+  var out: list<string> = []
+  var err: list<string> = []
+  var ended = {closed: false, exited: false, status: 0, late: false}
+  var run = {job: v:null, timer: 0}
+  var Stop = () => {
+    if job_status(run.job) ==# 'run'
+      job_stop(run.job, 'kill')
+    endif
+  }
+  var Finish = () => {
+    if !ended.closed || !ended.exited
+      return
+    endif
+    timer_stop(run.timer)
+    if ended.late
+      Deliver('TIMEOUT')
+    elseif ended.status != 0
+      var code = trim(join(err, ''))
+      Deliver(code =~# '^[A-Z_]\+$' ? code : 'SEMCMP')
+    else
+      try
+        Deliver(View(join(out, ''), query, raw))
+      catch
+        Deliver('RESULT')
+      endtry
+    endif
+  }
+  run.job = job_start([binary, '--propose', proposer], {in_io: 'pipe', out_mode: 'raw', err_mode: 'raw',
+    out_cb: (_, chunk) => add(out, chunk), err_cb: (_, chunk) => add(err, chunk),
+    close_cb: (_) => {
+      ended.closed = true
+      Finish()
+    },
+    exit_cb: (_, status) => {
+      ended.exited = true
+      ended.status = status
+      Finish()
+    }})
+  if job_status(run.job) ==# 'fail'
+    Deliver('START')
+    return v:null
+  endif
+  var limit = str2nr($JEV_TIMEOUT_MS) > 0 ? str2nr($JEV_TIMEOUT_MS) : 15000
+  run.timer = timer_start(2 * limit, (_) => {
+    ended.late = true
+    Stop()
+  })
+  ch_sendraw(run.job, json_encode({query: query}))
+  ch_close_in(run.job)
+  return Stop
+enddef
+
+export def Attach(binary: string, proposer: string)
   if !exists('b:surface_query')
     b:surface_query = Query
   endif
-  b:surface_source = {semcmp: binary, catalog: catalog}
-  b:surface_acquire = function(Acquire, [binary, catalog])
+  b:surface_source = {semcmp: binary, proposer: proposer}
+  b:surface_acquire = function(Acquire, [binary, proposer])
   surface.Attach()
 enddef

@@ -10,15 +10,19 @@ def Query(raw: dict<any>): dict<any>
   return {start: raw.cursor.column - 1, input: v:null}
 enddef
 
-def Acquire(raw: dict<any>): any
-  if raw.source == ''
+def Load(source: string): any
+  if source == ''
     throw 'EDITS_COMPLETION_SOURCE is required'
   endif
-  return json_decode(readfile(raw.source)->join("\n"))
+  return json_decode(readfile(source)->join("\n"))
+enddef
+
+def Acquire(raw: dict<any>, Deliver: func)
+  Deliver(Load(raw.source))
 enddef
 
 const path = $EDITS_COMPLETION_SOURCE
-const examples = surface.ValidateView(Acquire({source: path})).contexts
+const examples = surface.ValidateView(Load(path)).contexts
 var buffers: list<number> = []
 for group in examples
   var bnr = bufadd(tempname())
@@ -39,4 +43,4 @@ if empty(buffers)
 endif
 execute $'buffer {buffers[0]}'
 cursor(1, 1)
-echo '例: CTRL-X CTRL-Uで補完。選択・取消・編集は未採用'
+echo '例: 入力で補完、CTRL-X CTRL-Uで明示。選択・取消・編集は未採用'
